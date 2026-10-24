@@ -1,5 +1,5 @@
 site_name: GeoReSeT Corpus
-repo_url: https://github.com/NoeFlandre/GeoReSeT-Corpus-V2
+repo_url: https://github.com/NoeFlandre/GeoReSeT-Corpus
 theme:
   name: material
   features: [content.code.copy]
