@@ -8,7 +8,7 @@ from pathlib import Path
 import polars as pl
 
 from georeset.build.pipeline import Layout
-from georeset.publish import card, plots, stats
+from georeset.publish import card, figures, geo, stats
 
 MAP_RESOLUTION = 3
 TOP_LANGUAGES = 20
@@ -20,11 +20,11 @@ def partitions(out: Path) -> list[tuple[str, str]]:
 
 def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
     data = pl.scan_parquet(layout.out / "data" / "*" / "*" / "*.parquet")
-    land = plots.load_land(layout.work / "cache")
-    plots.world_map(
-        plots.hex_counts(stats.points(data), MAP_RESOLUTION), land, layout.out / "assets" / "map.png"
+    land = geo.load_land(layout.work / "cache")
+    figures.world_map(
+        geo.hex_counts(stats.points(data), MAP_RESOLUTION), land, layout.out / "assets" / "map.png"
     )
-    plots.language_bars(stats.top_languages(data, TOP_LANGUAGES), layout.out / "assets" / "languages.png")
+    figures.language_bars(stats.top_languages(data, TOP_LANGUAGES), layout.out / "assets" / "languages.png")
     context = card.Context(
         repo_id=repo_id,
         by_source=stats.by_source(data),

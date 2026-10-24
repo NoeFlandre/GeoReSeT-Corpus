@@ -64,4 +64,4 @@ def geojson_to_wkb(geojson: pl.Series) -> pl.Series:
 
 def has_letters(text: pl.Expr, minimum: int = 2) -> pl.Expr:
     """True when ``text`` holds at least ``minimum`` Unicode letters."""
-    return text.str.count_matches(r"\p{L}") >= minimum
+    return text.str.count_matches(r"\p{L}") >= minimum  # pragma: no mutate (\p{l} is the same class)

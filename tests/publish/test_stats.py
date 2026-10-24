@@ -61,3 +61,11 @@ def test_unlabelled():
     u = pl.LazyFrame({"source": ["w", "w", "x"], "status": ["failed", "unsplit", "failed"]})
     out = stats.unlabelled(u)
     assert out.rows() == [("w", 1, 1), ("x", 1, 0), ("total", 2, 1)]
+
+
+def test_ties_break_by_name():
+    data = _data().with_columns(
+        language=pl.Series(["b", "b", "a", "a"]), continent=pl.Series(["y", "y", "x", "x"])
+    )
+    assert stats.top_languages(data, 2)["language"].to_list() == ["a", "b"]
+    assert stats.by_continent(data)["continent"].to_list() == ["x", "y"]

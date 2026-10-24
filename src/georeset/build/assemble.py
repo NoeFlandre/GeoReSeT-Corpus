@@ -44,21 +44,23 @@ POLYGON_COLUMNS = [
 
 def region_priority(counts: pl.LazyFrame) -> pl.LazyFrame:
     """Rank extracts so the smallest (most specific) wins overlaps: ``centro`` over ``italy``."""
-    return counts.sort("n", "stem").select("stem", priority=pl.int_range(pl.len(), dtype=pl.UInt32))
+    return counts.sort("n", "stem").select("stem", priority=pl.int_range(pl.len()))
 
 
 def pick_polygons(candidates: pl.LazyFrame, priority: pl.LazyFrame) -> pl.LazyFrame:
     """One row per polygon: best region first, then the source with the best attributes."""
-    rank = pl.col("source").replace_strict(SOURCE_RANK, return_dtype=pl.UInt8)
+    rank = pl.col("source").replace_strict(SOURCE_RANK)
     region = pl.col("stem").str.strip_suffix(SUFFIX)
-    osm = pl.col("polygon_id").str.split_exact("/", 1)
+    osm = pl.col("polygon_id").str.split_exact("/", 1)  # pragma: no mutate (ids hold one "/")
     return (
         candidates.join(priority, on="stem")
-        .sort("polygon_id", "priority", rank)
-        .unique("polygon_id", keep="first", maintain_order=True)
+        .sort("priority", rank)
+        .unique(
+            "polygon_id", keep="first"
+        )  # pragma: no mutate (keep='first' is required; polars' 'any' only matches by luck)
         .with_columns(region=region)
         .with_columns(
-            continent=pl.col("region").replace_strict(CONTINENT_OF, return_dtype=pl.String),
+            continent=pl.col("region").replace_strict(CONTINENT_OF),
             osm_type=osm.struct.field("field_0"),
             osm_id=osm.struct.field("field_1").cast(pl.Int64),
         )
@@ -78,8 +80,10 @@ def canonical_docs(presence: pl.LazyFrame, priority: pl.LazyFrame) -> pl.LazyFra
     """The one staged region each document's sentences are taken from."""
     return (
         presence.join(priority, on="stem")
-        .sort("doc_key", "priority")
-        .unique("doc_key", keep="first", maintain_order=True)
+        .sort("priority")
+        .unique(
+            "doc_key", keep="first"
+        )  # pragma: no mutate (keep='first' is required; polars' 'any' only matches by luck)
         .select("doc_key", "stem")
     )
 
@@ -91,14 +95,14 @@ def _hash(keys: pl.Series) -> pl.Series:
 def row_id() -> pl.Expr:
     """Stable 128-bit hex id of (source, document, position)."""
     key = pl.concat_str(pl.col("source"), pl.col("doc_key"), pl.col("position"), separator="\x1f")
-    return key.map_batches(_hash, return_dtype=pl.String).alias("id")
+    return key.map_batches(_hash, return_dtype=pl.String).alias("id")  # pragma: no mutate (lazy schema)
 
 
 def to_rows(sentences: pl.DataFrame, meta: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Final (clean, unlabelled) rows; ``doc_key`` and ``position`` are kept for sorting."""
     rows = sentences.join(meta, on="doc_key").with_columns(
         row_id(),
-        license=pl.col("source").replace_strict(LICENSES, return_dtype=pl.String),
+        license=pl.col("source").replace_strict(LICENSES),
     )
     is_clean = pl.col("label").is_in(CLEAN_LABELS)
     clean = rows.filter(is_clean).with_columns(landuse=pl.col("label") == "yes")

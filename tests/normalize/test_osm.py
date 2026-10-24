@@ -82,3 +82,9 @@ def test_has_letters():
 
 def test_has_letters_custom_minimum():
     assert _eval(has_letters(pl.col("t"), 1), t=["a", "1"]) == [True, False]
+
+
+def test_geojson_to_wkb_keeps_binary_type_when_all_invalid():
+    out = geojson_to_wkb(pl.Series("g", ["bad", None]))
+    assert out.dtype == pl.Binary
+    assert out.to_list() == [None, None]

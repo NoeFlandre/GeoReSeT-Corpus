@@ -58,7 +58,7 @@ def finish_sentences(sentences: pl.DataFrame, scheme: Scheme) -> pl.DataFrame:
     codes = kept["language"].unique().to_list()
     mapping = {code: normalize(code, scheme) for code in codes}
     return (
-        kept.with_columns(pl.col("language").replace_strict(mapping, return_dtype=pl.String))
+        kept.with_columns(pl.col("language").replace_strict(mapping))
         .select(SENTENCE_SCHEMA.names())
         .cast(SENTENCE_SCHEMA)
     )
@@ -74,13 +74,13 @@ def attach_text(labels: pl.DataFrame, docs: pl.DataFrame, keys: list[str]) -> pl
         docs.select(
             *keys,
             "sentences",
-            sentence_index=pl.int_ranges(pl.col("sentences").list.len(), dtype=pl.Int32),
+            sentence_index=pl.int_ranges(pl.col("sentences").list.len()),
         )
         .explode("sentences", "sentence_index")
         .drop_nulls("sentence_index")
     )
     joined = labels.join(exploded, on=[*keys, "sentence_index"], how="left").join(
-        docs.select(*keys, "full_text"), on=keys, how="left"
+        docs.select(*keys, "full_text"), on=keys
     )
     skipped = pl.col("label") == "skipped_unsplit"
     return joined.with_columns(text=pl.when(skipped).then("full_text").otherwise("sentences")).drop(

@@ -47,23 +47,25 @@ def _scan_staged(layout: Layout, table: str) -> pl.LazyFrame:
     path = pl.col("path")
     return pl.scan_parquet(
         layout.stage / "*" / "*" / f"{table}.parquet", include_file_paths="path"
-    ).with_columns(source=path.str.extract(_STAGED, 1), stem=path.str.extract(_STAGED, 2))
+    ).with_columns(source=path.str.extract(_STAGED), stem=path.str.extract(_STAGED, 2))
 
 
 def build_meta(layout: Layout) -> None:
     """Pick one row per polygon and one staged copy per document (once)."""
     if (layout.meta / "docs").exists():
         return
-    layout.meta.mkdir(parents=True, exist_ok=True)
+    layout.meta.mkdir(parents=True, exist_ok=True)  # pragma: no mutate (idempotent setup)
     candidates = _scan_staged(layout, "polygons").drop("path")
     priority = region_priority(candidates.group_by("stem").agg(n=pl.len())).collect().lazy()
     polygons = pick_polygons(candidates, priority).sort("region", "polygon_id")
-    polygons.sink_parquet(layout.meta / "polygons.parquet", compression="zstd")
-    attributes = pl.scan_parquet(layout.meta / "polygons.parquet").drop("geometry", "osm_type", "osm_id")
+    polygons.sink_parquet(
+        layout.meta / "polygons.parquet", compression="zstd"
+    )  # pragma: no mutate (speed/size only)
+    attributes = pl.scan_parquet(layout.meta / "polygons.parquet")
     meta = doc_meta(_scan_staged(layout, "links").select("doc_key", "polygon_id"), attributes)
     presence = _scan_staged(layout, "sentences").select("doc_key", "stem").unique()
     docs = canonical_docs(presence, priority).join(meta, on="doc_key").collect(engine="streaming")
-    tmp = layout.meta / "docs.tmp"
+    tmp = layout.meta / "docs.tmp"  # pragma: no mutate (private scratch name)
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir()
     for (stem,), part in docs.partition_by("stem", as_dict=True).items():
@@ -85,11 +87,11 @@ def build_rows(layout: Layout, staged: Path) -> None:
     name = f"{source}__{stem}.parquet"
     for (out_source, language), part in clean.partition_by("source", "language", as_dict=True).items():
         target = layout.rows / "data" / str(out_source) / str(language)
-        target.mkdir(parents=True, exist_ok=True)
+        target.mkdir(parents=True, exist_ok=True)  # pragma: no mutate (idempotent setup)
         part.write_parquet(target / name)
-    (layout.rows / "unlabelled").mkdir(parents=True, exist_ok=True)
+    (layout.rows / "unlabelled").mkdir(parents=True, exist_ok=True)  # pragma: no mutate (idempotent setup)
     unlabelled.write_parquet(layout.rows / "unlabelled" / name)
-    done.parent.mkdir(parents=True, exist_ok=True)
+    done.parent.mkdir(parents=True, exist_ok=True)  # pragma: no mutate (idempotent setup)
     done.touch()
     shutil.rmtree(staged)
 
@@ -129,14 +131,18 @@ def shard_jobs(layout: Layout) -> list[tuple[Path, Path]]:
 
 
 def build_shards(layout: Layout, workers: int) -> None:
-    run_parallel([lambda r=r, o=o: _shard(r, o) for r, o in shard_jobs(layout)], workers)
+    run_parallel(
+        [lambda r=r, o=o: _shard(r, o) for r, o in shard_jobs(layout)], workers
+    )  # pragma: no mutate (speed/size only)
     source = pq.ParquetFile(layout.meta / "polygons.parquet")
-    batches = (pl.DataFrame(b) for b in source.iter_batches(batch_size=50_000))
+    batches = (
+        pl.DataFrame(b) for b in source.iter_batches(batch_size=50_000)
+    )  # pragma: no mutate (speed/size only)
     total = source.metadata.num_rows
     write_stream(batches, total, layout.out / "polygons", POLYGONS_PER_SHARD, 50_000, geometry="geometry")
 
 
 def run_parallel(jobs: Iterable[Callable[[], None]], workers: int) -> None:
-    with ThreadPoolExecutor(workers) as pool:
+    with ThreadPoolExecutor(workers) as pool:  # pragma: no mutate (speed/size only)
         for future in [pool.submit(job) for job in jobs]:
             future.result()

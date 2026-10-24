@@ -95,7 +95,7 @@ def _wikimedia(code: str) -> str:
 def _glotlid(code: str) -> str:
     if _LABEL.fullmatch(code):
         return code
-    raise ValueError(code)
+    raise ValueError(code)  # pragma: no mutate (message unused)
 
 
 _CONVERTERS = {"glotlid": _glotlid, "iso639_3": _label, "wikimedia": _wikimedia}
@@ -110,3 +110,9 @@ def normalize(code: str | None, scheme: Scheme) -> str:
         return _CONVERTERS[scheme](code)
     except (LookupError, ValueError):
         return UNDETERMINED
+
+
+def display_name(label: str) -> str:
+    """``French · fra_Latn``; the bare label when the language has no known name."""
+    name = langcodes.Language.get(label.split("_")[0]).display_name()
+    return label if name.startswith("Unknown") else f"{name} · {label}"

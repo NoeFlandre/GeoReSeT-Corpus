@@ -137,3 +137,17 @@ def test_individual_languages_take_macrolanguage_script(code, expected):
 )
 def test_iso639_3_macrolanguages_fold_like_glotlid(code, expected):
     assert normalize(code, "iso639_3") == expected
+
+
+@pytest.mark.parametrize(
+    ("label", "expected"),
+    [
+        ("fra_Latn", "French · fra_Latn"),
+        ("cmn_Hani", "Mandarin Chinese · cmn_Hani"),
+        ("zzz_Zzzz", "zzz_Zzzz"),
+    ],
+)
+def test_display_name(label, expected):
+    from georeset.normalize.languages import display_name
+
+    assert display_name(label) == expected

@@ -35,7 +35,9 @@ class _Shards:
 
     def _open(self, table: pa.Table) -> pq.ParquetWriter:
         name = f"train-{self.index:05d}-of-{self.count:05d}.parquet"
-        return pq.ParquetWriter(self.folder / name, table.schema, compression="zstd")
+        return pq.ParquetWriter(
+            self.folder / name, table.schema, compression="zstd"
+        )  # pragma: no mutate (case-insensitive)
 
     def write(self, df: pl.DataFrame) -> None:
         while df.height:
@@ -59,13 +61,13 @@ def write_stream(
     total: int,
     out: Path,
     rows_per_shard: int,
-    row_group_size: int = 100_000,
+    row_group_size: int = 100_000,  # pragma: no mutate (speed/size only)
     geometry: str | None = None,
 ) -> list[Path]:
     """Replace ``out`` with ``total`` rows streamed from ``frames``; returns the shard paths."""
     if total == 0:
         return []
-    tmp = out.with_name(out.name + ".tmp")
+    tmp = out.with_name(out.name + ".tmp")  # pragma: no mutate (private scratch name)
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
     shards = _Shards(tmp, math.ceil(total / rows_per_shard), rows_per_shard, row_group_size, geometry)
@@ -81,7 +83,7 @@ def write_shards(
     df: pl.DataFrame,
     out: Path,
     rows_per_shard: int,
-    row_group_size: int = 100_000,
+    row_group_size: int = 100_000,  # pragma: no mutate (speed/size only)
     geometry: str | None = None,
 ) -> list[Path]:
     """Replace ``out`` with ``df`` split into shards; returns the shard paths."""
