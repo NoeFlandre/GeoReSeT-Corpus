@@ -39,7 +39,6 @@ _MACRO: dict[str, str] = {
     "aze": "azj",
     "ara": "arb",
     "est": "ekk",
-    "fas": "pes",
     "kur": "kmr",
     "lav": "lvs",
     "mlg": "plt",
@@ -82,14 +81,15 @@ def _script(iso3: str) -> str:
 
 
 def _label(iso3: str) -> str:
-    return f"{iso3}_{_script(iso3)}"
+    """Label of an ISO 639-3 code; macrolanguages become the individual language GlotLID uses."""
+    individual = _MACRO.get(iso3, iso3)
+    return f"{individual}_{_script(individual)}"
 
 
 def _wikimedia(code: str) -> str:
     if code in _WIKIMEDIA:
         return _WIKIMEDIA[code]
-    iso3 = langcodes.Language.get(code).to_alpha3()
-    return _label(_MACRO.get(iso3, iso3))
+    return _label(langcodes.Language.get(code).to_alpha3())
 
 
 def _glotlid(code: str) -> str:

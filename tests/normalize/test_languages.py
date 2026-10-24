@@ -18,7 +18,7 @@ from georeset.normalize.languages import UNDETERMINED, normalize
         ("fr", "wikimedia", "fra_Latn"),
         ("ru", "wikimedia", "rus_Cyrl"),
         ("ar", "wikimedia", "arb_Arab"),
-        ("fa", "wikimedia", "pes_Arab"),
+        ("fa", "wikimedia", "fas_Arab"),
         ("zh", "wikimedia", "cmn_Hani"),
         ("ja", "wikimedia", "jpn_Jpan"),
         ("ko", "wikimedia", "kor_Hang"),
@@ -84,7 +84,7 @@ def test_wikimedia_special_codes(code, expected):
         ("az", "azj_Latn"),
         ("ar", "arb_Arab"),
         ("et", "ekk_Latn"),
-        ("fa", "pes_Arab"),
+        ("fa", "fas_Arab"),
         ("ku", "kmr_Latn"),
         ("lv", "lvs_Latn"),
         ("mg", "plt_Latn"),
@@ -128,4 +128,12 @@ def test_glotlid_script_overrides(code, expected):
     [("pbt", "pbt_Arab"), ("khk", "khk_Cyrl"), ("npi", "npi_Deva"), ("ydd", "ydd_Hebr"), ("ory", "ory_Orya")],
 )
 def test_individual_languages_take_macrolanguage_script(code, expected):
+    assert normalize(code, "iso639_3") == expected
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [("ara", "arb_Arab"), ("aze", "azj_Latn"), ("msa", "zsm_Latn"), ("zho", "cmn_Hani"), ("est", "ekk_Latn")],
+)
+def test_iso639_3_macrolanguages_fold_like_glotlid(code, expected):
     assert normalize(code, "iso639_3") == expected
