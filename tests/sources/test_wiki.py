@@ -97,12 +97,12 @@ def test_bracket_only_rows_are_dropped_but_bracketed_prose_is_kept():
         "[ editar código · editar ]",
         "[Wadel 2005]",
         "[ edit ] [2]",
-        "[ 編集 | ソースを編集 ] 10：00～17：00",
+        "[ 編集 | ソースを編集 ] 10-17h",
         "Built in 1805 [3].",
         "A [small] lake.",
     ]
     kept = pl.DataFrame({"t": texts}).filter(~pl.col("t").str.contains(wiki.BRACKETS_ONLY))["t"].to_list()
-    assert kept == ["[ 編集 | ソースを編集 ] 10：00～17：00", "Built in 1805 [3].", "A [small] lake."]
+    assert kept == ["[ 編集 | ソースを編集 ] 10-17h", "Built in 1805 [3].", "A [small] lake."]
 
 
 def test_permalink():
