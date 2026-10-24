@@ -22,7 +22,7 @@ _STAGED = r"stage/([^/]+)/([^/]+)/[^/]+\.parquet$"
 ROWS_PER_SHARD = 1_000_000
 SORT_CHUNK_ROWS = 3_000_000
 POLYGONS_PER_SHARD = 250_000
-POLYGON_ROW_GROUP = 50_000
+POLYGON_ROW_GROUP = 50_000  # batch size, hence row group size, of the polygon shards
 
 
 @dataclass(frozen=True)
@@ -139,7 +139,7 @@ def build_shards(layout: Layout, workers: int) -> None:
     batches = (pl.DataFrame(b) for b in source.iter_batches(batch_size=POLYGON_ROW_GROUP))
     out = layout.out / "polygons"
     total = source.metadata.num_rows
-    write_stream(batches, total, out, POLYGONS_PER_SHARD, POLYGON_ROW_GROUP, geometry="geometry")
+    write_stream(batches, total, out, POLYGONS_PER_SHARD, geometry="geometry")
 
 
 def run_parallel(jobs: Iterable[Callable[[], None]], workers: int) -> None:
