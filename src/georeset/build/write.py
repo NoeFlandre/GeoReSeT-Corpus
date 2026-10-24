@@ -11,6 +11,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 ROW_GROUP_SIZE = 100_000
+COMPRESSION = "zstd"
 
 
 def _geo_metadata(column: str) -> dict[bytes, bytes]:
@@ -37,9 +38,7 @@ class _Shards:
 
     def _open(self, table: pa.Table) -> pq.ParquetWriter:
         name = f"train-{self.index:05d}-of-{self.count:05d}.parquet"
-        return pq.ParquetWriter(
-            self.folder / name, table.schema, compression="zstd"
-        )  # pragma: no mutate (case-insensitive)
+        return pq.ParquetWriter(self.folder / name, table.schema, compression=COMPRESSION)
 
     def write(self, df: pl.DataFrame) -> None:
         while df.height:
