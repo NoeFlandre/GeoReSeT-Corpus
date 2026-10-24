@@ -1,5 +1,17 @@
 # Pipeline
 
+Code layout:
+
+```
+georeset/
+  cli.py        command line
+  hub.py        Hugging Face Hub I/O
+  normalize/    languages, regions, OSM helpers (pure)
+  sources/      one adapter per upstream repo + shared base
+  build/        stage, assemble, pipeline, write
+  publish/      stats, plots, card rendering, report
+```
+
 ```
 upstream repos ──stage──▶ work/stage/<source>/<region>/{polygons,links,sentences}.parquet
                ──meta───▶ work/meta/polygons.parquet, work/meta/docs/<region>.parquet
@@ -10,7 +22,7 @@ upstream repos ──stage──▶ work/stage/<source>/<region>/{polygons,links
 
 ## Stage
 
-Each source adapter (`georeset.sources.*`) turns one region of one upstream repo into three common tables:
+Each source adapter (`georeset.sources.website`, `.description`, `.wiki`) turns one region of one upstream repo into three common tables:
 
 * **polygons**: `polygon_id` (`way/123`), name, primary OSM tag, centroid, area, WKB geometry.
 * **links**: document → polygon. A document is a website URL, an OSM description, or a Wikipedia / Wikivoyage article.

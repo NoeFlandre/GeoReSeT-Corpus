@@ -5,8 +5,8 @@ from pathlib import Path
 
 import polars as pl
 
-from georeset import card, plots, stats
-from georeset.pipeline import Layout
+from georeset.build.pipeline import Layout
+from georeset.publish import card, plots, stats
 
 MAP_RESOLUTION = 3
 TOP_LANGUAGES = 20

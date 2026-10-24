@@ -4,8 +4,8 @@ from pathlib import Path
 
 import polars as pl
 
-from georeset.osm import polygon_id, primary_tag, tags_list_to_json
-from georeset.sources import Source, Staged, attach_text, finish_sentences, osm_url
+from georeset.normalize.osm import polygon_id, primary_tag, tags_list_to_json
+from georeset.sources.base import Source, Staged, attach_text, finish_sentences, osm_url
 
 BBOX = ["bbox_min_x", "bbox_min_y", "bbox_max_x", "bbox_max_y"]
 

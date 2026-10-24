@@ -3,8 +3,9 @@ import threading
 
 import polars as pl
 
-from georeset import hub, stage
-from georeset.sources import Source, Staged
+from georeset import hub
+from georeset.build import stage
+from georeset.sources.base import Source, Staged
 
 
 def _transform(paths):

@@ -3,7 +3,7 @@ import json
 import polars as pl
 import pyarrow.parquet as pq
 
-from georeset.write import write_shards
+from georeset.build.write import write_shards
 
 
 def test_shards_names_counts_and_order(tmp_path):

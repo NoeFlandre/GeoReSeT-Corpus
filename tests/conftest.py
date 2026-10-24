@@ -3,9 +3,9 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from georeset.pipeline import Layout
-from georeset.sources import Staged
-from georeset.stage import write_staged
+from georeset.build.pipeline import Layout, build_meta, build_rows, build_shards
+from georeset.build.stage import write_staged
+from georeset.sources.base import Staged
 
 SQUARE = '{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,1],[0,0]]]}'
 
@@ -79,3 +79,16 @@ def layout(tmp_path):
         layout.stage / "website" / "italy-latest",
     )
     return layout
+
+
+def labels_columns(rows: list[tuple], keys: list[str]) -> dict:
+    """Upstream label-table columns from ``(keys..., decision, failure_reason, language)`` rows."""
+    names = [*keys, "decision", "failure_reason", "language"]
+    return {name: [row[i] for row in rows] for i, name in enumerate(names)}
+
+
+def build_all(layout):
+    build_meta(layout)
+    for staged in sorted(layout.stage.glob("*/*")):
+        build_rows(layout, staged)
+    build_shards(layout, workers=2)

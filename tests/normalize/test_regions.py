@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from georeset.regions import CONTINENT_OF, SUFFIX
+from georeset.normalize.regions import CONTINENT_OF, SUFFIX
 
-UPSTREAM = Path(__file__).parent / "data" / "regions.txt"
+UPSTREAM = Path(__file__).parents[1] / "data" / "regions.txt"
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,6 @@
 import polars as pl
 
-from georeset import stats
+from georeset.publish import stats
 
 
 def _data():

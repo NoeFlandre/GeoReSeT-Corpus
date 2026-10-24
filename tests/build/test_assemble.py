@@ -1,7 +1,7 @@
 import polars as pl
 import pytest
 
-from georeset.assemble import (
+from georeset.build.assemble import (
     CLEAN_COLUMNS,
     POLYGON_COLUMNS,
     UNLABELLED_COLUMNS,

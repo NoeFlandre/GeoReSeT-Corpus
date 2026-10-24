@@ -1,6 +1,6 @@
 import pytest
 
-from georeset.languages import UNDETERMINED, normalize
+from georeset.normalize.languages import UNDETERMINED, normalize
 
 
 @pytest.mark.parametrize(

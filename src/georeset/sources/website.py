@@ -4,8 +4,8 @@ from pathlib import Path
 
 import polars as pl
 
-from georeset.osm import geojson_to_wkb, polygon_id, primary_tag
-from georeset.sources import Source, Staged, attach_text, finish_sentences
+from georeset.normalize.osm import geojson_to_wkb, polygon_id, primary_tag
+from georeset.sources.base import Source, Staged, attach_text, finish_sentences
 
 FIELDS = ("website", "contact_website")
 

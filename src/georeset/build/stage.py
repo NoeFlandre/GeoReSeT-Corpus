@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from georeset import hub
-from georeset.sources import Source, Staged
+from georeset.sources.base import Source, Staged
 
 TABLES = ("polygons", "links", "sentences")
 

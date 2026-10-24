@@ -8,7 +8,7 @@ from string import Template
 
 import polars as pl
 
-from georeset.languages import UNDETERMINED
+from georeset.normalize.languages import UNDETERMINED
 
 
 def fmt(n: int) -> str:
@@ -116,7 +116,7 @@ def _front_matter(ctx: Context) -> str:
 
 def render(ctx: Context) -> str:
     total = _total(ctx)
-    template = Template(files("georeset").joinpath("templates/card.md").read_text())
+    template = Template(files("georeset.publish").joinpath("templates/card.md").read_text())
     languages = sorted({lang for _, lang in ctx.partitions})
     return template.substitute(
         front_matter=_front_matter(ctx),

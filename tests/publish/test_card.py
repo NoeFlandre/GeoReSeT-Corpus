@@ -2,7 +2,7 @@ import polars as pl
 import pytest
 from huggingface_hub import DatasetCard
 
-from georeset import card
+from georeset.publish import card
 
 
 def test_fmt_and_pct():

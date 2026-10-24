@@ -1,6 +1,8 @@
 from typer.testing import CliRunner
 
-from georeset import cli, hub, report, stage
+from georeset import cli, hub
+from georeset.build import stage
+from georeset.publish import report
 
 runner = CliRunner()
 

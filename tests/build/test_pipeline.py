@@ -1,17 +1,11 @@
 import polars as pl
+from conftest import build_all
 
-from georeset.pipeline import build_meta, build_rows, build_shards
-
-
-def build(layout):
-    build_meta(layout)
-    for staged in sorted(layout.stage.glob("*/*")):
-        build_rows(layout, staged)
-    build_shards(layout, workers=2)
+from georeset.build.pipeline import build_meta, build_rows
 
 
 def test_end_to_end(layout):
-    build(layout)
+    build_all(layout)
     out = layout.out
     assert sorted(str(p.relative_to(out)) for p in out.rglob("*.parquet")) == [
         "data/website/eng_Latn/train-00000-of-00001.parquet",
@@ -34,9 +28,9 @@ def test_end_to_end(layout):
 
 
 def test_rerun_is_a_no_op_and_work_is_cleaned(layout):
-    build(layout)
+    build_all(layout)
     first = pl.read_parquet(layout.out / "data/wikipedia")
-    build(layout)
+    build_all(layout)
     assert pl.read_parquet(layout.out / "data/wikipedia").equals(first)
     assert list(layout.stage.glob("*/*")) == []
     assert list((layout.work / "rows").glob("data/*/*")) == []

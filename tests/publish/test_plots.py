@@ -1,7 +1,7 @@
 import polars as pl
 import shapely
 
-from georeset import plots
+from georeset.publish import plots
 
 
 def test_hex_counts_sums_points_per_cell():

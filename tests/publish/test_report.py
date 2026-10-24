@@ -1,15 +1,15 @@
 import json
 
 import shapely
+from conftest import build_all
 from huggingface_hub import DatasetCard
-from test_pipeline import build
 
-from georeset import plots, report
+from georeset.publish import plots, report
 
 
 def test_build_card(layout, monkeypatch):
     monkeypatch.setattr(plots, "load_land", lambda cache: [shapely.box(-10, 35, 30, 60)])
-    build(layout)
+    build_all(layout)
     (layout.work / "revisions.json").write_text(json.dumps({"me/up": "abcdef123"}))
     readme = report.build_card(layout, "me/data", "https://github.com/me/code")
     text = readme.read_text()

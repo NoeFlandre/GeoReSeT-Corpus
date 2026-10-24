@@ -8,14 +8,14 @@ from pathlib import Path
 
 import polars as pl
 
-from georeset.assemble import (
+from georeset.build.assemble import (
     canonical_docs,
     doc_meta,
     pick_polygons,
     region_priority,
     to_rows,
 )
-from georeset.write import write_shards
+from georeset.build.write import write_shards
 
 _STAGED = r"stage/([^/]+)/([^/]+)/[^/]+\.parquet$"
 ROWS_PER_SHARD = 1_000_000

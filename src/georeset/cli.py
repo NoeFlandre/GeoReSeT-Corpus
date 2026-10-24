@@ -5,7 +5,9 @@ from typing import Annotated
 
 import typer
 
-from georeset import hub, pipeline, report, stage
+from georeset import hub
+from georeset.build import pipeline, stage
+from georeset.publish import report
 from georeset.sources import description, website, wiki
 
 SOURCES = (website.SOURCE, description.SOURCE, wiki.SOURCE)

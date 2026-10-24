@@ -4,7 +4,7 @@ import hashlib
 
 import polars as pl
 
-from georeset.regions import CONTINENT_OF, SUFFIX
+from georeset.normalize.regions import CONTINENT_OF, SUFFIX
 
 SOURCE_RANK = {"wiki": 0, "website": 1, "description": 2}
 LICENSES = {

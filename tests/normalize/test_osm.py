@@ -1,7 +1,7 @@
 import polars as pl
 import shapely
 
-from georeset.osm import (
+from georeset.normalize.osm import (
     geojson_to_wkb,
     has_letters,
     polygon_id,
