@@ -70,9 +70,15 @@ _SCRIPT: dict[str, str] = {
 }
 
 
+_MACRO_OF = {individual: macro for macro, individual in _MACRO.items()}
+
+
 def _script(iso3: str) -> str:
-    """GlotLID script override, else CLDR's likely script (``Latn`` when unknown)."""
-    return _SCRIPT.get(iso3) or str(langcodes.Language.get(iso3).maximize().script)
+    """GlotLID script override, else CLDR's likely script of the language or its macrolanguage.
+
+    CLDR defaults to ``Latn`` for languages it does not know.
+    """
+    return _SCRIPT.get(iso3) or str(langcodes.Language.get(_MACRO_OF.get(iso3, iso3)).maximize().script)
 
 
 def _label(iso3: str) -> str:
