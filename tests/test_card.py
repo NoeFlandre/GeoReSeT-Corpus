@@ -1,4 +1,5 @@
 import polars as pl
+import pytest
 from huggingface_hub import DatasetCard
 
 from georeset import card
@@ -25,6 +26,21 @@ def test_configs_cover_sources_languages_and_extras():
     assert configs[1]["data_files"][0]["path"] == "data/website/*/*.parquet"
     assert configs[4]["data_files"][0]["path"] == "data/*/fra_Latn/*.parquet"
     assert configs[-1]["data_files"][0]["path"] == "polygons/*.parquet"
+
+
+@pytest.mark.parametrize(
+    ("n", "label"),
+    [
+        (0, "n<1K"),
+        (999, "n<1K"),
+        (1000, "1K<n<10K"),
+        (99_999_999, "10M<n<100M"),
+        (10**8, "100M<n<1B"),
+        (10**9, "1B<n<10B"),
+    ],
+)
+def test_size_category(n, label):
+    assert card.size_category(n) == label
 
 
 def test_iso_codes():
@@ -60,6 +76,7 @@ def test_render_is_a_valid_card():
     parsed = DatasetCard(text)
     assert parsed.data.license == ["odbl", "cc-by-sa-4.0", "other"]
     assert parsed.data.language == ["fra"]
+    assert parsed.data.size_categories == ["n<1K"]
     assert [c["config_name"] for c in parsed.data.configs][:2] == ["all", "wikipedia"]
     assert "# GeoReSeT Corpus" in text
     assert "| wikipedia | 10 | 50 | 3 | 1 | 2 | 40.0% |" in text

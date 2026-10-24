@@ -58,6 +58,22 @@ def configs(partitions: list[tuple[str, str]]) -> list[dict]:
     ]
 
 
+_SIZES = [
+    (10**3, "n<1K"),
+    (10**4, "1K<n<10K"),
+    (10**5, "10K<n<100K"),
+    (10**6, "100K<n<1M"),
+    (10**7, "1M<n<10M"),
+    (10**8, "10M<n<100M"),
+    (10**9, "100M<n<1B"),
+]
+
+
+def size_category(n: int) -> str:
+    """Hugging Face ``size_categories`` bucket of ``n`` rows."""
+    return next((label for bound, label in _SIZES if n < bound), "1B<n<10B")
+
+
 def iso_codes(languages: list[str]) -> list[str]:
     return sorted({lang.split("_")[0] for lang in languages if lang != UNDETERMINED})
 
@@ -80,6 +96,10 @@ def _bold_total(df: pl.DataFrame, column: str) -> pl.DataFrame:
     )
 
 
+def _total(ctx: Context) -> dict:
+    return ctx.by_source.filter(pl.col("source") == "total").row(0, named=True)
+
+
 def _front_matter(ctx: Context) -> str:
     meta = {
         "license": ["odbl", "cc-by-sa-4.0", "other"],
@@ -87,7 +107,7 @@ def _front_matter(ctx: Context) -> str:
         "language": iso_codes([lang for _, lang in ctx.partitions]),
         "task_categories": ["text-classification"],
         "tags": ["openstreetmap", "land-use", "land-cover", "geospatial", "multilingual"],
-        "size_categories": ["100M<n<1B"],
+        "size_categories": [size_category(_total(ctx)["sentences"])],
         "configs": configs(ctx.partitions),
     }
     # JSON is valid YAML: no YAML dependency, no quoting surprises.
@@ -95,7 +115,7 @@ def _front_matter(ctx: Context) -> str:
 
 
 def render(ctx: Context) -> str:
-    total = ctx.by_source.filter(pl.col("source") == "total").row(0, named=True)
+    total = _total(ctx)
     template = Template(files("georeset").joinpath("templates/card.md").read_text())
     languages = sorted({lang for _, lang in ctx.partitions})
     return template.substitute(
