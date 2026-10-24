@@ -317,7 +317,7 @@
        font-weight="700"
        fill="#253745"
        text-anchor="middle"
-       id="text14">Text-only relevance</text>
+       id="text14">Land-use relevance</text>
     <path
        d="M802,313 L802,339 L727,339 L727,357"
        fill="none"
