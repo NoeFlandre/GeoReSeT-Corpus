@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
+import pyarrow.parquet as pq
 
 from georeset.build.assemble import (
     canonical_docs,
@@ -15,10 +16,11 @@ from georeset.build.assemble import (
     region_priority,
     to_rows,
 )
-from georeset.build.write import write_shards
+from georeset.build.write import write_stream
 
 _STAGED = r"stage/([^/]+)/([^/]+)/[^/]+\.parquet$"
 ROWS_PER_SHARD = 1_000_000
+SORT_CHUNK_ROWS = 3_000_000
 POLYGONS_PER_SHARD = 250_000
 
 
@@ -92,10 +94,31 @@ def build_rows(layout: Layout, staged: Path) -> None:
     shutil.rmtree(staged)
 
 
+def region_chunks(counts: pl.DataFrame, budget: int) -> list[list[str]]:
+    """Group consecutive sorted regions into chunks of at most ``budget`` rows (or one region)."""
+    chunks: list[list[str]] = []
+    size = budget
+    for region, n in counts.sort("region").iter_rows():
+        if size + n > budget:
+            chunks.append([])
+            size = 0
+        chunks[-1].append(region)
+        size += n
+    return chunks
+
+
 def _shard(rows: Path, out: Path) -> None:
-    """Sort one partition by region then document and write it; rows are deleted after."""
-    df = pl.read_parquet(rows / "*.parquet").sort("region", "doc_key", "position")
-    write_shards(df.drop("doc_key", "position"), out, ROWS_PER_SHARD)
+    """Sort one partition by region then document, chunk by chunk to bound memory; delete rows after."""
+    scan = pl.scan_parquet(rows / "*.parquet")
+    counts = scan.group_by("region").agg(n=pl.len()).collect()
+    frames = (
+        scan.filter(pl.col("region").is_in(chunk))
+        .collect()
+        .sort("region", "doc_key", "position")
+        .drop("doc_key", "position")
+        for chunk in region_chunks(counts, SORT_CHUNK_ROWS)
+    )
+    write_stream(frames, int(counts["n"].sum()), out, ROWS_PER_SHARD)
     shutil.rmtree(rows)
 
 
@@ -107,14 +130,10 @@ def shard_jobs(layout: Layout) -> list[tuple[Path, Path]]:
 
 def build_shards(layout: Layout, workers: int) -> None:
     run_parallel([lambda r=r, o=o: _shard(r, o) for r, o in shard_jobs(layout)], workers)
-    polygons = pl.read_parquet(layout.meta / "polygons.parquet")
-    write_shards(
-        polygons,
-        layout.out / "polygons",
-        POLYGONS_PER_SHARD,
-        50_000,
-        geometry="geometry",
-    )
+    source = pq.ParquetFile(layout.meta / "polygons.parquet")
+    batches = (pl.DataFrame(b) for b in source.iter_batches(batch_size=50_000))
+    total = source.metadata.num_rows
+    write_stream(batches, total, layout.out / "polygons", POLYGONS_PER_SHARD, 50_000, geometry="geometry")
 
 
 def run_parallel(jobs: Iterable[Callable[[], None]], workers: int) -> None:
