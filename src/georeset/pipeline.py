@@ -45,9 +45,7 @@ def _scan_staged(layout: Layout, table: str) -> pl.LazyFrame:
     path = pl.col("path")
     return pl.scan_parquet(
         layout.stage / "*" / "*" / f"{table}.parquet", include_file_paths="path"
-    ).with_columns(
-        source=path.str.extract(_STAGED, 1), stem=path.str.extract(_STAGED, 2)
-    )
+    ).with_columns(source=path.str.extract(_STAGED, 1), stem=path.str.extract(_STAGED, 2))
 
 
 def build_meta(layout: Layout) -> None:
@@ -56,23 +54,13 @@ def build_meta(layout: Layout) -> None:
         return
     layout.meta.mkdir(parents=True, exist_ok=True)
     candidates = _scan_staged(layout, "polygons").drop("path")
-    priority = (
-        region_priority(candidates.group_by("stem").agg(n=pl.len())).collect().lazy()
-    )
+    priority = region_priority(candidates.group_by("stem").agg(n=pl.len())).collect().lazy()
     polygons = pick_polygons(candidates, priority).sort("region", "polygon_id")
     polygons.sink_parquet(layout.meta / "polygons.parquet", compression="zstd")
-    attributes = pl.scan_parquet(layout.meta / "polygons.parquet").drop(
-        "geometry", "osm_type", "osm_id"
-    )
-    meta = doc_meta(
-        _scan_staged(layout, "links").select("doc_key", "polygon_id"), attributes
-    )
+    attributes = pl.scan_parquet(layout.meta / "polygons.parquet").drop("geometry", "osm_type", "osm_id")
+    meta = doc_meta(_scan_staged(layout, "links").select("doc_key", "polygon_id"), attributes)
     presence = _scan_staged(layout, "sentences").select("doc_key", "stem").unique()
-    docs = (
-        canonical_docs(presence, priority)
-        .join(meta, on="doc_key")
-        .collect(engine="streaming")
-    )
+    docs = canonical_docs(presence, priority).join(meta, on="doc_key").collect(engine="streaming")
     tmp = layout.meta / "docs.tmp"
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir()
@@ -91,13 +79,9 @@ def build_rows(layout: Layout, staged: Path) -> None:
     docs = layout.meta / "docs" / f"{stem}.parquet"
     if done.exists() or not docs.exists():
         return
-    clean, unlabelled = to_rows(
-        pl.read_parquet(staged / "sentences.parquet"), pl.read_parquet(docs)
-    )
+    clean, unlabelled = to_rows(pl.read_parquet(staged / "sentences.parquet"), pl.read_parquet(docs))
     name = f"{source}__{stem}.parquet"
-    for (out_source, language), part in clean.partition_by(
-        "source", "language", as_dict=True
-    ).items():
+    for (out_source, language), part in clean.partition_by("source", "language", as_dict=True).items():
         target = layout.rows / "data" / str(out_source) / str(language)
         target.mkdir(parents=True, exist_ok=True)
         part.write_parquet(target / name)
@@ -122,9 +106,7 @@ def shard_jobs(layout: Layout) -> list[tuple[Path, Path]]:
 
 
 def build_shards(layout: Layout, workers: int) -> None:
-    run_parallel(
-        [lambda r=r, o=o: _shard(r, o) for r, o in shard_jobs(layout)], workers
-    )
+    run_parallel([lambda r=r, o=o: _shard(r, o) for r, o in shard_jobs(layout)], workers)
     polygons = pl.read_parquet(layout.meta / "polygons.parquet")
     write_shards(
         polygons,

@@ -153,6 +153,14 @@ def test_website_transform(write):
     ]
 
 
+def test_description_files():
+    assert description.files("x") == {
+        "polygons": "data/x.parquet",
+        "texts": "language-v1/data/x.parquet",
+        "labels": "labels/language-v1/data/x.parquet",
+    }
+
+
 def test_website_files():
     assert website.files("x-latest") == {
         "polygons": "polygons/x-latest.parquet",
@@ -228,9 +236,7 @@ def test_description_transform(write):
             "language": pl.String,
         },
     )
-    staged = description.transform(
-        {"polygons": polygons, "texts": texts, "labels": labels}
-    )
+    staged = description.transform({"polygons": polygons, "texts": texts, "labels": labels})
     s = staged.sentences.sort("doc_key")
     assert s["text"].to_list() == ["Nice view", "Grand refuge"]
     assert s["language"].to_list() == ["eng_Latn", "fra_Latn"]
@@ -268,10 +274,7 @@ def _wiki_project(write, project, rows):
             "failure_reason": [None] * len(rows),
             "language": [r[5] for r in rows],
         },
-        schema={
-            k: pl.String
-            for k in ["sentence_id", "decision", "failure_reason", "language"]
-        },
+        schema={k: pl.String for k in ["sentence_id", "decision", "failure_reason", "language"]},
     )
     return {f"{project}_sentences": sentences, f"{project}_labels": labels}
 

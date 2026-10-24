@@ -55,9 +55,7 @@ def _docs(path: Path) -> pl.DataFrame:
 
 
 def _sentences(docs: pl.DataFrame, labels: pl.DataFrame) -> pl.DataFrame:
-    canonical = docs.sort("polygon_id", "field").unique(
-        "url", keep="first", maintain_order=True
-    )
+    canonical = docs.sort("polygon_id", "field").unique("url", keep="first", maintain_order=True)
     labelled = labels.join(
         canonical.select("raw_id", "field", "url"),
         left_on=["polygon_id", "field"],
@@ -109,6 +107,4 @@ def transform(paths: dict[str, Path]) -> Staged:
     )
 
 
-SOURCE = Source(
-    "website", "NoeFlandre/osm-polygon-website-tag-landuse", files, transform
-)
+SOURCE = Source("website", "NoeFlandre/osm-polygon-website-tag-landuse", files, transform)

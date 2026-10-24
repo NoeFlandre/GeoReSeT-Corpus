@@ -80,9 +80,7 @@ def transform(paths: dict[str, Path]) -> Staged:
             "geometry",
         ],
     )
-    links = pl.read_parquet(
-        paths["links"], columns=["osm_type", "osm_id", "document_id"]
-    )
+    links = pl.read_parquet(paths["links"], columns=["osm_type", "osm_id", "document_id"])
     sentences = pl.concat(_project_sentences(paths, project) for project in PROJECTS)
     return Staged(
         polygons=polygons.select(
@@ -102,6 +100,4 @@ def transform(paths: dict[str, Path]) -> Staged:
     )
 
 
-SOURCE = Source(
-    "wiki", "NoeFlandre/osm-polygon-wikidata-and-wikipedia-landuse", files, transform
-)
+SOURCE = Source("wiki", "NoeFlandre/osm-polygon-wikidata-and-wikipedia-landuse", files, transform)

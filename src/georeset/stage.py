@@ -1,7 +1,9 @@
 """Download each (source, region), convert it to staged tables, delete the download."""
 
+import json
 import shutil
 import tempfile
+import threading
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -31,25 +33,19 @@ def write_staged(staged: Staged, out: Path) -> None:
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
     for table in TABLES:
-        getattr(staged, table).write_parquet(
-            tmp / f"{table}.parquet", compression="zstd"
-        )
+        getattr(staged, table).write_parquet(tmp / f"{table}.parquet", compression="zstd")
     tmp.rename(out)
 
 
-def run_task(task: Task, work: Path) -> Path:
+def run_task(task: Task, work: Path, transforms: threading.Semaphore) -> Path:
+    """Download freely, but convert under ``transforms`` to bound memory."""
     out = stage_dir(work, task.source.name, task.stem)
     if out.exists():
         return out
-    wanted = {
-        k: p for k, p in task.source.files(task.stem).items() if p in task.available
-    }
+    wanted = {k: p for k, p in task.source.files(task.stem).items() if p in task.available}
     (work / "tmp").mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=work / "tmp") as tmp:
-        local = {
-            k: hub.download(task.source.repo, p, task.rev, Path(tmp))
-            for k, p in wanted.items()
-        }
+        local = {k: hub.download(task.source.repo, p, task.rev, Path(tmp)) for k, p in wanted.items()}
         write_staged(task.source.transform(local), out)
     return out
 
@@ -63,6 +59,15 @@ def tasks(sources: Iterable[Source], stems: Iterable[str]) -> list[Task]:
     return out
 
 
-def stage(todo: list[Task], work: Path, workers: int) -> list[Path]:
-    with ThreadPoolExecutor(workers) as pool:
-        return list(pool.map(lambda t: run_task(t, work), todo))
+def record_revisions(todo: list[Task], work: Path) -> None:
+    """Pin the upstream commits used, for the dataset card."""
+    revisions = {task.source.repo: task.rev for task in todo}
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "revisions.json").write_text(json.dumps(revisions, indent=2))
+
+
+def stage(todo: list[Task], work: Path, downloads: int, transforms: int) -> list[Path]:
+    record_revisions(todo, work)
+    limit = threading.Semaphore(transforms)
+    with ThreadPoolExecutor(downloads) as pool:
+        return list(pool.map(lambda t: run_task(t, work, limit), todo))

@@ -1,14 +1,6 @@
 import pytest
 
-from georeset.regions import CONTINENT_OF, region_name
-
-
-def test_region_name_strips_suffix():
-    assert region_name("italy-latest") == "italy"
-
-
-def test_region_name_keeps_plain_name():
-    assert region_name("italy") == "italy"
+from georeset.regions import CONTINENT_OF
 
 
 @pytest.mark.parametrize(

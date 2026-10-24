@@ -58,17 +58,13 @@ def finish_sentences(sentences: pl.DataFrame, scheme: Scheme) -> pl.DataFrame:
     codes = kept["language"].unique().to_list()
     mapping = {code: normalize(code, scheme) for code in codes}
     return (
-        kept.with_columns(
-            pl.col("language").replace_strict(mapping, return_dtype=pl.String)
-        )
+        kept.with_columns(pl.col("language").replace_strict(mapping, return_dtype=pl.String))
         .select(SENTENCE_SCHEMA.names())
-        .cast(dict(SENTENCE_SCHEMA))
+        .cast(SENTENCE_SCHEMA)
     )
 
 
-def attach_text(
-    labels: pl.DataFrame, docs: pl.DataFrame, keys: list[str]
-) -> pl.DataFrame:
+def attach_text(labels: pl.DataFrame, docs: pl.DataFrame, keys: list[str]) -> pl.DataFrame:
     """Add ``text`` to labels keyed by ``keys`` + ``sentence_index``.
 
     ``docs`` holds ``keys``, a ``sentences`` list and the ``full_text`` used for
@@ -78,9 +74,7 @@ def attach_text(
         docs.select(
             *keys,
             "sentences",
-            sentence_index=pl.int_ranges(
-                pl.col("sentences").list.len(), dtype=pl.Int32
-            ),
+            sentence_index=pl.int_ranges(pl.col("sentences").list.len(), dtype=pl.Int32),
         )
         .explode("sentences", "sentence_index")
         .drop_nulls("sentence_index")
@@ -89,9 +83,9 @@ def attach_text(
         docs.select(*keys, "full_text"), on=keys, how="left"
     )
     skipped = pl.col("label") == "skipped_unsplit"
-    return joined.with_columns(
-        text=pl.when(skipped).then("full_text").otherwise("sentences")
-    ).drop("sentences", "full_text")
+    return joined.with_columns(text=pl.when(skipped).then("full_text").otherwise("sentences")).drop(
+        "sentences", "full_text"
+    )
 
 
 def osm_url(polygon_id: pl.Expr) -> pl.Expr:

@@ -86,14 +86,21 @@ def _wikimedia(code: str) -> str:
     return _label(_MACRO.get(iso3, iso3))
 
 
+def _glotlid(code: str) -> str:
+    if _LABEL.fullmatch(code):
+        return code
+    raise ValueError(code)
+
+
+_CONVERTERS = {"glotlid": _glotlid, "iso639_3": _label, "wikimedia": _wikimedia}
+
+
 @cache
 def normalize(code: str | None, scheme: Scheme) -> str:
     """Return the GlotLID label for ``code`` written in ``scheme``, or ``und_Zzzz``."""
     if not code or code in ("und", "unknown"):
         return UNDETERMINED
-    if scheme == "glotlid":
-        return code if _LABEL.fullmatch(code) else UNDETERMINED
     try:
-        return _label(code) if scheme == "iso639_3" else _wikimedia(code)
+        return _CONVERTERS[scheme](code)
     except (LookupError, ValueError):
         return UNDETERMINED

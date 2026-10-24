@@ -8,3 +8,4 @@ mutants/
 work/
 out/
 site/
+coverage.json

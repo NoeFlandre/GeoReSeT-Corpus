@@ -48,9 +48,7 @@ def _candidates():
 
 
 def test_pick_polygons_best_region_then_best_source():
-    priority = pl.LazyFrame(
-        {"stem": ["centro-latest", "italy-latest"], "priority": [0, 1]}
-    )
+    priority = pl.LazyFrame({"stem": ["centro-latest", "italy-latest"], "priority": [0, 1]})
     out = pick_polygons(_candidates(), priority).collect().sort("polygon_id")
     assert out["name"].to_list() == ["from-web", "two"]
     assert out["region"].to_list() == ["centro", "italy"]
@@ -102,17 +100,13 @@ def test_canonical_docs_keeps_highest_priority_copy():
             "stem": ["italy-latest", "centro-latest", "italy-latest"],
         }
     )
-    priority = pl.LazyFrame(
-        {"stem": ["centro-latest", "italy-latest"], "priority": [0, 1]}
-    )
+    priority = pl.LazyFrame({"stem": ["centro-latest", "italy-latest"], "priority": [0, 1]})
     out = canonical_docs(presence, priority).collect().sort("doc_key")
     assert out.rows() == [("d", "centro-latest"), ("e", "italy-latest")]
 
 
 def test_row_id_is_stable_and_distinct():
-    df = pl.DataFrame(
-        {"source": ["a", "a", "b"], "doc_key": ["d", "d", "d"], "position": [0, 1, 0]}
-    )
+    df = pl.DataFrame({"source": ["a", "a", "b"], "doc_key": ["d", "d", "d"], "position": [0, 1, 0]})
     ids = df.select(row_id()).to_series().to_list()
     assert len(set(ids)) == 3
     assert all(len(i) == 32 for i in ids)

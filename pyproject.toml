@@ -11,10 +11,12 @@ dependencies = [
     "h3>=4.5.0",
     "huggingface-hub>=2.3.0",
     "langcodes>=3.5.1",
+    "language-data>=1.4.0",
     "matplotlib>=3.11.2",
     "polars>=2.0.0",
     "pyarrow>=26.0.0",
     "pyproj>=3.8.0",
+    "pyshp>=3.1.6",
     "shapely>=2.2.0",
     "typer>=0.27.3",
 ]
@@ -29,6 +31,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "hypothesis>=6.170.9",
+    "mkdocs>=1.6,<2",
     "mkdocs-material>=9.7.7",
     "mkdocstrings[python]>=1.0.8",
     "mutmut>=3.8.0",
@@ -38,3 +41,25 @@ dev = [
     "ruff>=0.17.2",
     "ty>=0.0.91",
 ]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "tests"]
+testpaths = ["tests"]
+
+[tool.mutmut]
+paths_to_mutate = ["src/georeset/"]
+tests_dir = ["tests/"]
+also_copy = ["tools/"]
+
+[tool.coverage.run]
+branch = true
+source = ["georeset", "tools"]
+
+[tool.coverage.report]
+exclude_also = ["if __name__ == .__main__.:"]

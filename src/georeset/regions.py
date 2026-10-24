@@ -1,4 +1,4 @@
-"""Geofabrik extract names to clean region names and continents."""
+"""Continent of each Geofabrik extract used upstream."""
 
 _CONTINENTS: dict[str, str] = {
     "africa": (
@@ -81,15 +81,9 @@ _CONTINENTS: dict[str, str] = {
 }
 
 CONTINENT_OF: dict[str, str] = {
-    region: continent
-    for continent, names in _CONTINENTS.items()
-    for region in names.split()
+    region: continent for continent, names in _CONTINENTS.items() for region in names.split()
 }
 
 
+# Geofabrik file stems are ``<region>-latest``.
 SUFFIX = "-latest"
-
-
-def region_name(stem: str) -> str:
-    """Map a Geofabrik file stem (``italy-latest``) to a region name (``italy``)."""
-    return stem.removesuffix(SUFFIX)

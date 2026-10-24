@@ -15,9 +15,7 @@ def _eval(expr: pl.Expr, **columns) -> list:
 
 
 def test_polygon_id():
-    assert _eval(
-        polygon_id(pl.col("t"), pl.col("i")), t=["way", "relation"], i=[1, 22]
-    ) == [
+    assert _eval(polygon_id(pl.col("t"), pl.col("i")), t=["way", "relation"], i=[1, 22]) == [
         "way/1",
         "relation/22",
     ]
@@ -35,9 +33,7 @@ def test_primary_tag_follows_priority():
 
 
 def test_primary_tag_tolerates_spaces_and_missing():
-    assert _eval(
-        primary_tag(pl.col("j")), j=['{"natural": "wood"}', '{"name":"x"}', None]
-    ) == [
+    assert _eval(primary_tag(pl.col("j")), j=['{"natural": "wood"}', '{"name":"x"}', None]) == [
         "natural=wood",
         None,
         None,
@@ -45,9 +41,7 @@ def test_primary_tag_tolerates_spaces_and_missing():
 
 
 def test_primary_tag_matches_whole_key():
-    assert _eval(
-        primary_tag(pl.col("j")), j=['{"disused:shop":"bakery","shop":"bread"}']
-    ) == ["shop=bread"]
+    assert _eval(primary_tag(pl.col("j")), j=['{"disused:shop":"bakery","shop":"bread"}']) == ["shop=bread"]
 
 
 def test_tags_list_to_json_feeds_primary_tag():

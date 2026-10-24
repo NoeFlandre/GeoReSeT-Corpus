@@ -51,9 +51,7 @@ def tags_list_to_json(tags: pl.Expr) -> pl.Expr:
 def primary_tag(tags_json: pl.Expr) -> pl.Expr:
     """``key=value`` of the first ``PRIMARY_KEYS`` key present in a JSON tag object."""
     return pl.coalesce(
-        pl.concat_str(
-            pl.lit(f"{key}="), tags_json.str.extract(f'"{key}":\\s*"([^"]*)"')
-        )
+        pl.concat_str(pl.lit(f"{key}="), tags_json.str.extract(f'"{key}":\\s*"([^"]*)"'))
         for key in PRIMARY_KEYS
     )
 

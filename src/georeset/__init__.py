@@ -1,2 +1,1 @@
-def hello() -> str:
-    return "Hello from georeset!"
+"""Build and publish the GeoReSeT corpus."""

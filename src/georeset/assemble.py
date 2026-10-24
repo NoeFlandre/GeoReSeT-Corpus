@@ -44,9 +44,7 @@ POLYGON_COLUMNS = [
 
 def region_priority(counts: pl.LazyFrame) -> pl.LazyFrame:
     """Rank extracts so the smallest (most specific) wins overlaps: ``centro`` over ``italy``."""
-    return counts.sort("n", "stem").select(
-        "stem", priority=pl.int_range(pl.len(), dtype=pl.UInt32)
-    )
+    return counts.sort("n", "stem").select("stem", priority=pl.int_range(pl.len(), dtype=pl.UInt32))
 
 
 def pick_polygons(candidates: pl.LazyFrame, priority: pl.LazyFrame) -> pl.LazyFrame:
@@ -60,9 +58,7 @@ def pick_polygons(candidates: pl.LazyFrame, priority: pl.LazyFrame) -> pl.LazyFr
         .unique("polygon_id", keep="first", maintain_order=True)
         .with_columns(region=region)
         .with_columns(
-            continent=pl.col("region").replace_strict(
-                CONTINENT_OF, return_dtype=pl.String
-            ),
+            continent=pl.col("region").replace_strict(CONTINENT_OF, return_dtype=pl.String),
             osm_type=osm.struct.field("field_0"),
             osm_id=osm.struct.field("field_1").cast(pl.Int64),
         )
@@ -73,9 +69,7 @@ def pick_polygons(candidates: pl.LazyFrame, priority: pl.LazyFrame) -> pl.LazyFr
 def doc_meta(links: pl.LazyFrame, polygons: pl.LazyFrame) -> pl.LazyFrame:
     """Per document: sorted ``polygon_ids`` and the attributes of the first one."""
     known = links.unique().join(polygons.select("polygon_id"), on="polygon_id")
-    ids = known.group_by("doc_key").agg(
-        pl.col("polygon_id").sort().alias("polygon_ids")
-    )
+    ids = known.group_by("doc_key").agg(pl.col("polygon_id").sort().alias("polygon_ids"))
     primary = ids.with_columns(polygon_id=pl.col("polygon_ids").list.first())
     return primary.join(polygons, on="polygon_id").select("doc_key", *META_COLUMNS)
 
@@ -91,22 +85,16 @@ def canonical_docs(presence: pl.LazyFrame, priority: pl.LazyFrame) -> pl.LazyFra
 
 
 def _hash(keys: pl.Series) -> pl.Series:
-    return pl.Series(
-        [hashlib.blake2b(k.encode(), digest_size=16).hexdigest() for k in keys]
-    )
+    return pl.Series([hashlib.blake2b(k.encode(), digest_size=16).hexdigest() for k in keys])
 
 
 def row_id() -> pl.Expr:
     """Stable 128-bit hex id of (source, document, position)."""
-    key = pl.concat_str(
-        pl.col("source"), pl.col("doc_key"), pl.col("position"), separator="\x1f"
-    )
+    key = pl.concat_str(pl.col("source"), pl.col("doc_key"), pl.col("position"), separator="\x1f")
     return key.map_batches(_hash, return_dtype=pl.String).alias("id")
 
 
-def to_rows(
-    sentences: pl.DataFrame, meta: pl.DataFrame
-) -> tuple[pl.DataFrame, pl.DataFrame]:
+def to_rows(sentences: pl.DataFrame, meta: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Final (clean, unlabelled) rows; ``doc_key`` and ``position`` are kept for sorting."""
     rows = sentences.join(meta, on="doc_key").with_columns(
         row_id(),
@@ -115,12 +103,8 @@ def to_rows(
     is_clean = pl.col("label").is_in(CLEAN_LABELS)
     clean = rows.filter(is_clean).with_columns(landuse=pl.col("label") == "yes")
     unlabelled = rows.filter(~is_clean).with_columns(
-        status=pl.when(pl.col("label") == "failed")
-        .then(pl.lit("failed"))
-        .otherwise(pl.lit("unsplit")),
+        status=pl.when(pl.col("label") == "failed").then(pl.lit("failed")).otherwise(pl.lit("unsplit")),
         failure_reason=pl.when(pl.col("label") == "failed").then("failure_reason"),
     )
     keys = ["doc_key", "position"]
-    return clean.select(*CLEAN_COLUMNS, *keys), unlabelled.select(
-        *UNLABELLED_COLUMNS, *keys
-    )
+    return clean.select(*CLEAN_COLUMNS, *keys), unlabelled.select(*UNLABELLED_COLUMNS, *keys)
