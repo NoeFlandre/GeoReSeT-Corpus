@@ -1,4 +1,5 @@
 import polars as pl
+import pytest
 from conftest import build_all
 
 from georeset.build.pipeline import build_meta, build_rows, region_chunks
@@ -67,10 +68,11 @@ def test_large_partition_is_sorted_across_chunks(layout, monkeypatch):
     assert pl.read_parquet(layout.out / "polygons")["polygon_id"].to_list() == ["way/1", "way/2", "way/3"]
 
 
-def test_shards_are_sorted_by_region_then_document_then_position(layout, monkeypatch):
+@pytest.mark.parametrize("chunk_rows", [1, 100])
+def test_shards_are_sorted_by_region_then_document_then_position(layout, monkeypatch, chunk_rows):
     from georeset.build import pipeline
 
-    monkeypatch.setattr(pipeline, "SORT_CHUNK_ROWS", 1)
+    monkeypatch.setattr(pipeline, "SORT_CHUNK_ROWS", chunk_rows)
     rows = layout.work / "rows" / "data" / "s" / "l"
     rows.mkdir(parents=True)
     frame = pl.DataFrame(
@@ -113,3 +115,30 @@ def test_rows_leave_a_done_marker_and_polygons_are_geoparquet_sorted(layout, mon
         ("italy", "way/2"),
         ("italy", "way/3"),
     ]
+
+
+def test_meta_prefers_the_smaller_extract_even_when_it_sorts_last(tmp_path):
+    from conftest import _polygons, _sentences
+
+    from georeset.build.pipeline import Layout
+    from georeset.build.stage import write_staged
+    from georeset.sources.base import Staged
+
+    layout = Layout(tmp_path / "work", tmp_path / "out")
+    for stem, ids in [("andorra-latest", ["way/9", "way/2", "way/3"]), ("zimbabwe-latest", ["way/9"])]:
+        write_staged(
+            Staged(
+                polygons=_polygons(ids, stem),
+                links=pl.DataFrame({"doc_key": ["Q1"], "polygon_id": ["way/9"]}),
+                sentences=_sentences("wikipedia", "Q1", ["yes"]),
+            ),
+            layout.stage / "wiki" / stem,
+        )
+    build_meta(layout)
+    polygons = pl.read_parquet(layout.work / "meta" / "polygons.parquet")
+    assert polygons.select("region", "polygon_id").rows() == [
+        ("andorra", "way/2"),
+        ("andorra", "way/3"),
+        ("zimbabwe", "way/9"),
+    ]
+    assert [p.name for p in (layout.work / "meta" / "docs").iterdir()] == ["zimbabwe-latest.parquet"]

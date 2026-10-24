@@ -84,3 +84,27 @@ def test_write_staged_replaces_a_stale_tmp(tmp_path):
     stage.write_staged(Staged(polygons=frame, links=frame, sentences=frame), out)
     assert sorted(p.name for p in out.iterdir()) == ["links.parquet", "polygons.parquet", "sentences.parquet"]
     assert not stale.exists()
+
+
+def test_conversion_runs_inside_the_semaphore_but_downloads_do_not(tmp_path, monkeypatch):
+    events = []
+
+    class Gate:
+        def __enter__(self):
+            events.append("enter")
+
+        def __exit__(self, *a):
+            events.append("exit")
+
+    def download(*a):
+        events.append("download")
+        return _fake_download(*a)
+
+    def transform(paths):
+        events.append("transform")
+        return _transform(paths)
+
+    monkeypatch.setattr(hub, "download", download)
+    source = Source("fake", "me/fake", SOURCE.files, transform)
+    stage.run_task(stage.Task(source, "r", "rev1", frozenset({"a/r"})), tmp_path, Gate())
+    assert events == ["download", "enter", "transform", "exit"]

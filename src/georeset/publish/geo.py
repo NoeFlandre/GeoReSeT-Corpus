@@ -13,7 +13,7 @@ import shapely
 from pyproj import Transformer
 
 LAND_URL = "https://naciscdn.org/naturalearth/110m/physical/ne_110m_land.zip"
-LAND_FILES = ("ne_110m_land.shp", "ne_110m_land.shx", "ne_110m_land.dbf")
+LAND_SHAPES = "ne_110m_land.shp"
 _PROJECT = Transformer.from_crs("EPSG:4326", "+proj=eqearth", always_xy=True)
 
 
@@ -38,9 +38,8 @@ def bin_index(n: pl.Series, levels: int) -> pl.Series:
 
 def binned_rings(counts: pl.DataFrame, levels: int) -> list[tuple[np.ndarray, int]]:
     """(projected ring, decade bin) of every drawable cell."""
-    bins = bin_index(counts["n"], levels)
-    pairs = zip(counts["cell"], bins, strict=True)
-    return [(ring, b) for c, b in pairs if (ring := cell_ring(c)) is not None]
+    binned = counts.select("cell", bin=bin_index(counts["n"], levels))
+    return [(ring, b) for c, b in binned.iter_rows() if (ring := cell_ring(c)) is not None]
 
 
 def load_land(cache: Path) -> list[shapely.Geometry]:
@@ -51,8 +50,7 @@ def load_land(cache: Path) -> list[shapely.Geometry]:
         with urllib.request.urlopen(LAND_URL) as response:
             path.write_bytes(response.read())
     with zipfile.ZipFile(path) as archive:
-        shp, shx, dbf = (io.BytesIO(archive.read(name)) for name in LAND_FILES)
-        shapes = shapefile.Reader(shp=shp, shx=shx, dbf=dbf).shapes()
+        shapes = shapefile.Reader(shp=io.BytesIO(archive.read(LAND_SHAPES))).shapes()
         return [shapely.geometry.shape(s.__geo_interface__) for s in shapes if s is not None]
 
 

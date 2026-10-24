@@ -70,15 +70,11 @@ def attach_text(labels: pl.DataFrame, docs: pl.DataFrame, keys: list[str]) -> pl
     ``docs`` holds ``keys``, a ``sentences`` list and the ``full_text`` used for
     ``skipped_unsplit`` labels. Lists are exploded, never joined, to keep memory flat.
     """
-    exploded = (
-        docs.select(
-            *keys,
-            "sentences",
-            sentence_index=pl.int_ranges(pl.col("sentences").list.len()),
-        )
-        .explode("sentences", "sentence_index")
-        .drop_nulls("sentence_index")
-    )
+    exploded = docs.select(
+        *keys,
+        "sentences",
+        sentence_index=pl.int_ranges(pl.col("sentences").list.len()),
+    ).explode("sentences", "sentence_index")
     joined = labels.join(exploded, on=[*keys, "sentence_index"], how="left").join(
         docs.select(*keys, "full_text"), on=keys
     )

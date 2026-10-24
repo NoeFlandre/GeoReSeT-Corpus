@@ -78,14 +78,8 @@ def doc_meta(links: pl.LazyFrame, polygons: pl.LazyFrame) -> pl.LazyFrame:
 
 def canonical_docs(presence: pl.LazyFrame, priority: pl.LazyFrame) -> pl.LazyFrame:
     """The one staged region each document's sentences are taken from."""
-    return (
-        presence.join(priority, on="stem")
-        .sort("priority")
-        .unique(
-            "doc_key", keep="first"
-        )  # pragma: no mutate (keep='first' is required; polars' 'any' only matches by luck)
-        .select("doc_key", "stem")
-    )
+    joined = presence.join(priority, on="stem")
+    return joined.group_by("doc_key").agg(pl.col("stem").sort_by("priority").first())
 
 
 def _hash(keys: pl.Series) -> pl.Series:
@@ -94,7 +88,8 @@ def _hash(keys: pl.Series) -> pl.Series:
 
 def row_id() -> pl.Expr:
     """Stable 128-bit hex id of (source, document, position)."""
-    key = pl.concat_str(pl.col("source"), pl.col("doc_key"), pl.col("position"), separator="\x1f")
+    parts = pl.col("source"), pl.col("doc_key"), pl.col("position")
+    key = pl.concat_str(*parts, separator="\x1f")  # pragma: no mutate (\x1F is the same character)
     return key.map_batches(_hash, return_dtype=pl.String).alias("id")  # pragma: no mutate (lazy schema)
 
 
