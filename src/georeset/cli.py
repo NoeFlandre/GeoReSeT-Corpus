@@ -12,7 +12,7 @@ from georeset.sources import description, website, wiki
 
 SOURCES = (website.SOURCE, description.SOURCE, wiki.SOURCE)
 REPO_ID = "NoeFlandre/GeoReSeT-Corpus"
-CODE_URL = "https://github.com/NoeFlandre/GeoReSeT-Corpus-V2"
+CODE_URL = "https://github.com/NoeFlandre/GeoReSeT-Corpus"
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 Work = Annotated[Path, typer.Option(help="Scratch directory for staged data.")]
