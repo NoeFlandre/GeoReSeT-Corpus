@@ -69,7 +69,7 @@ The `polygons` config holds one row per polygon: `polygon_id`, `osm_type`, `osm_
 
 Labels follow GlotLID: ISO 639-3 + ISO 15924 script. How the language was found depends on the source:
 
-* `website`: [GlotLID v3](https://huggingface.co/cis-lmu/glotlid) on the page text.
+* `website`: [GlotLID v3](https://huggingface.co/cis-lmu/glotlid) on the whole page, so a sentence carries its page's label (an English menu line on a Hindi page is `hin_Deva`).
 * `osm_description`: [Lingua](https://github.com/pemistahl/lingua-py), with GlotLID v3 as fallback.
 * `wikipedia`, `wikivoyage`: the language edition of the article (`fr.wikipedia.org` → `fra_Latn`), not detected.
 
