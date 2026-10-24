@@ -48,7 +48,8 @@ def run_task(task: Task, work: Path, transforms: threading.Semaphore) -> Path:
     (work / "tmp").mkdir(parents=True, exist_ok=True)  # pragma: no mutate (idempotent setup)
     with tempfile.TemporaryDirectory(dir=work / "tmp") as tmp:
         local = {k: hub.download(task.source.repo, p, task.rev, Path(tmp)) for k, p in wanted.items()}
-        write_staged(task.source.transform(local), out)
+        with transforms:
+            write_staged(task.source.transform(local), out)
     return out
 
 

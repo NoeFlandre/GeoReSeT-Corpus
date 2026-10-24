@@ -69,6 +69,7 @@ def _context():
         unlabelled=pl.DataFrame({"source": ["wikipedia", "total"], "failed": [1, 1], "unsplit": [2, 2]}),
         partitions=[("wikipedia", "fra_Latn")],
         polygons=7,
+        areas=pl.DataFrame({"p10": [10.0], "p25": [25.0], "p50": [500.0], "p75": [20_000.0], "p90": [3e6]}),
         sources={"me/up": "abc1234def"},
         code_url="https://github.com/me/code",
     )
@@ -101,3 +102,39 @@ def test_render_matches_snapshot():
     if os.environ.get("UPDATE_SNAPSHOTS"):
         SNAPSHOT.write_text(text)
     assert text == SNAPSHOT.read_text()
+
+
+def test_example_language_prefers_french_else_first():
+    def example(partitions):
+        ctx = _context()
+        text = card.render(card.Context(**{**ctx.__dict__, "partitions": partitions}))
+        return text.split('load_dataset("me/data", "')[1].split('"')[0]
+
+    assert example([("s", "deu_Latn"), ("s", "fra_Latn")]) == "fra_Latn"
+    assert example([("s", "eng_Latn"), ("s", "deu_Latn")]) == "deu_Latn"
+
+
+def test_sources_are_listed_one_per_line():
+    ctx = _context()
+    text = card.render(
+        card.Context(**{**ctx.__dict__, "sources": {"a/x": "1111111aaa", "b/y": "2222222bbb"}})
+    )
+    assert (
+        "   * [`a/x` @ `1111111`](https://huggingface.co/datasets/a/x/tree/1111111aaa)\n"
+        "   * [`b/y` @ `2222222`](https://huggingface.co/datasets/b/y/tree/2222222bbb)\n"
+    ) in text
+
+
+@pytest.mark.parametrize(
+    ("m2", "text"),
+    [
+        (12.3, "12 m²"),
+        (9_999, "9,999 m²"),
+        (10_000, "1.0 ha"),
+        (523_000, "52.3 ha"),
+        (1_000_000, "1.0 km²"),
+        (3_477_486_032_789.2, "3,477,486.0 km²"),
+    ],
+)
+def test_area(m2, text):
+    assert card.area(m2) == text

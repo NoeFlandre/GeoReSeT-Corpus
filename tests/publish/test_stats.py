@@ -69,3 +69,10 @@ def test_ties_break_by_name():
     )
     assert stats.top_languages(data, 2)["language"].to_list() == ["a", "b"]
     assert stats.by_continent(data)["continent"].to_list() == ["x", "y"]
+
+
+def test_polygon_areas_quantiles_and_total():
+    polygons = pl.LazyFrame({"area_m2": [float(x) for x in range(1, 101)]})
+    out = stats.polygon_areas(polygons)
+    assert out.columns == ["p10", "p25", "p50", "p75", "p90"]
+    assert out.row(0) == (10.0, 25.0, 50.0, 75.0, 90.0)

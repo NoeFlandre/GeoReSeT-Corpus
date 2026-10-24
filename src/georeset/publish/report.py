@@ -12,6 +12,7 @@ from georeset.publish import card, figures, geo, stats
 
 MAP_RESOLUTION = 3
 TOP_LANGUAGES = 20
+HERO = files("georeset.publish").joinpath("assets/hero.png")
 
 
 def partitions(out: Path) -> list[tuple[str, str]]:
@@ -25,18 +26,19 @@ def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
         geo.hex_counts(stats.points(data), MAP_RESOLUTION), land, layout.out / "assets" / "map.png"
     )
     figures.language_bars(stats.top_languages(data, TOP_LANGUAGES), layout.out / "assets" / "languages.png")
+    polygons = pl.scan_parquet(layout.out / "polygons" / "*.parquet")
     context = card.Context(
         repo_id=repo_id,
         by_source=stats.by_source(data),
         continents=stats.by_continent(data),
         unlabelled=stats.unlabelled(pl.scan_parquet(layout.out / "unlabelled" / "*.parquet")),
         partitions=partitions(layout.out),
-        polygons=pl.scan_parquet(layout.out / "polygons" / "*.parquet").select(pl.len()).collect().item(),
+        polygons=polygons.select(pl.len()).collect().item(),
+        areas=stats.polygon_areas(polygons),
         sources=json.loads((layout.work / "revisions.json").read_text()),
         code_url=code_url,
     )
-    hero = files("georeset.publish").joinpath("assets/hero.png")
-    shutil.copyfile(str(hero), layout.out / "assets" / "hero.png")
+    shutil.copyfile(str(HERO), layout.out / "assets" / "hero.png")
     readme = layout.out / "README.md"
     readme.write_text(card.render(context))
     return readme

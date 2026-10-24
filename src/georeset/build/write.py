@@ -10,6 +10,8 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+ROW_GROUP_SIZE = 100_000
+
 
 def _geo_metadata(column: str) -> dict[bytes, bytes]:
     geo = {
@@ -61,7 +63,7 @@ def write_stream(
     total: int,
     out: Path,
     rows_per_shard: int,
-    row_group_size: int = 100_000,  # pragma: no mutate (speed/size only)
+    row_group_size: int = ROW_GROUP_SIZE,
     geometry: str | None = None,
 ) -> list[Path]:
     """Replace ``out`` with ``total`` rows streamed from ``frames``; returns the shard paths."""
@@ -83,7 +85,7 @@ def write_shards(
     df: pl.DataFrame,
     out: Path,
     rows_per_shard: int,
-    row_group_size: int = 100_000,  # pragma: no mutate (speed/size only)
+    row_group_size: int = ROW_GROUP_SIZE,
     geometry: str | None = None,
 ) -> list[Path]:
     """Replace ``out`` with ``df`` split into shards; returns the shard paths."""

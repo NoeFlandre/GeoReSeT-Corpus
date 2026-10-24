@@ -55,6 +55,12 @@ WHERE s.region = 'afghanistan' AND s.landuse;
 |---|---:|---:|
 | europe | 10 | 3 |
 
+Polygon areas, over all 7 polygons:
+
+| 10% | 25% | Median | 75% | 90% |
+|---:|---:|---:|---:|---:|
+| 10 m² | 25 m² | 500 m² | 2.0 ha | 3.0 km² |
+
 ## Fields
 
 | Field | Type | Description |

@@ -10,6 +10,8 @@ import polars as pl
 
 from georeset.normalize.languages import UNDETERMINED
 
+TEMPLATE = files("georeset.publish").joinpath("templates/card.md")
+
 
 def fmt(n: int) -> str:
     return f"{n:,}"
@@ -17,6 +19,15 @@ def fmt(n: int) -> str:
 
 def pct(x: float) -> str:
     return f"{x:.1%}"
+
+
+def area(m2: float) -> str:
+    """Readable area: m² below a hectare, hectares below a km², then km²."""
+    if m2 < 10_000:
+        return f"{m2:,.0f} m²"
+    if m2 < 1_000_000:
+        return f"{m2 / 10_000:,.1f} ha"
+    return f"{m2 / 1_000_000:,.1f} km²"
 
 
 Column = tuple[str, Callable]
@@ -34,10 +45,7 @@ def table(df: pl.DataFrame, columns: dict[str, Column]) -> str:
     """Markdown table; text columns left-aligned, the rest right-aligned."""
     specs = list(columns.values())
     header = [_line([head for head, _ in specs]), f"|{'|'.join(_align(f) for _, f in specs)}|"]
-    rows = (
-        _line([f(v) for (_, f), v in zip(specs, row, strict=True)])
-        for row in df.select(list(columns)).iter_rows()
-    )
+    rows = (_line([f(row[c]) for c, (_, f) in columns.items()]) for row in df.iter_rows(named=True))
     return "\n".join([*header, *rows])
 
 
@@ -86,6 +94,7 @@ class Context:
     unlabelled: pl.DataFrame
     partitions: list[tuple[str, str]]
     polygons: int
+    areas: pl.DataFrame
     sources: dict[str, str]
     code_url: str
 
@@ -111,12 +120,12 @@ def _front_matter(ctx: Context) -> str:
         "configs": configs(ctx.partitions),
     }
     # JSON is valid YAML: no YAML dependency, no quoting surprises.
-    return "\n".join(f"{key}: {json.dumps(value, ensure_ascii=False)}" for key, value in meta.items())
+    return "\n".join(f"{key}: {json.dumps(value)}" for key, value in meta.items())
 
 
 def render(ctx: Context) -> str:
     total = _total(ctx)
-    template = Template(files("georeset.publish").joinpath("templates/card.md").read_text())
+    template = Template(TEMPLATE.read_text())
     languages = sorted({lang for _, lang in ctx.partitions})
     return template.substitute(
         front_matter=_front_matter(ctx),
@@ -141,6 +150,16 @@ def render(ctx: Context) -> str:
         continents=table(
             ctx.continents,
             {"continent": ("Continent", str), "sentences": ("Sentences", fmt), "polygons": ("Polygons", fmt)},
+        ),
+        areas=table(
+            ctx.areas,
+            {
+                "p10": ("10%", area),
+                "p25": ("25%", area),
+                "p50": ("Median", area),
+                "p75": ("75%", area),
+                "p90": ("90%", area),
+            },
         ),
         unlabelled=table(
             _bold_total(ctx.unlabelled, "source"),

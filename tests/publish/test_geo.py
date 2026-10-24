@@ -38,10 +38,11 @@ def test_cell_ring_skips_antimeridian_cells():
     assert geo.cell_ring(ANTIMERIDIAN) is None
 
 
-def test_cell_ring_keeps_cells_just_under_180_degrees_wide(monkeypatch):
-    boundary = ((0.0, -90.0), (1.0, 90.0), (0.0, 0.0))  # lon span exactly 180
+@pytest.mark.parametrize(("span", "drawn"), [(180.0, True), (180.5, False)])
+def test_cell_ring_threshold_is_180_degrees(monkeypatch, span, drawn):
+    boundary = ((0.0, -90.0), (1.0, -90.0 + span), (0.0, 0.0))
     monkeypatch.setattr(geo.h3, "cell_to_boundary", lambda cell: boundary)
-    assert geo.cell_ring("x") is not None
+    assert (geo.cell_ring("x") is not None) is drawn
 
 
 @pytest.mark.parametrize(("levels", "expected"), [(7, [0, 0, 1, 4, 6]), (3, [0, 0, 1, 2, 2])])
@@ -71,8 +72,8 @@ def _land_zip() -> bytes:
         w.record(1)
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as z:
-        for name, data in zip(geo.LAND_FILES, (shp, shx, dbf), strict=True):
-            z.writestr(name, data.getvalue())
+        for ext, data in (("shp", shp), ("shx", shx), ("dbf", dbf)):
+            z.writestr(f"ne_110m_land.{ext}", data.getvalue())
     return buffer.getvalue()
 
 

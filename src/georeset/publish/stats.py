@@ -81,3 +81,13 @@ def unlabelled(data: pl.LazyFrame) -> pl.DataFrame:
     ).sort("source")
     total = wide.select(pl.lit("total").alias("source"), pl.col("failed", "unsplit").sum())
     return pl.concat([wide, total])
+
+
+AREA_QUANTILES = (0.10, 0.25, 0.50, 0.75, 0.90)
+
+
+def polygon_areas(polygons: pl.LazyFrame) -> pl.DataFrame:
+    """Area quantiles of all polygons, in m² (no total: polygons overlap, e.g. a park in a city)."""
+    area = pl.col("area_m2")
+    quantiles = [area.quantile(q, "lower").alias(f"p{round(q * 100)}") for q in AREA_QUANTILES]
+    return _collect(polygons.select(quantiles))

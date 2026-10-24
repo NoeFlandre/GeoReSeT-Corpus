@@ -1,4 +1,5 @@
 import polars as pl
+import shapely
 from conftest import SQUARE
 
 from georeset.sources import wiki
@@ -59,8 +60,8 @@ def test_wiki_transform_orders_sections_and_builds_permalinks(write):
         [
             ("c", doc, 1, 1, "Third part", "fr"),
             ("e", doc, 1, 0, "[ modifier | modifier le code ]", "fr"),
-            ("a", doc, 0, 0, "First part", "fr"),
             ("b", doc, 0, 1, "Second part", "fr"),
+            ("a", doc, 0, 0, "First part", "fr"),
             ("d", doc, 0, 2, "[ edit ] [1]", "fr"),
         ],
     )
@@ -73,6 +74,7 @@ def test_wiki_transform_orders_sections_and_builds_permalinks(write):
     assert set(s["language"]) == {"fra_Latn"}
     assert set(s["label"]) == {"yes"}
     assert staged.links.rows() == [(doc, "relation/9")]
+    assert shapely.from_wkb(staged.polygons["geometry"].item()).area == 1.0
     assert staged.polygons.drop("geometry").rows() == [
         ("relation/9", "Forest", "landuse=forest", 1.0, 2.0, 3.0)
     ]

@@ -44,6 +44,10 @@ $by_source
 
 $continents
 
+Polygon areas, over all $polygons polygons:
+
+$areas
+
 ## Fields
 
 | Field | Type | Description |
