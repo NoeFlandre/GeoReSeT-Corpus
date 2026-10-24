@@ -49,7 +49,7 @@ $continents
 | `id` | string | Stable id of the sentence (128-bit hex) |
 | `text` | string | The sentence, byte-exact as labelled |
 | `landuse` | bool | Relevant to land use / land cover |
-| `language` | string | GlotLID-style label, ISO 639-3 + script (`fra_Latn`); `und_Zzzz` when unknown |
+| `language` | string | ISO 639-3 + script (`fra_Latn`), see [Languages](#languages) |
 | `source` | string | `website`, `osm_description`, `wikipedia` or `wikivoyage` |
 | `polygon_ids` | list[string] | All polygons the sentence's document is linked to (`way/123`, `relation/45`) |
 | `region` | string | Geofabrik extract of the first polygon (`afghanistan`, `us-texas`) |
@@ -62,6 +62,18 @@ $continents
 | `license` | string | License of the text: `ODbL-1.0`, `CC-BY-SA-4.0` or `other` |
 
 The `polygons` config holds one row per polygon: `polygon_id`, `osm_type`, `osm_id`, `name`, `osm_tag`, `region`, `continent`, `lat`, `lon`, `area_m2` and `geometry` (WKB, [GeoParquet](https://geoparquet.org) 1.1, WGS 84).
+
+## Languages
+
+Labels follow GlotLID: ISO 639-3 + ISO 15924 script. How the language was found depends on the source:
+
+* `website`: [GlotLID v3](https://huggingface.co/cis-lmu/glotlid) on the page text.
+* `osm_description`: [Lingua](https://github.com/pemistahl/lingua-py), with GlotLID v3 as fallback.
+* `wikipedia`, `wikivoyage`: the language edition of the article (`fr.wikipedia.org` → `fra_Latn`), not detected.
+
+Only text in the 85 languages of the [SaT](https://huggingface.co/segment-any-text/sat-3l-sm) sentence splitter was split and labelled.
+Labels are finer than that: individual languages of a macrolanguage (`nob_Latn` and `nno_Latn` for Norwegian, `cmn_Hani` and `yue_Hani` for Chinese)
+and scripts (`srp_Cyrl` and `srp_Latn`) stay distinct. Other languages appear only in `unlabelled`, as `unsplit`.
 
 ## Files
 
