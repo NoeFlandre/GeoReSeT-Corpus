@@ -1,6 +1,8 @@
 """Compute the card's stats and figures from the published files, then write README.md."""
 
 import json
+import shutil
+from importlib.resources import files
 from pathlib import Path
 
 import polars as pl
@@ -33,6 +35,8 @@ def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
         sources=json.loads((layout.work / "revisions.json").read_text()),
         code_url=code_url,
     )
+    hero = files("georeset.publish").joinpath("assets/hero.png")
+    shutil.copyfile(str(hero), layout.out / "assets" / "hero.png")
     readme = layout.out / "README.md"
     readme.write_text(card.render(context))
     return readme

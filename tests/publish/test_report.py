@@ -17,4 +17,6 @@ def test_build_card(layout, monkeypatch):
     assert "**4 sentences in 2 languages, tied to 3 OpenStreetMap polygons in 2 regions" in text
     assert (layout.out / "assets" / "map.png").exists()
     assert (layout.out / "assets" / "languages.png").exists()
+    assert (layout.out / "assets" / "hero.png").read_bytes()[:4] == b"\x89PNG"
+    assert text.index("assets/hero.png") < text.index("# GeoReSeT Corpus")
     assert report.partitions(layout.out) == [("website", "eng_Latn"), ("wikipedia", "fra_Latn")]

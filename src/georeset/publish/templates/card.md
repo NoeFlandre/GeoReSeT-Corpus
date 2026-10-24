@@ -2,6 +2,8 @@
 $front_matter
 ---
 
+![GeoReSeT: collect texts linked to OpenStreetMap polygons, filter them by land-use relevance, link sentences back to polygons](assets/hero.png)
+
 # GeoReSeT Corpus
 
 **$sentences sentences in $languages languages, tied to $polygons OpenStreetMap polygons in $regions regions, each labelled for land-use / land-cover relevance.**
