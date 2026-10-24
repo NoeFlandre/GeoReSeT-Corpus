@@ -87,6 +87,9 @@ CONTINENT_OF: dict[str, str] = {
 }
 
 
+SUFFIX = "-latest"
+
+
 def region_name(stem: str) -> str:
     """Map a Geofabrik file stem (``italy-latest``) to a region name (``italy``)."""
-    return stem.removesuffix("-latest")
+    return stem.removesuffix(SUFFIX)

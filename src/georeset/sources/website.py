@@ -72,6 +72,7 @@ def _sentences(docs: pl.DataFrame, labels: pl.DataFrame) -> pl.DataFrame:
         position="sentence_index",
         text="text",
         label="label",
+        failure_reason="failure_reason",
         language="language",
         url="url",
     )
@@ -83,7 +84,14 @@ def transform(paths: dict[str, Path]) -> Staged:
     )
     labels = pl.read_parquet(
         paths["labels"],
-        columns=["polygon_id", "field", "sentence_index", "decision", "language"],
+        columns=[
+            "polygon_id",
+            "field",
+            "sentence_index",
+            "decision",
+            "failure_reason",
+            "language",
+        ],
     ).rename({"decision": "label"})
     docs = _docs(paths["polygons"])
     return Staged(

@@ -42,6 +42,7 @@ def _sentences(texts: pl.DataFrame, labels: pl.DataFrame) -> pl.DataFrame:
         position="sentence_index",
         text="text",
         label="label",
+        failure_reason="failure_reason",
         language="language",
         url=osm_url(pl.col("polygon_id")),
     )
@@ -66,6 +67,7 @@ def transform(paths: dict[str, Path]) -> Staged:
             "tag_key",
             "sentence_index",
             "decision",
+            "failure_reason",
             "language",
         ],
     ).rename({"decision": "label"})

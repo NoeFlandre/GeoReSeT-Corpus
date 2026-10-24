@@ -47,7 +47,8 @@ def _project_sentences(paths: dict[str, Path], project: str) -> pl.DataFrame:
         ],
     )
     labels = pl.read_parquet(
-        paths[f"{project}_labels"], columns=["sentence_id", "decision", "language"]
+        paths[f"{project}_labels"],
+        columns=["sentence_id", "decision", "failure_reason", "language"],
     )
     return (
         sentences.join(labels, on="sentence_id")
@@ -58,6 +59,7 @@ def _project_sentences(paths: dict[str, Path], project: str) -> pl.DataFrame:
             position=pl.int_range(pl.len(), dtype=pl.Int32).over("document_id"),
             text="text",
             label="decision",
+            failure_reason="failure_reason",
             language="language",
             url=permalink(pl.col("document_id")),
         )

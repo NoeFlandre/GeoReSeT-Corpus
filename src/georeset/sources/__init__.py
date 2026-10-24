@@ -28,6 +28,7 @@ SENTENCE_SCHEMA = pl.Schema(
         "position": pl.Int32,
         "text": pl.String,
         "label": pl.String,
+        "failure_reason": pl.String,
         "language": pl.String,
         "url": pl.String,
     }
