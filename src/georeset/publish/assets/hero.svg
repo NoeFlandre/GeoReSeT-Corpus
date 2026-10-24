@@ -231,11 +231,11 @@
        x="802"
        y="115"
        font-family="Fira Sans"
-       font-size="24"
+       font-size="20"
        font-weight="700"
        fill="#253745"
        text-anchor="middle"
-       id="text10">Language + sentences</text>
+       id="text10">Language detection + sentence splitting</text>
     <rect
        x="625"
        y="140"
@@ -474,14 +474,5 @@
        fill="#253745"
        text-anchor="middle"
        id="text25">Text–polygon links</text>
-    <text
-       x="1343"
-       y="338"
-       font-family="Fira Sans"
-       font-size="21"
-       font-weight="400"
-       fill="#253745"
-       text-anchor="middle"
-       id="text26">Provenance preserved</text>
   </g>
   </svg>
