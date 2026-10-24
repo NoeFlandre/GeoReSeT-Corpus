@@ -147,7 +147,7 @@ def render(ctx: Context) -> str:
             {"source": ("Source", str), "failed": ("`failed`", fmt), "unsplit": ("`unsplit`", fmt)},
         ),
         sources="\n".join(
-            f"* [`{repo}` @ `{rev[:7]}`](https://huggingface.co/datasets/{repo}/tree/{rev})"
+            f"   * [`{repo}` @ `{rev[:7]}`](https://huggingface.co/datasets/{repo}/tree/{rev})"
             for repo, rev in ctx.sources.items()
         ),
         code_url=ctx.code_url,

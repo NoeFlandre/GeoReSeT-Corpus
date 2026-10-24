@@ -6,7 +6,7 @@ $front_matter
 
 # GeoReSeT Corpus
 
-**$sentences sentences in $languages languages, tied to $polygons OpenStreetMap polygons in $regions regions, each labelled for land-use / land-cover relevance.**
+**$sentences sentences in $languages languages, tied to $polygons OpenStreetMap polygons in $regions regions, each labelled for land-use / land-cover relevance by an LLM.**
 
 Sentences come from the websites, `description` tags and Wikipedia / Wikivoyage articles linked to OpenStreetMap polygons. Every row is one sentence with a boolean `landuse` label, the language, and the location of the polygon it describes. Polygon shapes are in a separate `polygons` table.
 
@@ -50,7 +50,7 @@ $continents
 |---|---|---|
 | `id` | string | Stable id of the sentence (128-bit hex) |
 | `text` | string | The sentence, byte-exact as labelled |
-| `landuse` | bool | Relevant to land use / land cover |
+| `landuse` | bool | The sentence describes land use, land cover or a geographic environment observable by remote sensing (LLM label) |
 | `language` | string | ISO 639-3 + script (`fra_Latn`), see [Languages](#languages) |
 | `source` | string | `website`, `osm_description`, `wikipedia` or `wikivoyage` |
 | `polygon_ids` | list[string] | All polygons the sentence's document is linked to (`way/123`, `relation/45`) |
@@ -96,16 +96,18 @@ The `unlabelled` config holds sentences without a usable label, kept to be label
 
 $unlabelled
 
-## How it was made
+## Methodology
 
-1. OpenStreetMap polygons with a website, a `description` tag, or a Wikidata link to Wikipedia / Wikivoyage were extracted per [Geofabrik](https://download.geofabrik.de) region.
-2. Texts were split into sentences and each sentence labelled by `LiquidAI/LFM2.5-2.6B` for land-use / land-cover relevance. Labels, method and quality checks are documented in the source datasets:
+1. **Polygons.** Closed ways and multipolygon relations from the 386 regional [Geofabrik](https://download.geofabrik.de) extracts of OpenStreetMap, assembled with [osmium](https://osmcode.org/libosmium/).
+2. **Text.** Three kinds of text attached to a polygon:
+   * websites in `website` / `contact:website` tags, fetched and extracted with [Trafilatura](https://trafilatura.readthedocs.io): [`osm-polygon-website-tag`](https://huggingface.co/datasets/NoeFlandre/osm-polygon-website-tag) ([code](https://github.com/NoeFlandre/osm-polygon-website-tag));
+   * `description` and `description:*` tags: [`osm-polygon-description-tag`](https://huggingface.co/datasets/NoeFlandre/osm-polygon-description-tag) ([code](https://github.com/NoeFlandre/osm-polygon-description-tag));
+   * Wikipedia and Wikivoyage articles reached through the `wikidata` tag: [`osm-polygon-wikidata-and-wikipedia`](https://huggingface.co/datasets/NoeFlandre/osm-polygon-wikidata-and-wikipedia) ([code](https://github.com/NoeFlandre/osm-polygon-wikidata-only)).
+3. **Language.** [GlotLID v3](https://huggingface.co/cis-lmu/glotlid) for websites, [Lingua](https://github.com/pemistahl/lingua-py) with GlotLID fallback for descriptions, the language edition for Wikipedia and Wikivoyage (see [Languages](#languages)).
+4. **Sentences.** Split with [SaT `sat-3l-sm`](https://huggingface.co/segment-any-text/sat-3l-sm) in its 85 languages; text in other languages is left whole (`unsplit`).
+5. **Labels.** Each sentence is classified by [`LiquidAI/LFM2.5-2.6B`](https://huggingface.co/LiquidAI/LFM2.5-2.6B): does it describe land use, land cover or a geographic environment observable by remote sensing? Greedy decoding with reasoning, up to 4,096 tokens, served with SGLang and the [DSpark](https://huggingface.co/LiquidAI/LFM2.5-2.6B-DSpark) draft model, on about 4,500 GPU-hours of [Grid'5000](https://www.grid5000.fr). The model and prompt were chosen on [`benchmark-llms-landuse-relevance`](https://huggingface.co/datasets/NoeFlandre/benchmark-llms-landuse-relevance) (53 models, 25,500 labelled sentences in 85 languages), where this setup reaches macro F1 0.81 and balanced accuracy 0.77. Labels and raw model outputs, with reasoning ([code](https://github.com/NoeFlandre/filter-osm-datasets-llms-landuse)):
 $sources
-3. This dataset merges them: one row per sentence of each document (a document linked to several polygons appears once), overlapping regions resolved to the most specific extract, language codes normalized, sentences with fewer than two letters dropped.
-
-The model's raw outputs, including its reasoning, stay in the source datasets: join them on `sha256(text)` = `text_sha256`.
-
-Code: $code_url
+6. **This dataset.** One row per sentence of each document (a document linked to several polygons appears once); overlapping extracts resolved to the most specific one; language codes normalized; sentences with fewer than two letters dropped. Join the raw outputs on `sha256(text)` = `text_sha256`. Code: $code_url
 
 ## License
 
