@@ -1,0 +1,19 @@
+# Reference
+
+::: georeset.cli
+::: georeset.build.stage
+::: georeset.sources.base
+::: georeset.sources.website
+::: georeset.sources.description
+::: georeset.sources.wiki
+::: georeset.normalize.languages
+::: georeset.normalize.regions
+::: georeset.normalize.osm
+::: georeset.build.assemble
+::: georeset.build.pipeline
+::: georeset.build.write
+::: georeset.publish.stats
+::: georeset.publish.plots
+::: georeset.publish.card
+::: georeset.publish.report
+::: georeset.hub
