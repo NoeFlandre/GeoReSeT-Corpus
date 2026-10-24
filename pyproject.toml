@@ -57,6 +57,8 @@ norecursedirs = [".*", "data", "__pycache__"]
 source_paths = ["src/georeset/"]
 pytest_add_cli_args_test_selection = ["tests/"]
 also_copy = ["tools/"]
+# Matplotlib styling only; checked visually (see the module docstring).
+do_not_mutate = ["src/georeset/publish/figures.py"]
 # polars' thread pool does not survive fork(): fork workers from a clean server instead.
 process_isolation = "forkserver"
 forkserver_warmup = "none"

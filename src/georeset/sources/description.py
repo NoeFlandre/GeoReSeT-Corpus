@@ -8,6 +8,16 @@ from georeset.normalize.osm import polygon_id, primary_tag, tags_list_to_json
 from georeset.sources.base import Source, Staged, attach_text, finish_sentences, osm_url
 
 BBOX = ["bbox_min_x", "bbox_min_y", "bbox_max_x", "bbox_max_y"]
+POLYGON_COLUMNS = ["osm_type", "osm_id", "name", "tags", "area_m2", "geometry", *BBOX]
+TEXT_COLUMNS = ["description_identity", "osm_type", "osm_id", "tag_key", "original_text", "sentences"]
+LABEL_COLUMNS = [
+    "description_identity",
+    "tag_key",
+    "sentence_index",
+    "decision",
+    "failure_reason",
+    "language",
+]
 
 
 def files(stem: str) -> dict[str, str]:
@@ -19,10 +29,8 @@ def files(stem: str) -> dict[str, str]:
 
 
 def _polygons(path: Path) -> pl.DataFrame:
-    return pl.read_parquet(
-        path,
-        columns=["osm_type", "osm_id", "name", "tags", "area_m2", "geometry", *BBOX],
-    ).select(
+    polygons = pl.read_parquet(path, columns=POLYGON_COLUMNS)  # pragma: no mutate (speed)
+    return polygons.select(
         polygon_id=polygon_id(pl.col("osm_type"), pl.col("osm_id")),
         name="name",
         osm_tag=primary_tag(tags_list_to_json(pl.col("tags"))),
@@ -50,28 +58,10 @@ def _sentences(texts: pl.DataFrame, labels: pl.DataFrame) -> pl.DataFrame:
 
 
 def transform(paths: dict[str, Path]) -> Staged:
-    texts = pl.read_parquet(
-        paths["texts"],
-        columns=[
-            "description_identity",
-            "osm_type",
-            "osm_id",
-            "tag_key",
-            "original_text",
-            "sentences",
-        ],
-    ).with_columns(polygon_id=polygon_id(pl.col("osm_type"), pl.col("osm_id")))
-    labels = pl.read_parquet(
-        paths["labels"],
-        columns=[
-            "description_identity",
-            "tag_key",
-            "sentence_index",
-            "decision",
-            "failure_reason",
-            "language",
-        ],
-    ).rename({"decision": "label"})
+    texts = pl.read_parquet(paths["texts"], columns=TEXT_COLUMNS)  # pragma: no mutate (speed)
+    texts = texts.with_columns(polygon_id=polygon_id(pl.col("osm_type"), pl.col("osm_id")))
+    labels = pl.read_parquet(paths["labels"], columns=LABEL_COLUMNS)  # pragma: no mutate (speed)
+    labels = labels.rename({"decision": "label"})
     return Staged(
         polygons=_polygons(paths["polygons"]),
         links=texts.select(doc_key="description_identity", polygon_id="polygon_id").unique(),

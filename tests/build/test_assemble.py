@@ -113,6 +113,16 @@ def test_row_id_is_stable_and_distinct():
     assert ids == df.select(row_id()).to_series().to_list()
 
 
+def test_row_id_is_blake2b_of_unit_separated_key():
+    df = pl.DataFrame({"source": ["wikipedia"], "doc_key": ["Q1:wikipedia:fr:10:99"], "position": [3]})
+    assert df.select(row_id()).item() == "a177517a0cb77fb362d7a9b19545ad17"
+
+
+def test_row_id_depends_on_document():
+    df = pl.DataFrame({"source": ["a", "a"], "doc_key": ["d1", "d2"], "position": [0, 0]})
+    assert df.select(row_id()).n_unique() == 2
+
+
 def _sentences():
     return pl.DataFrame(
         {

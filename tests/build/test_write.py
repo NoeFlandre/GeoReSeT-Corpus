@@ -63,3 +63,20 @@ def test_stream_keeps_geo_metadata_on_every_shard(tmp_path):
     frames = [pl.DataFrame({"geometry": [b"\x01", b"\x02", b"\x03"]})]
     paths = write_stream(frames, 3, tmp_path / "p", rows_per_shard=2, geometry="geometry")
     assert all(b"geo" in pq.read_schema(p).metadata for p in paths)
+
+
+def test_stream_tops_up_a_partly_filled_shard_from_a_larger_frame(tmp_path):
+    from georeset.build.write import write_stream
+
+    frames = [pl.DataFrame({"x": [0, 1, 2]}), pl.DataFrame({"x": [3, 4, 5, 6, 7]})]
+    paths = write_stream(frames, 8, tmp_path / "d", rows_per_shard=4)
+    assert [pl.read_parquet(p)["x"].to_list() for p in paths] == [[0, 1, 2, 3], [4, 5, 6, 7]]
+
+
+def test_geo_metadata_is_exactly_geoparquet_1_1(tmp_path):
+    [path] = write_shards(pl.DataFrame({"g": [b"\x01"]}), tmp_path / "p", rows_per_shard=4, geometry="g")
+    assert json.loads(pq.read_schema(path).metadata[b"geo"]) == {
+        "version": "1.1.0",
+        "primary_column": "g",
+        "columns": {"g": {"encoding": "WKB", "geometry_types": []}},
+    }

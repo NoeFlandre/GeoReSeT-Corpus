@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 import polars as pl
 import pytest
 from huggingface_hub import DatasetCard
@@ -84,3 +87,17 @@ def test_render_is_a_valid_card():
     assert "`me/up` @ `abc1234`" in text
     assert 'load_dataset("me/data", "fra_Latn", split="train")' in text
     assert "$" not in text.replace("$ ", "")
+
+
+SNAPSHOT = Path(__file__).parents[1] / "data" / "card_snapshot.md"
+
+
+def test_render_matches_snapshot():
+    """Every heading, label and table of the card.
+
+    Regenerate with ``UPDATE_SNAPSHOTS=1`` after reviewing a change.
+    """
+    text = card.render(_context())
+    if os.environ.get("UPDATE_SNAPSHOTS"):
+        SNAPSHOT.write_text(text)
+    assert text == SNAPSHOT.read_text()

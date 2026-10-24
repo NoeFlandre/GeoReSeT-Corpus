@@ -9,20 +9,20 @@ def _website(write, labels_rows):
     polygons = write(
         "polygons",
         {
-            "polygon_id": ["r:way/1", "r:way/2", "r:node/3"],
+            "polygon_id": ["r:way/2", "r:way/1", "r:node/3"],
             "osm_type": ["way", "way", "node"],
-            "osm_id": [1, 2, 3],
-            "name": ["A", "B", "C"],
-            "tags": ['{"amenity":"cafe"}', '{"shop":"bakery"}', "{}"],
-            "lat": [1.0, 2.0, 3.0],
-            "lon": [4.0, 5.0, 6.0],
-            "area_m2": [10.0, 20.0, 30.0],
+            "osm_id": [2, 1, 3],
+            "name": ["B", "A", "C"],
+            "tags": ['{"shop":"bakery"}', '{"amenity":"cafe"}', "{}"],
+            "lat": [2.0, 1.0, 3.0],
+            "lon": [5.0, 4.0, 6.0],
+            "area_m2": [20.0, 10.0, 30.0],
             "geometry": [SQUARE, SQUARE, SQUARE],
             "website": ["http://x", "http://x", None],
             "contact_website": [None, None, "http://y"],
-            "website_sentences": [["Hello there", "Second one"], ["Other copy"], None],
+            "website_sentences": [["Other copy"], ["Hello there", "Second one"], None],
             "contact_website_sentences": [None, None, None],
-            "website_text": ["Hello there Second one", "Other copy", None],
+            "website_text": ["Other copy", "Hello there Second one", None],
             "contact_website_text": [None, None, "Whole page text"],
         },
     )
@@ -58,29 +58,33 @@ def test_website_transform(write):
             ),
         ],
     )
-    s = staged.sentences.sort("doc_key", "position")
-    assert s["text"].to_list() == ["Hello there", "Second one", "Whole page text"]
-    assert s["label"].to_list() == ["yes", "failed", "skipped_unsplit"]
-    assert s["failure_reason"].to_list() == [None, "truncated", "unsplit_upstream"]
-    assert s["doc_key"].to_list() == ["http://x", "http://x", "http://y"]
-    assert set(s["source"]) == {"website"}
+    assert staged.sentences.sort("doc_key", "position").rows() == [
+        ("website", "http://x", 0, "Hello there", "yes", None, "eng_Latn", "http://x"),
+        ("website", "http://x", 1, "Second one", "failed", "truncated", "eng_Latn", "http://x"),
+        (
+            "website",
+            "http://y",
+            0,
+            "Whole page text",
+            "skipped_unsplit",
+            "unsplit_upstream",
+            "vec_Latn",
+            "http://y",
+        ),
+    ]
     assert staged.links.sort("polygon_id").rows() == [
         ("http://y", "node/3"),
         ("http://x", "way/1"),
         ("http://x", "way/2"),
     ]
     p = staged.polygons.sort("polygon_id")
-    assert p["osm_tag"].to_list() == [None, "amenity=cafe", "shop=bakery"]
-    assert shapely.from_wkb(p["geometry"][0]).area == 1.0
-    assert p.columns == [
-        "polygon_id",
-        "name",
-        "osm_tag",
-        "lat",
-        "lon",
-        "area_m2",
-        "geometry",
+    assert p.drop("geometry").rows() == [
+        ("node/3", "C", None, 3.0, 6.0, 30.0),
+        ("way/1", "A", "amenity=cafe", 1.0, 4.0, 10.0),
+        ("way/2", "B", "shop=bakery", 2.0, 5.0, 20.0),
     ]
+    assert p.columns[-1] == "geometry"
+    assert [shapely.from_wkb(g).area for g in p["geometry"]] == [1.0, 1.0, 1.0]
 
 
 def test_website_files():

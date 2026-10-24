@@ -17,6 +17,7 @@ def files(stem: str) -> dict[str, str]:
     }
 
 
+LABEL_COLUMNS = ["polygon_id", "field", "sentence_index", "decision", "failure_reason", "language"]
 POLYGON_COLUMNS = [
     "polygon_id",
     "osm_type",
@@ -55,7 +56,9 @@ def _docs(path: Path) -> pl.DataFrame:
 
 
 def _sentences(docs: pl.DataFrame, labels: pl.DataFrame) -> pl.DataFrame:
-    canonical = docs.sort("polygon_id", "field").unique("url", keep="first", maintain_order=True)
+    canonical = docs.sort("polygon_id", "field").unique(
+        "url", keep="first"
+    )  # pragma: no mutate (keep='first' is required; polars' 'any' only matches by luck)
     labelled = labels.join(
         canonical.select("raw_id", "field", "url"),
         left_on=["polygon_id", "field"],
@@ -77,20 +80,10 @@ def _sentences(docs: pl.DataFrame, labels: pl.DataFrame) -> pl.DataFrame:
 
 
 def transform(paths: dict[str, Path]) -> Staged:
-    polygons = pl.read_parquet(paths["polygons"], columns=POLYGON_COLUMNS).with_columns(
-        polygon_id=polygon_id(pl.col("osm_type"), pl.col("osm_id"))
-    )
-    labels = pl.read_parquet(
-        paths["labels"],
-        columns=[
-            "polygon_id",
-            "field",
-            "sentence_index",
-            "decision",
-            "failure_reason",
-            "language",
-        ],
-    ).rename({"decision": "label"})
+    polygons = pl.read_parquet(paths["polygons"], columns=POLYGON_COLUMNS)  # pragma: no mutate (speed)
+    polygons = polygons.with_columns(polygon_id=polygon_id(pl.col("osm_type"), pl.col("osm_id")))
+    labels = pl.read_parquet(paths["labels"], columns=LABEL_COLUMNS)  # pragma: no mutate (speed)
+    labels = labels.rename({"decision": "label"})
     docs = _docs(paths["polygons"])
     return Staged(
         polygons=polygons.select(

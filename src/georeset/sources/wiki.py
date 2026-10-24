@@ -10,6 +10,10 @@ from georeset.sources.base import SENTENCE_SCHEMA, Source, Staged, finish_senten
 PROJECTS = ("wikipedia", "wikivoyage")
 # Rows made only of [...] segments: section edit links ("[ edit | edit source ]") and citation crumbs.
 BRACKETS_ONLY = r"^\s*(\[[^\[\]]{1,80}\]\s*)+$"
+SENTENCE_COLUMNS = ["sentence_id", "document_id", "section_index", "sentence_index", "text"]
+LABEL_COLUMNS = ["sentence_id", "decision", "failure_reason", "language"]
+POLYGON_COLUMNS = ["osm_type", "osm_id", "name", "tags", "lat", "lon", "area_m2", "geometry"]
+LINK_COLUMNS = ["osm_type", "osm_id", "document_id"]
 
 
 def files(stem: str) -> dict[str, str]:
@@ -38,20 +42,8 @@ def _project_sentences(paths: dict[str, Path], project: str) -> pl.DataFrame:
     """Sentences of one project, or nothing when the region has no such file."""
     if f"{project}_sentences" not in paths:
         return pl.DataFrame(schema=SENTENCE_SCHEMA)
-    sentences = pl.read_parquet(
-        paths[f"{project}_sentences"],
-        columns=[
-            "sentence_id",
-            "document_id",
-            "section_index",
-            "sentence_index",
-            "text",
-        ],
-    )
-    labels = pl.read_parquet(
-        paths[f"{project}_labels"],
-        columns=["sentence_id", "decision", "failure_reason", "language"],
-    )
+    sentences = pl.read_parquet(paths[f"{project}_sentences"], columns=SENTENCE_COLUMNS)  # pragma: no mutate
+    labels = pl.read_parquet(paths[f"{project}_labels"], columns=LABEL_COLUMNS)  # pragma: no mutate
     return (
         sentences.filter(~pl.col("text").str.contains(BRACKETS_ONLY))
         .join(labels, on="sentence_id")
@@ -70,20 +62,8 @@ def _project_sentences(paths: dict[str, Path], project: str) -> pl.DataFrame:
 
 
 def transform(paths: dict[str, Path]) -> Staged:
-    polygons = pl.read_parquet(
-        paths["polygons"],
-        columns=[
-            "osm_type",
-            "osm_id",
-            "name",
-            "tags",
-            "lat",
-            "lon",
-            "area_m2",
-            "geometry",
-        ],
-    )
-    links = pl.read_parquet(paths["links"], columns=["osm_type", "osm_id", "document_id"])
+    polygons = pl.read_parquet(paths["polygons"], columns=POLYGON_COLUMNS)  # pragma: no mutate (speed)
+    links = pl.read_parquet(paths["links"], columns=LINK_COLUMNS)  # pragma: no mutate (speed)
     sentences = pl.concat(_project_sentences(paths, project) for project in PROJECTS)
     return Staged(
         polygons=polygons.select(

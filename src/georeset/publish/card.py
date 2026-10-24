@@ -97,7 +97,7 @@ def _bold_total(df: pl.DataFrame, column: str) -> pl.DataFrame:
 
 
 def _total(ctx: Context) -> dict:
-    return ctx.by_source.filter(pl.col("source") == "total").row(0, named=True)
+    return ctx.by_source.filter(pl.col("source") == "total").row(0, named=True)  # pragma: no mutate (one row)
 
 
 def _front_matter(ctx: Context) -> str:

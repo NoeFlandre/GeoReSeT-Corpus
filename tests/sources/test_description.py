@@ -71,19 +71,14 @@ def test_description_transform(write):
         },
     )
     staged = description.transform({"polygons": polygons, "texts": texts, "labels": labels})
-    s = staged.sentences.sort("doc_key")
-    assert s["text"].to_list() == ["Nice view", "Grand refuge"]
-    assert s["language"].to_list() == ["eng_Latn", "fra_Latn"]
-    assert s["url"].to_list() == ["https://www.openstreetmap.org/way/7"] * 2
-    assert set(s["source"]) == {"osm_description"}
+    url = "https://www.openstreetmap.org/way/7"
+    assert staged.sentences.sort("doc_key").rows() == [
+        ("osm_description", "id1", 1, "Nice view", "yes", None, "eng_Latn", url),
+        ("osm_description", "id2", 0, "Grand refuge", "skipped_unsplit", "unsplit_upstream", "fra_Latn", url),
+    ]
     assert staged.links.sort("doc_key").rows() == [("id1", "way/7"), ("id2", "way/7")]
-    p = staged.polygons.row(0, named=True)
-    assert (p["polygon_id"], p["osm_tag"], p["lat"], p["lon"]) == (
-        "way/7",
-        "tourism=alpine_hut",
-        15.0,
-        1.0,
-    )
+    assert staged.polygons.drop("geometry").rows() == [("way/7", "Hut", "tourism=alpine_hut", 15.0, 1.0, 5.0)]
+    assert shapely.from_wkb(staged.polygons["geometry"].item()).area == 1.0
 
 
 def test_description_files():

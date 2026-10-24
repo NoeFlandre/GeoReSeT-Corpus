@@ -9,7 +9,7 @@ georeset/
   normalize/    languages, regions, OSM helpers (pure)
   sources/      one adapter per upstream repo + shared base
   build/        stage, assemble, pipeline, write
-  publish/      stats, plots, card rendering, report
+  publish/      stats, geo (map maths), figures (matplotlib), card rendering, report
 ```
 
 ```

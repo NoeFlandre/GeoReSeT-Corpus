@@ -1,19 +1,23 @@
+from pathlib import Path
+
 from georeset import hub
 
 
 class _FakeApi:
+    """Records every call with all its arguments."""
+
     def __init__(self):
         self.calls = []
 
-    def create_repo(self, repo_id, **kwargs):
-        self.calls.append(("create", repo_id, kwargs["private"]))
-        return f"https://hf.co/datasets/{repo_id}"
+    def create_repo(self, *args, **kwargs):
+        self.calls.append(("create_repo", args, kwargs))
+        return f"https://hf.co/datasets/{args[0]}"
 
-    def upload_folder(self, **kwargs):
-        self.calls.append(("folder", kwargs["path_in_repo"]))
+    def upload_folder(self, *args, **kwargs):
+        self.calls.append(("upload_folder", args, kwargs))
 
-    def upload_file(self, **kwargs):
-        self.calls.append(("file", kwargs["path_in_repo"]))
+    def upload_file(self, *args, **kwargs):
+        self.calls.append(("upload_file", args, kwargs))
 
 
 def _out(tmp_path):
@@ -33,30 +37,68 @@ def test_upload_units_order(tmp_path):
     ]
 
 
-def test_publish_is_public_and_card_goes_last(tmp_path, monkeypatch):
+def test_upload_units_skip_missing_folders(tmp_path):
+    (tmp_path / "data" / "website").mkdir(parents=True)
+    assert hub.upload_units(tmp_path) == ["data/website"]
+
+
+def test_publish_creates_public_repo_uploads_units_then_card(tmp_path, monkeypatch):
     api = _FakeApi()
     monkeypatch.setattr(hub, "HfApi", lambda: api)
-    assert hub.publish(_out(tmp_path), "me/d") == "https://hf.co/datasets/me/d"
-    assert api.calls[0] == ("create", "me/d", False)
-    assert api.calls[-1] == ("file", "README.md")
+    out = _out(tmp_path)
+    assert hub.publish(out, "me/d") == "https://hf.co/datasets/me/d"
+    assert api.calls[0] == (
+        "create_repo",
+        ("me/d",),
+        {"repo_type": "dataset", "private": False, "exist_ok": True},
+    )
+    folders = [call for call in api.calls if call[0] == "upload_folder"]
+    assert folders[0] == (
+        "upload_folder",
+        (),
+        {
+            "repo_id": "me/d",
+            "repo_type": "dataset",
+            "folder_path": out / "data/website",
+            "path_in_repo": "data/website",
+            "delete_patterns": "*",
+            "commit_message": "Upload data/website",
+        },
+    )
+    assert [c[2]["path_in_repo"] for c in folders] == hub.upload_units(out)
+    assert api.calls[-1] == (
+        "upload_file",
+        (),
+        {
+            "repo_id": "me/d",
+            "repo_type": "dataset",
+            "path_or_fileobj": out / "README.md",
+            "path_in_repo": "README.md",
+            "commit_message": "Update dataset card",
+        },
+    )
     assert len(api.calls) == 7
 
 
 def test_revision_and_list_files(monkeypatch):
+    seen = []
+
     class Info:
         sha = "abc"
 
     class Api:
         def dataset_info(self, repo):
+            seen.append(("info", repo))
             return Info()
 
         def list_repo_files(self, repo, repo_type, revision):
-            assert (repo_type, revision) == ("dataset", "abc")
+            seen.append(("files", repo, repo_type, revision))
             return ["a", "b"]
 
     monkeypatch.setattr(hub, "HfApi", Api)
     assert hub.revision("me/d") == "abc"
     assert hub.list_files("me/d", "abc") == frozenset({"a", "b"})
+    assert seen == [("info", "me/d"), ("files", "me/d", "dataset", "abc")]
 
 
 def test_download(tmp_path, monkeypatch):
@@ -67,7 +109,11 @@ def test_download(tmp_path, monkeypatch):
         return str(tmp_path / path)
 
     monkeypatch.setattr(hub, "hf_hub_download", fake)
-    assert hub.download("me/d", "x.parquet", "abc", tmp_path) == tmp_path / "x.parquet"
-    assert seen["revision"] == "abc"
-    assert seen["repo_type"] == "dataset"
-    assert seen["local_dir"] == tmp_path
+    assert hub.download("me/d", "x.parquet", "abc", tmp_path) == Path(tmp_path / "x.parquet")
+    assert seen == {
+        "repo": "me/d",
+        "path": "x.parquet",
+        "repo_type": "dataset",
+        "revision": "abc",
+        "local_dir": tmp_path,
+    }

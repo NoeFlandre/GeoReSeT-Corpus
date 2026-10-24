@@ -8,11 +8,10 @@ runner = CliRunner()
 
 
 def test_stems_default_lists_polygon_files(monkeypatch):
-    monkeypatch.setattr(stage.hub, "revision", lambda repo: "r")
+    files = frozenset({"polygons/b-latest.parquet", "polygons/a-latest.parquet", "x"})
+    monkeypatch.setattr(stage.hub, "revision", {cli.wiki.SOURCE.repo: "r"}.__getitem__)
     monkeypatch.setattr(
-        stage.hub,
-        "list_files",
-        lambda repo, rev: frozenset({"polygons/b-latest.parquet", "polygons/a-latest.parquet", "x"}),
+        stage.hub, "list_files", lambda repo, rev: {(cli.wiki.SOURCE.repo, "r"): files}[(repo, rev)]
     )
     assert cli._stems(None) == ["a-latest", "b-latest"]
     assert cli._stems(["z-latest"]) == ["z-latest"]

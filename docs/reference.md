@@ -13,7 +13,8 @@
 ::: georeset.build.pipeline
 ::: georeset.build.write
 ::: georeset.publish.stats
-::: georeset.publish.plots
+::: georeset.publish.geo
+::: georeset.publish.figures
 ::: georeset.publish.card
 ::: georeset.publish.report
 ::: georeset.hub
