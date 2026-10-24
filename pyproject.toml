@@ -54,9 +54,12 @@ testpaths = ["tests"]
 norecursedirs = [".*", "data", "__pycache__"]
 
 [tool.mutmut]
-paths_to_mutate = ["src/georeset/"]
-tests_dir = ["tests/"]
+source_paths = ["src/georeset/"]
+pytest_add_cli_args_test_selection = ["tests/"]
 also_copy = ["tools/"]
+# polars' thread pool does not survive fork(): fork workers from a clean server instead.
+process_isolation = "forkserver"
+forkserver_warmup = "none"
 
 [tool.coverage.run]
 branch = true
