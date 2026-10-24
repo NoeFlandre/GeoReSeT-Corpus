@@ -8,6 +8,8 @@ from georeset.normalize.osm import geojson_to_wkb, polygon_id, primary_tag
 from georeset.sources.base import SENTENCE_SCHEMA, Source, Staged, finish_sentences
 
 PROJECTS = ("wikipedia", "wikivoyage")
+# Rows made only of [...] segments: section edit links ("[ edit | edit source ]") and citation crumbs.
+BRACKETS_ONLY = r"^\s*(\[[^\[\]]{1,80}\]\s*)+$"
 
 
 def files(stem: str) -> dict[str, str]:
@@ -51,8 +53,9 @@ def _project_sentences(paths: dict[str, Path], project: str) -> pl.DataFrame:
         columns=["sentence_id", "decision", "failure_reason", "language"],
     )
     return (
-        sentences.join(labels, on="sentence_id")
-        .sort("document_id", "section_index", "sentence_index")
+        sentences.filter(~pl.col("text").str.contains(BRACKETS_ONLY))
+        .join(labels, on="sentence_id")
+        .sort("section_index", "sentence_index")
         .select(
             source=pl.lit(project),
             doc_key="document_id",
