@@ -152,7 +152,7 @@ def test_spread():
             "scene_id": [1, 1, 1, 1, 2],
             "lat": [0.0, 0.0, 0.0, 0.0, 5.0],
             "lon": [0.0, 1.0, 2.0, 10.0, 5.0],
-            "country": ["B", "A", "A", "C", "D"],
+            "country": ["C", "B", "B", "A", "D"],
         }
     )
     out = scenes.spread(photos).collect().sort("scene_id")
@@ -162,7 +162,7 @@ def test_spread():
     assert (one["lat"], one["lon"]) == (0.0, 1.5)
     assert one["spread_km_p50"] == pytest.approx(degree)  # distances 1.5, 0.5, 0.5, 8.5 degrees
     assert one["spread_km_p90"] == pytest.approx(degree * (1.5 + 0.7 * 7))
-    assert one["countries"] == ["A", "B", "C"]
+    assert one["countries"] == ["B", "A", "C"]
     two = out.row(1, named=True)
     assert (two["n_photos"], two["spread_km_p50"], two["spread_km_p90"], two["countries"]) == (1, 0, 0, ["D"])
 

@@ -104,7 +104,7 @@ def scene_totals(scenes: pl.LazyFrame) -> dict[str, int]:
             countries=pl.col("countries").explode().n_unique().cast(pl.Int64),
         )
     )
-    return totals.row(0, named=True)
+    return totals.row(0, named=True)  # pragma: no mutate (one row)
 
 
 def scene_labels(scenes: pl.LazyFrame, n: int) -> pl.DataFrame:
@@ -114,7 +114,8 @@ def scene_labels(scenes: pl.LazyFrame, n: int) -> pl.DataFrame:
             scenes=pl.len().cast(pl.Int64), photos=pl.col("n_photos").sum().cast(pl.Int64)
         )
     )
-    return counts.sort("photos", "lulc_label", descending=[True, False]).head(n)
+    ranked = counts.sort("photos", "lulc_label", descending=[True, False])  # pragma: no mutate (tie key)
+    return ranked.head(n)
 
 
 def scene_platforms(photos: pl.LazyFrame) -> pl.DataFrame:

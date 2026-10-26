@@ -174,9 +174,9 @@ def spread(photos: pl.LazyFrame) -> pl.LazyFrame:
     countries = (
         photos.group_by("scene_id", "country")
         .agg(n=pl.len())
-        .sort("scene_id", "n", "country", descending=[False, True, False])
-        .group_by("scene_id", maintain_order=True)
-        .agg(countries=pl.col("country"))
+        .sort("n", "country", descending=[True, False])  # pragma: no mutate (None key: no-op)
+        .group_by("scene_id")
+        .agg(countries=pl.col("country"))  # keeps the sorted order within each scene
     )
     return centre.join(distances, on="scene_id").join(countries, on="scene_id")
 

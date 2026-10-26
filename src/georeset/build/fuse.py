@@ -48,19 +48,18 @@ def fetch_scenes(work: Path) -> Path:
 def _with_text(photos: pl.DataFrame, texts: pl.DataFrame) -> Iterator[pl.DataFrame]:
     """``photos`` (sorted by scene) chunk by chunk, each row given its scene's text and label."""
     for chunk in photos.iter_slices(JOIN_CHUNK_ROWS):
-        yield chunk.join(texts, on="scene_id", maintain_order="left").select(SCENE_PHOTO_COLUMNS)
+        joined = chunk.join(texts, on="scene_id", maintain_order="left")  # pragma: no mutate (order)
+        yield joined.select(SCENE_PHOTO_COLUMNS)
 
 
 def build_scenes(raw: Path, out: Path) -> None:
     """``scenes``: one row per description; ``scene_photos``: one row per photo, text repeated."""
     clusters = pl.scan_parquet(raw / scenes.CLUSTERS_FILE)
     scene_rows = scenes.scenes(clusters).collect(engine="streaming")
-    photos = (
-        scenes.photos(pl.scan_parquet(raw / scenes.PHOTOS_FILE), clusters)
-        .join(scene_rows.lazy().select("scene_id"), on="scene_id", how="semi")
-        .sort("scene_id", "platform", "photo_id")
-        .collect(engine="streaming")
-    )
+    described = scene_rows.lazy().select("scene_id")
+    all_photos = scenes.photos(pl.scan_parquet(raw / scenes.PHOTOS_FILE), clusters)
+    kept = all_photos.join(described, on="scene_id", how="semi")  # pragma: no mutate (= inner join)
+    photos = kept.sort("scene_id", "platform", "photo_id").collect(engine="streaming")
     table = scenes.with_spread(scene_rows.lazy(), photos.lazy()).collect()
     write_shards(table, out / "scenes", SCENES_PER_SHARD)
     texts = table.select("scene_id", "text", "lulc_label")
