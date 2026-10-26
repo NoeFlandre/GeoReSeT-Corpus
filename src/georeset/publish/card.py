@@ -196,7 +196,8 @@ def km(n: int) -> str:
 def parts(text: str) -> dict[str, str]:
     """Named parts of a template split on ``<!-- name -->`` lines, without their final newline."""
     pieces = _PART.split(text)
-    return {name: body.removesuffix("\n") for name, body in zip(pieces[1::2], pieces[2::2], strict=True)}
+    pairs = zip(pieces[1::2], pieces[2::2], strict=True)  # pragma: no mutate (split pairs are always even)
+    return {name: body.removesuffix("\n") for name, body in pairs}
 
 
 def _scene_values(ctx: Context, scenes: Scenes) -> dict[str, str]:

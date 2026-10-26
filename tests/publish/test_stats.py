@@ -106,13 +106,15 @@ def test_scene_labels_by_photos():
 
 
 def test_scene_labels_ties_by_name():
-    tied = _scenes().with_columns(n_photos=pl.lit(1))
-    assert stats.scene_labels(tied, 5)["lulc_label"].to_list() == ["Lake / Pond", "Tundra"]
+    tied = _scenes().with_columns(
+        n_photos=pl.Series([1, 2, 1]), lulc_label=pl.Series(["Tundra", "Lake", "Tundra"])
+    )
+    assert stats.scene_labels(tied, 5)["lulc_label"].to_list() == ["Lake", "Tundra"]
 
 
 def test_scene_platforms():
-    photos = pl.LazyFrame({"platform": ["b", "a", "a", "c"], "url": ["u", None, "v", None]})
-    assert stats.scene_platforms(photos).rows() == [("a", 2, 0.5), ("b", 1, 1.0), ("c", 1, 0.0)]
+    photos = pl.LazyFrame({"platform": ["c", "z", "z", "b"], "url": ["u", None, "v", None]})
+    assert stats.scene_platforms(photos).rows() == [("z", 2, 0.5), ("b", 1, 0.0), ("c", 1, 1.0)]
 
 
 def test_scene_locality_is_inclusive():

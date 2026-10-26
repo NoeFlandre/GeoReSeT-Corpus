@@ -31,7 +31,7 @@ def test_fetch_corpus(tmp_path, monkeypatch):
         ("snapshot", "me/corpus", "v1.0", out, ["data/*", "unlabelled/*", "polygons/*"]),
         ("download", "me/corpus", "README.md", "v1.0", work / "corpus"),
     ]
-    assert json.loads((work / "revisions.json").read_text()) == {"me/up": SHA_A}
+    assert (work / "revisions.json").read_text() == json.dumps({"me/up": SHA_A}, indent=2)
 
 
 def test_fetch_scenes(tmp_path, monkeypatch):
@@ -45,7 +45,7 @@ def test_fetch_scenes(tmp_path, monkeypatch):
         (scenes.RAW_REPO, scenes.PHOTOS_FILE, SHA_B, folder),
         (scenes.RAW_REPO, scenes.CLUSTERS_FILE, SHA_B, folder),
     ]
-    assert json.loads((tmp_path / "w" / "scenes.json").read_text()) == {scenes.RAW_REPO: SHA_B}
+    assert (tmp_path / "w" / "scenes.json").read_text() == json.dumps({scenes.RAW_REPO: SHA_B}, indent=2)
 
 
 def _read(folder: Path) -> pl.DataFrame:
@@ -82,4 +82,21 @@ def test_with_text_keeps_photo_order_across_chunks(monkeypatch):
     assert pl.concat(chunks).select("scene_id", "text", "lulc_label").rows() == [
         (2, "two", "L2"),
         (1, "one", "L1"),
+    ]
+
+
+def test_build_scenes_sorts_photos_by_id_within_platform(raw_scenes, tmp_path):
+    for name, extra in [
+        (scenes.PHOTOS_FILE, {"Photo_ID": "10", "Platform": "flickr", "photo_key": "flickr_10"}),
+        (scenes.CLUSTERS_FILE, {"photo_key": "flickr_10"}),
+    ]:
+        table = pl.read_parquet(raw_scenes / name)
+        row = table.head(2).tail(1).with_columns(**{k: pl.lit(v) for k, v in extra.items()})
+        pl.concat([table, row]).write_parquet(raw_scenes / name)
+    fuse.build_scenes(raw_scenes, tmp_path / "out")
+    photos = _read(tmp_path / "out" / "scene_photos").filter(pl.col("scene_id") == 7)
+    assert photos.select("platform", "photo_id").rows() == [
+        ("flickr", "10"),
+        ("flickr", "2"),
+        ("mapillary", "1"),
     ]
