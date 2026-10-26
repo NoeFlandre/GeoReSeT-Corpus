@@ -6,12 +6,14 @@
 ::: georeset.sources.website
 ::: georeset.sources.description
 ::: georeset.sources.wiki
+::: georeset.sources.scenes
 ::: georeset.normalize.languages
 ::: georeset.normalize.regions
 ::: georeset.normalize.osm
 ::: georeset.build.assemble
 ::: georeset.build.pipeline
 ::: georeset.build.write
+::: georeset.build.fuse
 ::: georeset.publish.stats
 ::: georeset.publish.geo
 ::: georeset.publish.figures

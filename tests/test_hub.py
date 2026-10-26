@@ -37,6 +37,13 @@ def test_upload_units_order(tmp_path):
     ]
 
 
+def test_upload_units_add_scenes_before_assets(tmp_path):
+    out = _out(tmp_path)
+    for d in ["scene_photos", "scenes"]:
+        (out / d).mkdir()
+    assert hub.upload_units(out)[-4:] == ["polygons", "scenes", "scene_photos", "assets"]
+
+
 def test_upload_units_skip_missing_folders(tmp_path):
     (tmp_path / "data" / "website").mkdir(parents=True)
     assert hub.upload_units(tmp_path) == ["data/website"]
@@ -78,6 +85,31 @@ def test_publish_creates_public_repo_uploads_units_then_card(tmp_path, monkeypat
         },
     )
     assert len(api.calls) == 7
+
+
+def test_publish_private(tmp_path, monkeypatch):
+    api = _FakeApi()
+    monkeypatch.setattr(hub, "HfApi", lambda: api)
+    hub.publish(_out(tmp_path), "me/d", private=True)
+    assert api.calls[0][2]["private"] is True
+
+
+def test_snapshot(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake(repo, **kwargs):
+        seen.update(kwargs, repo=repo)
+        return str(tmp_path)
+
+    monkeypatch.setattr(hub, "snapshot_download", fake)
+    assert hub.snapshot("me/d", "v1", tmp_path, ["data/*"]) == tmp_path
+    assert seen == {
+        "repo": "me/d",
+        "repo_type": "dataset",
+        "revision": "v1",
+        "local_dir": tmp_path,
+        "allow_patterns": ["data/*"],
+    }
 
 
 def test_revision_and_list_files(monkeypatch):

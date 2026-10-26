@@ -6,12 +6,15 @@ from typing import Annotated
 import typer
 
 from georeset import hub
+from georeset.build import fuse as fusion
 from georeset.build import pipeline, stage
 from georeset.publish import report
 from georeset.sources import description, website, wiki
 
 SOURCES = (website.SOURCE, description.SOURCE, wiki.SOURCE)
 REPO_ID = "NoeFlandre/GeoReSeT-Corpus"
+FUSED_REPO_ID = "NoeFlandre/GeoReSeT-Corpus-Fused"
+CORPUS_RELEASE = "v1.0"  # tag of REPO_ID fused with the scenes
 CODE_URL = "https://github.com/NoeFlandre/GeoReSeT-Corpus"
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
@@ -64,9 +67,30 @@ def card_cmd(work: Work = Path("work"), out: Out = Path("out"), repo: str = REPO
 
 
 @app.command()
-def publish(out: Out = Path("out"), repo: str = REPO_ID) -> None:
-    """Upload the dataset to the Hugging Face Hub (public)."""
-    typer.echo(hub.publish(out, repo))
+def publish(
+    out: Out = Path("out"),
+    repo: str = REPO_ID,
+    private: Annotated[bool, typer.Option(help="Create the repo private.")] = False,
+) -> None:
+    """Upload the dataset to the Hugging Face Hub."""
+    typer.echo(hub.publish(out, repo, private))
+
+
+@app.command()
+def fuse(
+    work: Work = Path("work-fused"),
+    out: Out = Path("out-fused"),
+    corpus: Annotated[str, typer.Option(help="Corpus release (tag or commit) to fuse.")] = CORPUS_RELEASE,
+    repo: str = FUSED_REPO_ID,
+    publish_: Annotated[bool, typer.Option("--publish", help="Upload when done.")] = False,
+    private: Annotated[bool, typer.Option(help="Create the repo private.")] = False,
+) -> None:
+    """Copy a corpus release, add the geo-rag scenes, write the card, then optionally publish."""
+    fusion.fetch_corpus(REPO_ID, corpus, out, work)
+    fusion.build_scenes(fusion.fetch_scenes(work), out)
+    typer.echo(report.build_card(pipeline.Layout(work, out), repo, CODE_URL))
+    if publish_:
+        publish(out, repo, private)
 
 
 @app.command()

@@ -30,3 +30,17 @@ uv run georeset publish  # upload out/ to the Hub
 ```
 
 `--region italy-latest` (repeatable) restricts a run to some regions.
+
+## Fused dataset
+
+[`NoeFlandre/GeoReSeT-Corpus-Fused`](https://huggingface.co/datasets/NoeFlandre/GeoReSeT-Corpus-Fused)
+adds the scene descriptions of [geo-rag](https://github.com/ananthu-aniraj/geo-rag) to a corpus release:
+
+```bash
+uv run georeset fuse --publish     # copy corpus v1.0, add scenes, card, upload
+```
+
+| Config | Rows |
+|---|---|
+| `scenes` | one per scene description (a cluster of similar-looking photos) |
+| `scene_photos` | one per photo: its scene's text and label with the photo's location |
