@@ -91,3 +91,46 @@ def polygon_areas(polygons: pl.LazyFrame) -> pl.DataFrame:
     area = pl.col("area_m2")
     quantiles = [area.quantile(q, "lower").alias(f"p{round(q * 100)}") for q in AREA_QUANTILES]
     return _collect(polygons.select(quantiles))
+
+
+def scene_totals(scenes: pl.LazyFrame) -> dict[str, int]:
+    """Descriptions, photos they cover (and per description, median), words and countries."""
+    totals = _collect(
+        scenes.select(
+            scenes=pl.len().cast(pl.Int64),
+            photos=pl.col("n_photos").sum().cast(pl.Int64),
+            median_photos=pl.col("n_photos").median().round().cast(pl.Int64),
+            words=_WORDS,
+            countries=pl.col("countries").explode().n_unique().cast(pl.Int64),
+        )
+    )
+    return totals.row(0, named=True)
+
+
+def scene_labels(scenes: pl.LazyFrame, n: int) -> pl.DataFrame:
+    """The ``n`` land-use / land-cover labels covering most photos."""
+    counts = _collect(
+        scenes.group_by("lulc_label").agg(
+            scenes=pl.len().cast(pl.Int64), photos=pl.col("n_photos").sum().cast(pl.Int64)
+        )
+    )
+    return counts.sort("photos", "lulc_label", descending=[True, False]).head(n)
+
+
+def scene_platforms(photos: pl.LazyFrame) -> pl.DataFrame:
+    """Photos per platform and the share that keeps a public URL."""
+    counts = _collect(
+        photos.group_by("platform").agg(
+            photos=pl.len().cast(pl.Int64), linked=pl.col("url").is_not_null().mean()
+        )
+    )
+    return counts.sort("photos", "platform", descending=[True, False])
+
+
+SPREAD_KM = (10, 100, 1_000)
+
+
+def scene_locality(scenes: pl.LazyFrame) -> pl.DataFrame:
+    """Scenes whose photos lie, for 90% of them, within each distance of their median location."""
+    within = [(pl.col("spread_km_p90") <= km).sum().cast(pl.Int64).alias(f"km{km}") for km in SPREAD_KM]
+    return _collect(scenes.select(within))

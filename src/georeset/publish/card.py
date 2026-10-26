@@ -1,6 +1,7 @@
 """Render the dataset card (README.md) from computed stats."""
 
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib.resources import files
@@ -9,8 +10,21 @@ from string import Template
 import polars as pl
 
 from georeset.normalize.languages import UNDETERMINED
+from georeset.sources import scenes as scenes_source
 
 TEMPLATE = files("georeset.publish").joinpath("templates/card.md")
+SCENES_TEMPLATE = files("georeset.publish").joinpath("templates/scenes.md")
+SCENE_PARTS = ("headline", "intro", "quickstart", "files", "configs", "section", "method", "license")
+HERO_ALT = (
+    "GeoReSeT: collect texts linked to OpenStreetMap polygons, filter them by land-use relevance, "
+    "link sentences back to polygons"
+)
+FUSED_HERO_ALT = (
+    "GeoReSeT Fused: texts linked to OpenStreetMap polygons are filtered by land-use relevance; "
+    "geotagged photos are clustered and described by a vision-language model; "
+    "both are tied back to places"
+)
+_PART = re.compile(r"^<!-- (\w+) -->\n", re.MULTILINE)
 
 
 def fmt(n: int) -> str:
@@ -53,6 +67,9 @@ def _config(name: str, path: str) -> dict:
     return {"config_name": name, "data_files": [{"split": "train", "path": path}]}
 
 
+SCENE_CONFIGS = ("scenes", "scene_photos")
+
+
 def configs(partitions: list[tuple[str, str]]) -> list[dict]:
     """``all`` (default), one per source, one per language, then ``unlabelled`` and ``polygons``."""
     sources = sorted({s for s, _ in partitions})
@@ -64,6 +81,11 @@ def configs(partitions: list[tuple[str, str]]) -> list[dict]:
         _config("unlabelled", "unlabelled/*.parquet"),
         _config("polygons", "polygons/*.parquet"),
     ]
+
+
+def folder_configs(names: tuple[str, ...]) -> list[dict]:
+    """One config per top-level folder."""
+    return [_config(name, f"{name}/*.parquet") for name in names]
 
 
 _SIZES = [
@@ -87,6 +109,17 @@ def iso_codes(languages: list[str]) -> list[str]:
 
 
 @dataclass(frozen=True)
+class Scenes:
+    """The geo-rag scene descriptions fused into the corpus."""
+
+    totals: dict[str, int]
+    labels: pl.DataFrame
+    platforms: pl.DataFrame
+    locality: pl.DataFrame
+    raw: dict[str, str]
+
+
+@dataclass(frozen=True)
 class Context:
     repo_id: str
     by_source: pl.DataFrame
@@ -97,6 +130,7 @@ class Context:
     areas: pl.DataFrame
     sources: dict[str, str]
     code_url: str
+    scenes: Scenes | None = None
 
 
 def _bold_total(df: pl.DataFrame, column: str) -> pl.DataFrame:
@@ -109,26 +143,108 @@ def _total(ctx: Context) -> dict:
     return ctx.by_source.filter(pl.col("source") == "total").row(0, named=True)  # pragma: no mutate (one row)
 
 
+@dataclass(frozen=True)
+class Flavor:
+    """What differs between the plain corpus card and the fused one."""
+
+    title: str
+    hero_alt: str
+    licenses: tuple[str, ...]
+    tags: tuple[str, ...]
+    folders: tuple[str, ...]
+
+
+_TAGS = ("openstreetmap", "land-use", "land-cover", "geospatial", "multilingual")
+PLAIN = Flavor("GeoReSeT Corpus", HERO_ALT, ("odbl", "cc-by-sa-4.0", "other"), _TAGS, ())
+FUSED = Flavor(
+    "GeoReSeT Corpus Fused",
+    FUSED_HERO_ALT,
+    ("odbl", "cc-by-sa-4.0", "cc-by-4.0", "other"),
+    (*_TAGS, "street-level-imagery", "scene-description"),
+    SCENE_CONFIGS,
+)
+
+
+def flavor(ctx: Context) -> Flavor:
+    return PLAIN if ctx.scenes is None else FUSED
+
+
 def _front_matter(ctx: Context) -> str:
+    kind = flavor(ctx)
     meta = {
-        "license": ["odbl", "cc-by-sa-4.0", "other"],
-        "pretty_name": "GeoReSeT Corpus",
+        "license": list(kind.licenses),
+        "pretty_name": kind.title,
         "language": iso_codes([lang for _, lang in ctx.partitions]),
         "task_categories": ["text-classification"],
-        "tags": ["openstreetmap", "land-use", "land-cover", "geospatial", "multilingual"],
+        "tags": list(kind.tags),
         "size_categories": [size_category(_total(ctx)["sentences"])],
-        "configs": configs(ctx.partitions),
+        "configs": configs(ctx.partitions) + folder_configs(kind.folders),
     }
     # JSON is valid YAML: no YAML dependency, no quoting surprises.
     return "\n".join(f"{key}: {json.dumps(value)}" for key, value in meta.items())
+
+
+def pinned(repo: str, rev: str) -> str:
+    """Markdown link to a dataset repo at one commit."""
+    return f"[`{repo}` @ `{rev[:7]}`](https://huggingface.co/datasets/{repo}/tree/{rev})"
+
+
+def km(n: int) -> str:
+    return f"{n:,} km"
+
+
+def parts(text: str) -> dict[str, str]:
+    """Named parts of a template split on ``<!-- name -->`` lines, without their final newline."""
+    pieces = _PART.split(text)
+    return {name: body.removesuffix("\n") for name, body in zip(pieces[1::2], pieces[2::2], strict=True)}
+
+
+def _scene_values(ctx: Context, scenes: Scenes) -> dict[str, str]:
+    totals = scenes.totals
+    ((raw_repo, raw_rev),) = scenes.raw.items()
+    return {
+        "repo_id": ctx.repo_id,
+        "scene_texts": fmt(totals["scenes"]),
+        "scene_photos": fmt(totals["photos"]),
+        "scene_words": fmt(totals["words"]),
+        "scene_countries": fmt(totals["countries"]),
+        "scene_median": fmt(totals["median_photos"]),
+        "scene_locality": table(scenes.locality, {f"km{d}": (km(d), fmt) for d in (10, 100, 1_000)}),
+        "scene_labels": table(
+            scenes.labels,
+            {"lulc_label": ("Label", str), "scenes": ("Scenes", fmt), "photos": ("Photos", fmt)},
+        ),
+        "scene_platforms": table(
+            scenes.platforms,
+            {"platform": ("Platform", str), "photos": ("Photos", fmt), "linked": ("With `url`", pct)},
+        ),
+        "scene_raw": f"{pinned(raw_repo, raw_rev)} (private)",
+        "geo_rag_url": scenes_source.CODE_URL,
+        "geo_rag_rev": scenes_source.CODE_REV,
+        "geo_rag_short": scenes_source.CODE_REV[:7],
+    }
+
+
+def scene_parts(ctx: Context) -> dict[str, str]:
+    """The fused card's extra text, or empty strings for the plain corpus."""
+    if ctx.scenes is None:
+        return {name: "" for name in SCENE_PARTS}
+    values = _scene_values(ctx, ctx.scenes)
+    return {
+        name: Template(body).substitute(values) for name, body in parts(SCENES_TEMPLATE.read_text()).items()
+    }
 
 
 def render(ctx: Context) -> str:
     total = _total(ctx)
     template = Template(TEMPLATE.read_text())
     languages = sorted({lang for _, lang in ctx.partitions})
+    kind = flavor(ctx)
     return template.substitute(
+        {f"scenes_{name}": text for name, text in scene_parts(ctx).items()},
         front_matter=_front_matter(ctx),
+        title=kind.title,
+        hero_alt=kind.hero_alt,
         repo_id=ctx.repo_id,
         sentences=fmt(total["sentences"]),
         polygons=fmt(ctx.polygons),
@@ -165,9 +281,6 @@ def render(ctx: Context) -> str:
             _bold_total(ctx.unlabelled, "source"),
             {"source": ("Source", str), "failed": ("`failed`", fmt), "unsplit": ("`unsplit`", fmt)},
         ),
-        sources="\n".join(
-            f"   * [`{repo}` @ `{rev[:7]}`](https://huggingface.co/datasets/{repo}/tree/{rev})"
-            for repo, rev in ctx.sources.items()
-        ),
+        sources="\n".join(f"   * {pinned(repo, rev)}" for repo, rev in ctx.sources.items()),
         code_url=ctx.code_url,
     )

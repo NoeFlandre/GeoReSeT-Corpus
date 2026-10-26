@@ -7,8 +7,8 @@ georeset/
   cli.py        command line
   hub.py        Hugging Face Hub I/O
   normalize/    languages, regions, OSM helpers (pure)
-  sources/      one adapter per upstream repo + shared base
-  build/        stage, assemble, pipeline, write
+  sources/      one adapter per upstream repo + shared base; scenes (geo-rag)
+  build/        stage, assemble, pipeline, write; fuse
   publish/      stats, geo (map maths), figures (matplotlib), card rendering, report
 ```
 
@@ -42,3 +42,19 @@ Downloads run in parallel; conversions are capped to bound memory. Each region i
 Labelled (`yes` / `no`) sentences become `landuse = true / false`; `failed` and `skipped_unsplit`
 go to `unlabelled` with `status` and `failure_reason`. Partitions are sorted by region, then document and position,
 so region filters read few row groups. Staged and intermediate files are deleted as soon as they are consumed.
+
+## Fuse
+
+`georeset fuse` builds the fused dataset without rebuilding the corpus:
+
+```
+corpus repo @ v1.0 ──▶ out-fused/{data,unlabelled,polygons}/   (copied as published)
+geo-rag-scenes-raw ──▶ out-fused/scenes/, out-fused/scene_photos/
+                   ──▶ out-fused/README.md, out-fused/assets/  (card with the fused hero)
+```
+
+The raw geo-rag files are pinned in the private repo `NoeFlandre/geo-rag-scenes-raw`.
+`georeset.sources.scenes` keeps one row per described cluster (failed ones dropped, off-vocabulary labels
+mapped), one row per photo (local paths and links to non-reusable photos removed, Mapillary keys turned
+into links), and how far each scene's photos are spread. `scene_photos` repeats each scene's text on its
+photos, sorted by scene so the text compresses to one copy per row group.

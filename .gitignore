@@ -9,3 +9,5 @@ work/
 out/
 site/
 coverage.json
+work-fused/
+out-fused/
