@@ -31,6 +31,14 @@ def test_configs_cover_sources_languages_and_extras():
     assert configs[-1]["data_files"][0]["path"] == "polygons/*.parquet"
 
 
+def test_folder_configs():
+    assert card.folder_configs(card.SCENE_CONFIGS) == [
+        {"config_name": "scenes", "data_files": [{"split": "train", "path": "scenes/*.parquet"}]},
+        {"config_name": "scene_photos", "data_files": [{"split": "train", "path": "scene_photos/*.parquet"}]},
+    ]
+    assert card.folder_configs(()) == []
+
+
 @pytest.mark.parametrize(
     ("n", "label"),
     [
@@ -75,6 +83,22 @@ def _context():
     )
 
 
+def _scenes():
+    return card.Scenes(
+        totals={"scenes": 2, "photos": 1500, "median_photos": 750, "words": 40, "countries": 3},
+        labels=pl.DataFrame(
+            {"lulc_label": ["Tundra", "Lake / Pond"], "scenes": [1, 1], "photos": [1000, 500]}
+        ),
+        platforms=pl.DataFrame({"platform": ["flickr"], "photos": [1500], "linked": [0.25]}),
+        locality=pl.DataFrame({"km10": [0], "km100": [1], "km1000": [2]}),
+        raw={"me/raw": "f" * 40},
+    )
+
+
+def _fused():
+    return card.Context(**{**_context().__dict__, "scenes": _scenes()})
+
+
 def test_render_is_a_valid_card():
     text = card.render(_context())
     parsed = DatasetCard(text)
@@ -102,6 +126,57 @@ def test_render_matches_snapshot():
     if os.environ.get("UPDATE_SNAPSHOTS"):
         SNAPSHOT.write_text(text)
     assert text == SNAPSHOT.read_text()
+
+
+def test_fused_card_is_valid_and_mentions_scenes():
+    text = card.render(_fused())
+    parsed = DatasetCard(text)
+    assert parsed.data.pretty_name == "GeoReSeT Corpus Fused"
+    assert parsed.data.license == ["odbl", "cc-by-sa-4.0", "cc-by-4.0", "other"]
+    assert parsed.data.tags[-2:] == ["street-level-imagery", "scene-description"]
+    assert [c["config_name"] for c in parsed.data.configs][-2:] == ["scenes", "scene_photos"]
+    assert "# GeoReSeT Corpus Fused\n" in text
+    assert "**Plus 2 English scene descriptions" in text
+    assert "| Tundra | 1 | 1,000 |" in text
+    assert "| flickr | 1,500 | 25.0% |" in text
+    assert "| 10 km | 100 km | 1,000 km |" in text
+    assert "`me/raw` @ `fffffff`" in text
+    assert "`polygons`, `scenes`, `scene_photos`." in text
+    assert "7. **Scenes**" in text
+    assert 'load_dataset("me/data", "scene_photos", split="train")' in text
+    assert "$" not in text.replace("$ ", "")
+
+
+FUSED_SNAPSHOT = Path(__file__).parents[1] / "data" / "card_fused_snapshot.md"
+
+
+def test_fused_render_matches_snapshot():
+    """The fused card; regenerate with ``UPDATE_SNAPSHOTS=1`` after reviewing a change."""
+    text = card.render(_fused())
+    if os.environ.get("UPDATE_SNAPSHOTS"):
+        FUSED_SNAPSHOT.write_text(text)
+    assert text == FUSED_SNAPSHOT.read_text()
+
+
+def test_plain_card_has_no_scene_text():
+    assert card.scene_parts(_context()) == dict.fromkeys(card.SCENE_PARTS, "")
+    assert "scene" not in card.render(_context()).lower()
+
+
+def test_scene_template_has_every_part():
+    assert tuple(card.parts(card.SCENES_TEMPLATE.read_text())) == card.SCENE_PARTS
+
+
+def test_parts():
+    assert card.parts("<!-- a -->\nx\n\n<!-- b -->\n y\n") == {"a": "x\n", "b": " y"}
+
+
+def test_pinned_and_km():
+    assert (
+        card.pinned("me/x", "abcdef0123")
+        == "[`me/x` @ `abcdef0`](https://huggingface.co/datasets/me/x/tree/abcdef0123)"
+    )
+    assert card.km(1000) == "1,000 km"
 
 
 def test_example_language_prefers_french_else_first():

@@ -92,3 +92,58 @@ def build_all(layout):
     for staged in sorted(layout.stage.glob("*/*")):
         build_rows(layout, staged)
     build_shards(layout, workers=2)
+
+
+SCENE_TEXT = "A paved street lined with trees."
+
+
+@pytest.fixture
+def raw_scenes(tmp_path):
+    """Raw geo-rag files: 4 photos in 3 clusters, one of which failed to be described."""
+    from georeset.sources import scenes
+
+    folder = tmp_path / "raw"
+    folder.mkdir()
+    keys = ["mapillary_1", "flickr_2", "wikimedia_3", "flickr_4"]
+    pl.DataFrame(
+        {
+            "Photo_ID": ["1", "2", "3", "4"],
+            "Platform": ["mapillary", "flickr", "wikimedia", "flickr"],
+            "Latitude": [48.0, 48.0, 10.0, 0.0],
+            "Longitude": [2.0, 3.0, 20.0, 0.0],
+            "Image_URL": [
+                "mapillary://1",
+                "https://live.staticflickr.com/2.jpg",
+                "/home/someone/landmarks/3.jpg",
+                "https://live.staticflickr.com/4.jpg",
+            ],
+            "Captured_At": ["2020-01-01T00:00:00Z", None, "2019-06-01T12:00:00Z", None],
+            "H3_Cell": ["8b1", "8b2", "8b3", "8b4"],
+            "Season": ["Winter", "Unknown", "Wet Season", "Summer"],
+            "Time_Of_Day": ["Night", "Morning", "Unknown", "Dusk"],
+            "Koppen_Code": ["Cfb", "Cfb", "Aw", "Af"],
+            "Koppen_Desc": ["d"] * 4,
+            "continent": ["Europe", "Europe", "North America", "Ocean / Unknown"],
+            "country": ["France", "France", "Mexico", "Ocean"],
+            "License": ["CC BY-SA 4.0", "CC BY 2.0", "CC BY SA 3.0", "All Rights Reserved"],
+            "photo_key": keys,
+        }
+    ).write_parquet(folder / scenes.PHOTOS_FILE)
+    pl.DataFrame(
+        {
+            "photo_key": keys,
+            "cluster_id": [7, 7, 3, 9],
+            "parent_cluster_id": [1, 1, 0, 1],
+            "cluster_label": [
+                "Transportation network",
+                "Transportation network",
+                "Bare soil / Badlands",
+                "x",
+            ],
+            "cluster_description": [SCENE_TEXT, SCENE_TEXT, "Dry bare earth.", scenes.FAILED_TEXT],
+            "visual_description": ["street", "street", "", "?"],
+            "parent_cluster_label": ["High-density built-up"] * 2
+            + ["Arid shrubland", "High-density built-up"],
+        }
+    ).write_parquet(folder / scenes.CLUSTERS_FILE)
+    return folder
