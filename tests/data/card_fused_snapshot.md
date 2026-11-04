@@ -18,13 +18,15 @@ configs: [{"config_name": "all", "data_files": [{"split": "train", "path": "data
 
 Sentences come from the websites, `description` tags and Wikipedia / Wikivoyage articles linked to OpenStreetMap polygons. Every row is one sentence with a boolean `landuse` label, the language, and the location of the polygon it describes. Polygon shapes are in a separate `polygons` table. Scene descriptions come from ground-level photos (Mapillary, Flickr, Google Landmarks v2, iNaturalist, KartaView, camera traps) grouped by look with [geo-rag](https://github.com/ananthu-aniraj/geo-rag); see [Scenes](#scenes). No photo is included.
 
-![Sentences per H3 cell](assets/map.png)
+**All sentences** of the dataset:
 
-Sentences labelled `landuse`:
+![All sentences per H3 cell](assets/map.png)
 
-![Sentences labelled landuse per H3 cell](assets/map_landuse.png)
+**Sentences the LLM labelled relevant** (`landuse` is true):
 
-Sentences per source: `website`, `osm_description`, then `wikipedia` and `wikivoyage` together:
+![Sentences labelled relevant per H3 cell](assets/map_landuse.png)
+
+**Sentences per source**: `website`, `osm_description`, then `wikipedia` and `wikivoyage` together:
 
 ![Website sentences per H3 cell](assets/map_website.png)
 
