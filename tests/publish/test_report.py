@@ -41,6 +41,8 @@ def test_build_fused_card(layout, raw_scenes):
     assert "`me/raw` @ `fffffff`" in text
     assert (layout.out / "assets" / "map_scenes.png").exists()
     assert "assets/map_scenes.png" in text
+    assert "all sentences and all scene photos" in text
+    assert report.scene_points(layout.out)["n"].sum() == 3
     hero = (layout.out / "assets" / "hero.png").read_bytes()
     assert hero == report.FUSED_HERO.read_bytes() != report.HERO.read_bytes()
 
@@ -51,3 +53,4 @@ def test_plain_card_uses_plain_hero(layout):
     report.build_card(layout, "me/data", "https://github.com/me/code")
     assert (layout.out / "assets" / "hero.png").read_bytes() == report.HERO.read_bytes()
     assert report.scene_context(layout.out, layout.work) is None
+    assert report.scene_points(layout.out) is None

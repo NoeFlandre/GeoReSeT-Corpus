@@ -14,7 +14,17 @@ from georeset.sources import scenes as scenes_source
 
 TEMPLATE = files("georeset.publish").joinpath("templates/card.md")
 SCENES_TEMPLATE = files("georeset.publish").joinpath("templates/scenes.md")
-SCENE_PARTS = ("headline", "intro", "quickstart", "files", "configs", "section", "method", "license")
+SCENE_PARTS = (
+    "headline",
+    "intro",
+    "overview",
+    "quickstart",
+    "files",
+    "configs",
+    "section",
+    "method",
+    "license",
+)
 HERO_ALT = (
     "GeoReSeT: collect texts linked to OpenStreetMap polygons, filter them by land-use relevance, "
     "link sentences back to polygons"
