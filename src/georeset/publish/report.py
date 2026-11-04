@@ -42,17 +42,32 @@ def scene_context(out: Path, work: Path) -> card.Scenes | None:
     )
 
 
-def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
-    data = pl.scan_parquet(layout.out / "data" / "*" / "*" / "*.parquet")
-    full = geo.hex_counts(stats.points(data), MAP_RESOLUTION)
-    figures.world_map(full, layout.out / "assets" / "map.png", "Sentences", MAP_RESOLUTION)
+def scene_points(out: Path) -> pl.DataFrame | None:
+    """Photos per location of the fused scenes, or ``None`` for the plain corpus."""
+    if not (out / "scene_photos").is_dir():
+        return None
+    return stats.points(pl.scan_parquet(out / "scene_photos" / "*.parquet"))
+
+
+def draw_maps(data: pl.LazyFrame, out: Path) -> None:
+    """The full dataset map, then the sentence subsets and the scenes over it in grey."""
+    maps = out / "assets"
+    photos = scene_points(out)
+    sentences = stats.points(data)
+    full = geo.hex_counts(sentences if photos is None else pl.concat([sentences, photos]), MAP_RESOLUTION)
+    unit = "Sentences" if photos is None else "Sentences and scene photos"
+    figures.world_map(full, maps / "map.png", unit, MAP_RESOLUTION)
     for name, rows in SENTENCE_MAPS.items():
         counts = geo.hex_counts(stats.points(data.filter(rows)), MAP_RESOLUTION)
-        figures.world_map(counts, layout.out / "assets" / name, "Sentences", MAP_RESOLUTION, full)
-    if (layout.out / "scene_photos").is_dir():
-        photos = pl.scan_parquet(layout.out / "scene_photos" / "*.parquet")
-        counts = geo.hex_counts(stats.points(photos), MAP_RESOLUTION)
-        figures.world_map(counts, layout.out / "assets" / "map_scenes.png", "Photos", MAP_RESOLUTION)
+        figures.world_map(counts, maps / name, "Sentences", MAP_RESOLUTION, full)
+    if photos is not None:
+        counts = geo.hex_counts(photos, MAP_RESOLUTION)
+        figures.world_map(counts, maps / "map_scenes.png", "Photos", MAP_RESOLUTION, full)
+
+
+def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
+    data = pl.scan_parquet(layout.out / "data" / "*" / "*" / "*.parquet")
+    draw_maps(data, layout.out)
     figures.language_bars(stats.top_languages(data, TOP_LANGUAGES), layout.out / "assets" / "languages.png")
     polygons = pl.scan_parquet(layout.out / "polygons" / "*.parquet")
     context = card.Context(

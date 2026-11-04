@@ -16,9 +16,9 @@ configs: [{"config_name": "all", "data_files": [{"split": "train", "path": "data
 
 Sentences come from the websites, `description` tags and Wikipedia / Wikivoyage articles linked to OpenStreetMap polygons. Every row is one sentence with a boolean `landuse` label, the language, and the location of the polygon it describes. Polygon shapes are in a separate `polygons` table.
 
-**All sentences** of the dataset:
+**The full dataset**, all sentences:
 
-![All sentences per H3 cell](assets/map.png)
+![The full dataset per H3 cell](assets/map.png)
 
 **Sentences the LLM labelled relevant** (`landuse` is true):
 
