@@ -28,6 +28,16 @@ def log_edges(top: float, levels: int) -> list[int]:
     return [*sorted({e for i in range(levels) if (e := round(ratio**i)) < last}), last]
 
 
+_UNITS = ((10**9, "B"), (10**6, "M"), (10**3, "K"))
+
+
+def short(n: int) -> str:
+    """3 significant digits past a thousand: ``999``, ``1.91K``, ``12.6K``, ``2M``."""
+    return next((f"{n / size:.3g}{unit}" for size, unit in _UNITS if n >= size), str(n))
+
+
 def edge_labels(edges: list[int]) -> list[str]:
     """``1``, ``2-3``, ...: the integers each bin [lo, hi) holds."""
-    return [f"{lo:,}" if hi - lo == 1 else f"{lo:,}-{hi - 1:,}" for lo, hi in itertools.pairwise(edges)]
+    return [
+        short(lo) if hi - lo == 1 else f"{short(lo)}-{short(hi - 1)}" for lo, hi in itertools.pairwise(edges)
+    ]

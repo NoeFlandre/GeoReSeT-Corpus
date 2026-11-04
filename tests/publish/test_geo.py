@@ -54,4 +54,20 @@ def test_log_edges(top, levels, expected):
 
 
 def test_edge_labels():
-    assert geo.edge_labels([1, 2, 4, 1000, 2001]) == ["1", "2-3", "4-999", "1,000-2,000"]
+    assert geo.edge_labels([1, 2, 4, 1000, 2001]) == ["1", "2-3", "4-999", "1K-2K"]
+
+
+@pytest.mark.parametrize(
+    ("n", "expected"),
+    [
+        (0, "0"),
+        (999, "999"),
+        (1000, "1K"),
+        (1907, "1.91K"),
+        (12_612, "12.6K"),
+        (10**6, "1M"),
+        (2_500_000_000, "2.5B"),
+    ],
+)
+def test_short(n, expected):
+    assert geo.short(n) == expected
