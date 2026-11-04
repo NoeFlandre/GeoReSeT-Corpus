@@ -26,6 +26,10 @@ scene_photos/train-*.parquet               one row per photo, with its scene's t
 
 $scene_texts descriptions ($scene_words words) of $scene_photos geotagged ground-level photos in $scene_countries countries, from [geo-rag]($geo_rag_url) by Ananthu Aniraj. Photos were grouped by look into clusters (median $scene_median photos); a vision-language model described 4 representative photos of each cluster and labelled the scene with one of 40 land-use / land-cover classes.
 
+Photos of the scenes per H3 cell:
+
+![Scene photos per H3 cell](assets/map_scenes.png)
+
 A description belongs to all the photos of its cluster, and a cluster groups photos that **look** alike, not photos of one place: half the clusters have photos in 20 countries or more. So:
 
 * `scene_photos` repeats the text and label of the scene on each of its photos, with the photo's own location, time and climate: one row per (text, place).

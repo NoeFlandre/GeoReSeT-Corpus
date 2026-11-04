@@ -41,8 +41,10 @@ def _save(fig, path: Path) -> Path:
     return path
 
 
-def world_map(counts: pl.DataFrame, land: list[shapely.Geometry], path: Path) -> Path:
-    """Equal Earth map of sentences per H3 cell, log-binned on one blue ramp."""
+def world_map(
+    counts: pl.DataFrame, land: list[shapely.Geometry], path: Path, unit: str, resolution: int
+) -> Path:
+    """Equal Earth map of ``unit`` per H3 cell, log-binned on one blue ramp."""
     fig, ax = _figure(12, 6)
     ax.add_collection(PolyCollection(land_rings(land), facecolors=LAND, edgecolors="none"))
     drawn = binned_rings(counts, len(RAMP))
@@ -63,7 +65,7 @@ def world_map(counts: pl.DataFrame, land: list[shapely.Geometry], path: Path) ->
     bar.set_ticks(EDGES, labels=[f"{e:,}" for e in EDGES])
     bar.ax.tick_params(colors=TEXT_SECONDARY, labelsize=8, length=0)
     bar.outline.set_visible(False)
-    bar.set_label("Sentences per H3 cell (resolution 3)", color=TEXT_SECONDARY, fontsize=9)
+    bar.set_label(f"{unit} per H3 cell (resolution {resolution})", color=TEXT_SECONDARY, fontsize=9)
     return _save(fig, path)
 
 
