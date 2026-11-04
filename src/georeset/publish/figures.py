@@ -8,23 +8,28 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
+import itertools
+
 import matplotlib.pyplot as plt
+import numpy as np
 import polars as pl
-import shapely
-from matplotlib.collections import PolyCollection
-from matplotlib.colors import BoundaryNorm, ListedColormap
+from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColormap
 
 from georeset.normalize.languages import display_name
-from georeset.publish.geo import binned_rings, land_rings
+from georeset.publish.geo import cell_centres, edge_labels, log_edges
 
 SURFACE = "#fcfcfb"
 TEXT = "#0b0b0b"
 TEXT_SECONDARY = "#52514e"
-LAND = "#e9e8e4"
+EMPTY = "#e3e2de"  # hexagons with data in the full dataset only
 BAR = "#2a78d6"
-# One-hue sequential ramp (light -> dark), one step per decade of sentences.
-RAMP = ["#b7d3f6", "#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281", "#0d366b"]
-EDGES = [10**k for k in range(len(RAMP) + 1)]
+# One-hue sequential ramp (light -> dark), resampled to the number of bins.
+RAMP = ["#b7d3f6", "#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281", "#0d2b5e"]
+LEVELS = 11
+HEX_DEGREES = 2
+# Rows of the hexagon grid that make regular hexagons over 180° of latitude.
+_GRID = (360 // HEX_DEGREES, round(180 / (HEX_DEGREES * np.sqrt(3))))
+_EXTENT = (-180, 180, -90, 90)
 
 
 def _figure(width: float, height: float):
@@ -41,31 +46,49 @@ def _save(fig, path: Path) -> Path:
     return path
 
 
-def world_map(
-    counts: pl.DataFrame, land: list[shapely.Geometry], path: Path, unit: str, resolution: int
-) -> Path:
-    """Equal Earth map of ``unit`` per H3 cell, log-binned on one blue ramp."""
-    fig, ax = _figure(12, 6)
-    ax.add_collection(PolyCollection(land_rings(land), facecolors=LAND, edgecolors="none"))
-    drawn = binned_rings(counts, len(RAMP))
-    rings = [ring for ring, _ in drawn]
-    ax.add_collection(PolyCollection(rings, facecolors=[RAMP[b] for _, b in drawn], edgecolors="none"))
-    ax.set_xlim(-17_000_000, 17_000_000)
-    ax.set_ylim(-7_500_000, 8_700_000)
-    ax.set_aspect("equal")
-    ax.axis("off")
-    bar = fig.colorbar(
-        plt.cm.ScalarMappable(norm=BoundaryNorm(EDGES, len(RAMP)), cmap=ListedColormap(RAMP)),
-        ax=ax,
-        orientation="horizontal",
-        fraction=0.04,
-        pad=0.02,
-        aspect=40,
+def _hexbin(ax, centres: pl.DataFrame, **kwargs):
+    return ax.hexbin(
+        centres["lon"], centres["lat"], gridsize=_GRID, extent=_EXTENT, linewidths=0.15, **kwargs
     )
-    bar.set_ticks(EDGES, labels=[f"{e:,}" for e in EDGES])
+
+
+def _colour(hexes) -> list[int]:
+    """Bin the hexagons' means on log-spaced edges; return the edges."""
+    values = hexes.get_array()
+    edges = log_edges(float(values.max()) if values.size else 1, LEVELS)
+    bins = len(edges) - 1
+    hexes.set_cmap(ListedColormap(LinearSegmentedColormap.from_list("ramp", RAMP)(np.linspace(0, 1, bins))))
+    hexes.set_norm(BoundaryNorm(edges, bins))
+    return edges
+
+
+def _colorbar(fig, ax, hexes, edges: list[int], label: str) -> None:
+    bar = fig.colorbar(hexes, ax=ax, orientation="horizontal", fraction=0.04, pad=0.02, aspect=40)
+    bar.set_ticks([(lo + hi) / 2 for lo, hi in itertools.pairwise(edges)], labels=edge_labels(edges))
     bar.ax.tick_params(colors=TEXT_SECONDARY, labelsize=8, length=0)
     bar.outline.set_visible(False)
-    bar.set_label(f"{unit} per H3 cell (resolution {resolution})", color=TEXT_SECONDARY, fontsize=9)
+    bar.set_label(label, color=TEXT_SECONDARY, fontsize=9)
+
+
+def world_map(
+    counts: pl.DataFrame, path: Path, unit: str, resolution: int, full: pl.DataFrame | None = None
+) -> Path:
+    """Plate carrée map of the mean ``unit`` per H3 cell in each 2° hexagon, log-binned on one blue ramp.
+
+    ``full``: H3 counts of the full dataset, drawn grey where ``counts`` has nothing.
+    """
+    fig, ax = _figure(12, 6.4)
+    label = f"{unit} per H3 cell (resolution {resolution}), mean per {HEX_DEGREES}° hexagon"
+    if full is not None:
+        _hexbin(ax, cell_centres(full), mincnt=1, cmap=ListedColormap([EMPTY]), edgecolors=EMPTY)
+        label += " (grey: the full dataset)"
+    centres = cell_centres(counts)
+    hexes = _hexbin(ax, centres, C=centres["n"], reduce_C_function=np.mean, edgecolors="face")
+    ax.set_xlim(-180, 180)
+    ax.set_ylim(-60, 85)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    _colorbar(fig, ax, hexes, _colour(hexes), label)
     return _save(fig, path)
 
 

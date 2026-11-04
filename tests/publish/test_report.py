@@ -1,28 +1,22 @@
 import json
 
-import shapely
 from conftest import build_all
 from huggingface_hub import DatasetCard
 
-from georeset.publish import geo, report
+from georeset.publish import report
 
 
-def test_build_card(layout, monkeypatch):
-    caches = []
-    monkeypatch.setattr(
-        geo, "load_land", lambda cache: caches.append(cache) or [shapely.box(-10, 35, 30, 60)]
-    )
+def test_build_card(layout):
     build_all(layout)
     (layout.work / "revisions.json").write_text(json.dumps({"me/up": "abcdef123"}))
     readme = report.build_card(layout, "me/data", "https://github.com/me/code")
     assert readme == layout.out / "README.md"
-    assert caches == [layout.work / "cache"]
     text = readme.read_text()
     assert 'load_dataset("me/data"' in text
     assert "Code: https://github.com/me/code" in text
     assert DatasetCard(text).data.pretty_name == "GeoReSeT Corpus"
     assert "**4 sentences in 2 languages, tied to 3 OpenStreetMap polygons in 2 regions" in text
-    for name in report.SENTENCE_MAPS:
+    for name in ["map.png", *report.SENTENCE_MAPS]:
         assert (layout.out / "assets" / name).exists()
     assert not (layout.out / "assets" / "map_scenes.png").exists()
     assert (layout.out / "assets" / "languages.png").exists()
@@ -31,10 +25,9 @@ def test_build_card(layout, monkeypatch):
     assert report.partitions(layout.out) == [("website", "eng_Latn"), ("wikipedia", "fra_Latn")]
 
 
-def test_build_fused_card(layout, raw_scenes, monkeypatch):
+def test_build_fused_card(layout, raw_scenes):
     from georeset.build import fuse
 
-    monkeypatch.setattr(geo, "load_land", lambda cache: [shapely.box(-10, 35, 30, 60)])
     build_all(layout)
     (layout.work / "revisions.json").write_text(json.dumps({"me/up": "abcdef123"}))
     (layout.work / "scenes.json").write_text(json.dumps({"me/raw": "f" * 40}))
@@ -52,8 +45,7 @@ def test_build_fused_card(layout, raw_scenes, monkeypatch):
     assert hero == report.FUSED_HERO.read_bytes() != report.HERO.read_bytes()
 
 
-def test_plain_card_uses_plain_hero(layout, monkeypatch):
-    monkeypatch.setattr(geo, "load_land", lambda cache: [shapely.box(-10, 35, 30, 60)])
+def test_plain_card_uses_plain_hero(layout):
     build_all(layout)
     (layout.work / "revisions.json").write_text(json.dumps({"me/up": "abcdef123"}))
     report.build_card(layout, "me/data", "https://github.com/me/code")

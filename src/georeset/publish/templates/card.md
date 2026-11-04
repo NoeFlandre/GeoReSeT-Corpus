@@ -10,13 +10,15 @@ $front_matter
 
 Sentences come from the websites, `description` tags and Wikipedia / Wikivoyage articles linked to OpenStreetMap polygons. Every row is one sentence with a boolean `landuse` label, the language, and the location of the polygon it describes. Polygon shapes are in a separate `polygons` table.$scenes_intro
 
-![Sentences per H3 cell](assets/map.png)
+**All sentences** of the dataset:
 
-Sentences labelled `landuse`:
+![All sentences per H3 cell](assets/map.png)
 
-![Sentences labelled landuse per H3 cell](assets/map_landuse.png)
+**Sentences the LLM labelled relevant** (`landuse` is true):
 
-Sentences per source: `website`, `osm_description`, then `wikipedia` and `wikivoyage` together:
+![Sentences labelled relevant per H3 cell](assets/map_landuse.png)
+
+**Sentences per source**: `website`, `osm_description`, then `wikipedia` and `wikivoyage` together:
 
 ![Website sentences per H3 cell](assets/map_website.png)
 

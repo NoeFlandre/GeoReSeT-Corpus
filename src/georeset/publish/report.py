@@ -11,9 +11,8 @@ from georeset.build.pipeline import Layout
 from georeset.publish import card, figures, geo, stats
 
 MAP_RESOLUTION = 5
-# Sentence maps: file name -> rows drawn.
+# Sentence maps after the full dataset (map.png): file name -> rows drawn.
 SENTENCE_MAPS = {
-    "map.png": pl.lit(True),
     "map_landuse.png": pl.col("landuse"),
     "map_website.png": pl.col("source") == "website",
     "map_description.png": pl.col("source") == "osm_description",
@@ -45,14 +44,15 @@ def scene_context(out: Path, work: Path) -> card.Scenes | None:
 
 def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
     data = pl.scan_parquet(layout.out / "data" / "*" / "*" / "*.parquet")
-    land = geo.load_land(layout.work / "cache")
+    full = geo.hex_counts(stats.points(data), MAP_RESOLUTION)
+    figures.world_map(full, layout.out / "assets" / "map.png", "Sentences", MAP_RESOLUTION)
     for name, rows in SENTENCE_MAPS.items():
         counts = geo.hex_counts(stats.points(data.filter(rows)), MAP_RESOLUTION)
-        figures.world_map(counts, land, layout.out / "assets" / name, "Sentences", MAP_RESOLUTION)
+        figures.world_map(counts, layout.out / "assets" / name, "Sentences", MAP_RESOLUTION, full)
     if (layout.out / "scene_photos").is_dir():
         photos = pl.scan_parquet(layout.out / "scene_photos" / "*.parquet")
         counts = geo.hex_counts(stats.points(photos), MAP_RESOLUTION)
-        figures.world_map(counts, land, layout.out / "assets" / "map_scenes.png", "Photos", MAP_RESOLUTION)
+        figures.world_map(counts, layout.out / "assets" / "map_scenes.png", "Photos", MAP_RESOLUTION)
     figures.language_bars(stats.top_languages(data, TOP_LANGUAGES), layout.out / "assets" / "languages.png")
     polygons = pl.scan_parquet(layout.out / "polygons" / "*.parquet")
     context = card.Context(
