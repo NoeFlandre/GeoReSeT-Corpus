@@ -10,7 +10,15 @@ import polars as pl
 from georeset.build.pipeline import Layout
 from georeset.publish import card, figures, geo, stats
 
-MAP_RESOLUTION = 3
+MAP_RESOLUTION = 5
+# Sentence maps: file name -> rows drawn.
+SENTENCE_MAPS = {
+    "map.png": pl.lit(True),
+    "map_landuse.png": pl.col("landuse"),
+    "map_website.png": pl.col("source") == "website",
+    "map_description.png": pl.col("source") == "osm_description",
+    "map_wikimedia.png": pl.col("source").is_in(["wikipedia", "wikivoyage"]),
+}
 TOP_LANGUAGES = 20
 HERO = files("georeset.publish").joinpath("assets/hero.png")
 FUSED_HERO = files("georeset.publish").joinpath("assets/hero_fused.png")
@@ -38,9 +46,13 @@ def scene_context(out: Path, work: Path) -> card.Scenes | None:
 def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
     data = pl.scan_parquet(layout.out / "data" / "*" / "*" / "*.parquet")
     land = geo.load_land(layout.work / "cache")
-    figures.world_map(
-        geo.hex_counts(stats.points(data), MAP_RESOLUTION), land, layout.out / "assets" / "map.png"
-    )
+    for name, rows in SENTENCE_MAPS.items():
+        counts = geo.hex_counts(stats.points(data.filter(rows)), MAP_RESOLUTION)
+        figures.world_map(counts, land, layout.out / "assets" / name, "Sentences", MAP_RESOLUTION)
+    if (layout.out / "scene_photos").is_dir():
+        photos = pl.scan_parquet(layout.out / "scene_photos" / "*.parquet")
+        counts = geo.hex_counts(stats.points(photos), MAP_RESOLUTION)
+        figures.world_map(counts, land, layout.out / "assets" / "map_scenes.png", "Photos", MAP_RESOLUTION)
     figures.language_bars(stats.top_languages(data, TOP_LANGUAGES), layout.out / "assets" / "languages.png")
     polygons = pl.scan_parquet(layout.out / "polygons" / "*.parquet")
     context = card.Context(

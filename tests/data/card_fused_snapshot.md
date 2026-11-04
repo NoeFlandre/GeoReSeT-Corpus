@@ -20,6 +20,18 @@ Sentences come from the websites, `description` tags and Wikipedia / Wikivoyage 
 
 ![Sentences per H3 cell](assets/map.png)
 
+Sentences labelled `landuse`:
+
+![Sentences labelled landuse per H3 cell](assets/map_landuse.png)
+
+Sentences per source: `website`, `osm_description`, then `wikipedia` and `wikivoyage` together:
+
+![Website sentences per H3 cell](assets/map_website.png)
+
+![OSM description sentences per H3 cell](assets/map_description.png)
+
+![Wikipedia and Wikivoyage sentences per H3 cell](assets/map_wikimedia.png)
+
 ## Quick start
 
 ```python
@@ -131,6 +143,10 @@ The `unlabelled` config holds sentences without a usable label, kept to be label
 ## Scenes
 
 2 descriptions (40 words) of 1,500 geotagged ground-level photos in 3 countries, from [geo-rag](https://github.com/ananthu-aniraj/geo-rag) by Ananthu Aniraj. Photos were grouped by look into clusters (median 750 photos); a vision-language model described 4 representative photos of each cluster and labelled the scene with one of 40 land-use / land-cover classes.
+
+Photos of the scenes per H3 cell:
+
+![Scene photos per H3 cell](assets/map_scenes.png)
 
 A description belongs to all the photos of its cluster, and a cluster groups photos that **look** alike, not photos of one place: half the clusters have photos in 20 countries or more. So:
 

@@ -22,7 +22,9 @@ def test_build_card(layout, monkeypatch):
     assert "Code: https://github.com/me/code" in text
     assert DatasetCard(text).data.pretty_name == "GeoReSeT Corpus"
     assert "**4 sentences in 2 languages, tied to 3 OpenStreetMap polygons in 2 regions" in text
-    assert (layout.out / "assets" / "map.png").exists()
+    for name in report.SENTENCE_MAPS:
+        assert (layout.out / "assets" / name).exists()
+    assert not (layout.out / "assets" / "map_scenes.png").exists()
     assert (layout.out / "assets" / "languages.png").exists()
     assert (layout.out / "assets" / "hero.png").read_bytes()[:4] == b"\x89PNG"
     assert text.index("assets/hero.png") < text.index("# GeoReSeT Corpus")
@@ -44,6 +46,8 @@ def test_build_fused_card(layout, raw_scenes, monkeypatch):
     assert "| Transportation network | 1 | 2 |" in text
     assert "| mapillary | 1 | 100.0% |" in text
     assert "`me/raw` @ `fffffff`" in text
+    assert (layout.out / "assets" / "map_scenes.png").exists()
+    assert "assets/map_scenes.png" in text
     hero = (layout.out / "assets" / "hero.png").read_bytes()
     assert hero == report.FUSED_HERO.read_bytes() != report.HERO.read_bytes()
 
