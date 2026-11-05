@@ -147,6 +147,10 @@ class Corpus:
     min_texts: int  # per hexagon
     axes: dict[int, tuple[str, str]]  # (low end, high end) per component, named from its axes report
     languages: bool  # whether the texts vary in language, so the language check applies
+    placement: str  # where a text counts on the map, for the card
+    places: str = (
+        ""  # parquet glob of (``scene_id``, ``lat``, ``lon``) placing each text; empty: its own lat/lon
+    )
     suffix: str = ""  # of its maps and axes report
 
     @property
@@ -319,6 +323,7 @@ def _theme_values(ctx: Context, themes: Themes, step: int) -> dict[str, str]:
         "themes_what": corpus.what,
         "themes_unit": corpus.unit,
         "themes_selection": corpus.selection,
+        "themes_placement": corpus.placement,
         "themes_folder": corpus.folder,
         "themes_files": f"{corpus.folder}/train-*.parquet".ljust(43),
         "themes_suffix": corpus.suffix,
@@ -334,7 +339,10 @@ def _rendered_themes(ctx: Context) -> list[dict[str, str]]:
     first = 7 + bool(ctx.scenes)  # after the six common steps and, if fused, the scenes step
     template = parts(THEMES_TEMPLATE.read_text())
     return [
-        {name: Template(body).substitute(_theme_values(ctx, themes, first + i)) for name, body in template.items()}
+        {
+            name: Template(body).substitute(_theme_values(ctx, themes, first + i))
+            for name, body in template.items()
+        }
         for i, themes in enumerate(ctx.themes)
     ]
 

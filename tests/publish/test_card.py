@@ -228,6 +228,7 @@ _LANDUSE = card.Corpus(
     min_texts=50,
     axes=_AXES,
     languages=True,
+    placement="at its location",
 )
 _SCENES = card.Corpus(
     name="scenes",
@@ -240,6 +241,8 @@ _SCENES = card.Corpus(
     min_texts=10,
     axes=_AXES,
     languages=False,
+    placement="once in every hexagon where its scene has photos",
+    places="scene_photos/*.parquet",
     suffix="_scenes",
 )
 
@@ -303,6 +306,7 @@ def test_card_with_both_pcas():
         < text.index("assets/map_pc3_scenes.png")
         < text.index("A description belongs")
     )
+    assert "counted once in every hexagon where its scene has photos, and the mean embedding" in text
     assert "the 56 2° hexagons holding 10 descriptions or more" in text
     assert "docs/pca_axes_scenes.md" in text
     assert "scene_embeddings/train-*.parquet           scene descriptions, one vector each" in text

@@ -132,13 +132,21 @@ def test_themes_downloads_embeddings_then_computes(tmp_path, monkeypatch):
     for name in ("train-00001-of-00002.parquet", "train-00000-of-00002.parquet"):
         (tmp_path / name).touch()
     seen = {}
-    monkeypatch.setattr(hub, "revision", lambda repo: f"{repo}@rev")
+    monkeypatch.setattr(hub, "revision", lambda repo: "rev")
     monkeypatch.setattr(
         hub, "snapshot", lambda repo, rev, dest, patterns: seen.update(get=(rev, dest, patterns))
     )
+    monkeypatch.setattr(cli.pl, "scan_parquet", lambda glob: f"scan {glob}")
+    monkeypatch.setattr(cli.stats, "photo_hexagons", lambda photos: f"places from {photos}")
 
-    def compute(sentences, embeddings, work, corpus):
-        seen.update(sentences=[p.name for p in sentences], embeddings=embeddings, work=work, corpus=corpus)
+    def compute(sentences, embeddings, work, corpus, places):
+        seen.update(
+            sentences=[p.name for p in sentences],
+            embeddings=embeddings,
+            work=work,
+            corpus=corpus,
+            places=places,
+        )
         return work / "themes"
 
     monkeypatch.setattr(cli.themes, "compute", compute)
@@ -158,8 +166,12 @@ def test_themes_downloads_embeddings_then_computes(tmp_path, monkeypatch):
     ]
     result = runner.invoke(cli.app, args)
     assert result.exit_code == 0, result.output
-    assert seen["get"] == ("me/x@rev", cache, ["scene_embeddings/*"])
+    assert seen["get"] == ("rev", cache, ["scene_embeddings/*"])
+    assert seen["places"] == "places from scan hf://datasets/me/x@rev/scene_photos/*.parquet"
     assert seen["sentences"] == ["train-00000-of-00002.parquet", "train-00001-of-00002.parquet"]
     assert seen["embeddings"] == [cache / "scene_embeddings" / n for n in seen["sentences"]]
     assert seen["corpus"] is cli.themes.SCENES
     assert seen["work"] == work
+    # The sentences count at their own location.
+    assert runner.invoke(cli.app, args[:-2]).exit_code == 0
+    assert seen["corpus"] is cli.themes.LANDUSE and seen["places"] is None
