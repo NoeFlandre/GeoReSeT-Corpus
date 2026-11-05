@@ -1,7 +1,7 @@
 <!-- section -->
 
 
-**What places talk about, from the $themes_what**: each is embedded with [`$themes_model`](https://huggingface.co/$themes_model) and counts $themes_placement (resolution $themes_resolution). Each cell takes the mean embedding of its texts, and each of the $themes_hexagons cells of resolution $themes_display holding $themes_min $themes_unit or more the mean of its child cells, so that every place counts once, however much is written there. Those means are projected on their first three principal components, shown as red, green and blue:
+**What places talk about, from the $themes_what**: each is embedded with [`$themes_model`](https://huggingface.co/$themes_model) and counts $themes_placement (resolution $themes_resolution). Each cell takes the mean embedding of its texts, and each of the $themes_hexagons cells of resolution $themes_display holding $themes_min $themes_unit or more the mean of its child cells, so that every place counts once, however much is written there. Those means are projected on their first three principal components, shown as red, green and blue. Within that colour, a cell is a little darker or lighter, and its hue a little turned, by how it differs from its surroundings: a second PCA, of each cell's mean minus its region's (resolution 3, about 12,000 km²), whose two axes are listed last:
 
 ![Mean embedding of the $themes_what per H3 cell, mean per resolution-$themes_display cell, first three principal components as red, green and blue](assets/map_pca$themes_suffix.png)
 

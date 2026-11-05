@@ -103,3 +103,75 @@ The 5,046,840 relevant sentences in English each count in the H3 cell of its loc
 | 8 | -0.402 | To handle the growing traffic volume, a new dedicated civil airport is being planned to replace Luqiao Airport, with an estimated total investment of 800 million to 1 billion yuan.  |
 | 9 | -0.401 | It also has the largest airport and seaport and the city in the region with most investors.  |
 | 10 | -0.401 | The airport featured a dedicated cargo terminal including facilities for the handling of radioactive and refrigerated freight. |
+
+# Local axes
+
+How a cell differs from its region (its parent of resolution 3, about 12,000 km²): a PCA of each cell's mean minus its region's. On the maps they make a cell darker or lighter, then turn its hue. Scores below are the texts' projections on each axis.
+
+## Local axis 1: campus and city buildings ↔ lakes and wilderness
+
+11.9% of how cells differ from their region.
+
+### Highest (lakes and wilderness)
+
+| # | Score | Text |
+|---:|---:|---|
+| 1 | 0.440 | Wild lakes |
+| 2 | 0.411 | The lakes contain wild rainbow and minnow species. |
+| 3 | 0.403 | The wilderness contains one of the largest concentrations of native lake trout lakes in the lower 48 states. |
+| 4 | 0.402 | Expansive wetlands ecosystem featuring native wildlife, pristine landscapes, hiking & paddling. |
+| 5 | 0.399 | Water wildlife |
+| 6 | 0.398 | The reserve is a wild and wet place. |
+| 7 | 0.397 | The abundance of inland lakes and rivers makes for many remote wilderness adventures. |
+| 8 | 0.397 | Wide, wet and wild |
+| 9 | 0.395 | Wild swimming in mountain lakes and tarns |
+| 10 | 0.393 | High mountain lakes and streams are sensitive and vulnerable habitats where swimming is not allowed. |
+
+### Lowest (campus and city buildings)
+
+| # | Score | Text |
+|---:|---:|---|
+| 1 | -0.409 | The Historic Campus, located at 1362 East 59th Street, fills two full city blocks and is known for its Modern Gothic style architecture.  |
+| 2 | -0.405 | The buildings on this campus grew out of St. Luke's Hospital, which has occupied the site since 1876. |
+| 3 | -0.404 | It has been a major cultural center of the city since its construction, and houses its largest auditorium. |
+| 4 | -0.403 | Founded in 1885, the school is housed in a building constructed in 1970 that features a blend of modern and historic architectural styles.  |
+| 5 | -0.402 | The building is the focal point of the campus, with a large distinguishable modern bell tower.  |
+| 6 | -0.401 | Built in 1952 and renovated in 2025, the multi-story center has classic charm and is connected to Catharine Blaine Elementary K-8 School. |
+| 7 | -0.400 | The school is housed in a historic, Art Deco building opened in 1937, which has since become a landmark of the city.  |
+| 8 | -0.400 | Built in 1895, Jesse Hall holds many administrative offices and Jesse Auditorium.  |
+| 9 | -0.400 | The imposing Romanesque Revival building was built in 1888 to serve as both the town hall and the public high school.  |
+| 10 | -0.400 | The city was given a Carnegie library in 1904, and the two-story purpose-built marble structure survives to this day at Eighth Street and Georgia Avenue as commercial office space.  |
+
+## Local axis 2: airports and transport ↔ old stone churches
+
+9.3% of how cells differ from their region.
+
+### Highest (old stone churches)
+
+| # | Score | Text |
+|---:|---:|---|
+| 1 | 0.411 | There are ancient khachkars around the church, and a stone gates with preserved engravings.  |
+| 2 | 0.411 | traditional stone-built church |
+| 3 | 0.410 | Well-preserved church ruin from the 1100s. |
+| 4 | 0.407 | Based on its large stone blocks and lintel , the church is placed to the pre-Norman period.  |
+| 5 | 0.406 | The church was built on the remains of a stone mound, which was an important pagan cult site until the 10th century.  |
+| 6 | 0.405 | Part of the old church and town wall survives in the 14th-century crypt.  |
+| 7 | 0.402 | The church lies in an unusually well-preserved medieval cemetery which is surrounded by a low wall in which three medieval lych gates still sits.  |
+| 8 | 0.402 | A tiny thatched church with medieval paintings and Norman carving |
+| 9 | 0.402 | Fragments of walling at the east end of the nave are considered to be relics of the pre-conquest church.  |
+| 10 | 0.401 | The church, featuring ornate architecture, still maintains many of its original features and is set in walled gardens with mature trees.  |
+
+### Lowest (airports and transport)
+
+| # | Score | Text |
+|---:|---:|---|
+| 1 | -0.418 | The airport is equipped to handle a large variety of aircraft from corporate jets and turboprops to industry needing cargo brought in and shipped out. |
+| 2 | -0.417 | As one of the world’s busiest airports, it offers nonstop flights worldwide and convenient ground transportation options. |
+| 3 | -0.414 | Airport Transportation |
+| 4 | -0.410 | The airport provides corporate and general aviation transportation services. |
+| 5 | -0.410 | Transport at the airport |
+| 6 | -0.409 | The commercial aviation airport offers intercontinental service to North America, Asia, Australia and Oceania.  |
+| 7 | -0.409 | Airport transportation |
+| 8 | -0.409 | It is a full-service airport that offers nonstop commercial jet service to more than two dozen major airports in the U.S., Mexico, Central America and Taiwan. |
+| 9 | -0.408 | The airport serves as the base of operations for regional carrier Quzhou Airlines. |
+| 10 | -0.408 | The Ann Arbor Airport offers a full array of services including aircraft fuel, aircraft maintenance, flight instruction and car rental. |

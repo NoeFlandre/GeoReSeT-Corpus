@@ -3,7 +3,7 @@
 import json
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib.resources import files
 from string import Template
 
@@ -154,6 +154,8 @@ class Corpus:
     photos: str = ""
     only_language: str = ""  # keep only the texts in this language; empty: all
     suffix: str = ""  # of its maps and axes report
+    # (low end, high end) of each local axis: how a cell differs from its surroundings, named from its report.
+    local_axes: dict[int, tuple[str, str]] = field(default_factory=lambda: {1: ("", ""), 2: ("", "")})
 
     @property
     def report(self) -> str:
@@ -172,6 +174,9 @@ class Themes:
     explained: list[float]
     language_r2: list[float]
     warning: float  # language R² above which an axis is flagged
+    local_explained: list[float] = field(
+        default_factory=list
+    )  # share of the differences each local axis holds
 
 
 @dataclass(frozen=True)
@@ -307,7 +312,23 @@ def legend(themes: Themes) -> str:
             flag = " Mostly language: read with care." if r2 > themes.warning else ""
             line += f" The cell's most frequent language explains {r2:.0%} of it.{flag}"
         lines.append(line)
-    return "\n".join(lines)
+    return "\n".join(lines + _local_legend(themes))
+
+
+# What each local axis does to a cell's colour, from its low end to its high end.
+_LOCAL_EFFECTS = (("Shade", "darker ↔ lighter"), ("Hue", "turned back ↔ forward"))
+
+
+def _local_legend(themes: Themes) -> list[str]:
+    """One line per local axis: how it shades the colour, its share of the local differences, its ends."""
+    axes = themes.corpus.local_axes
+    return [
+        f"* **{name}** ({effect} than the surroundings, {pct(share)} of how cells differ from them): "
+        f"{axes[j][0]} ↔ {axes[j][1]}."
+        for j, ((name, effect), share) in enumerate(
+            zip(_LOCAL_EFFECTS, themes.local_explained, strict=False), 1
+        )
+    ]
 
 
 # Method steps are list items, one per line; the other parts carry their own separators.
