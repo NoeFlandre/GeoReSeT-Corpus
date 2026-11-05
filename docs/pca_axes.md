@@ -115,3 +115,83 @@ Languages of the 1,000 sentences at this end: Cebuano · ceb_Latn 95.5%, English
 | 8 | -0.274 | ceb_Latn | Tri-City Airport nga nahimutang sa lanaw sa Westville Lake ang ulohan sa nasod.  |
 | 9 | -0.273 | ceb_Latn | Nahimutangan sa West Papoose Lake Airpark sa Tinipong Bansa. |
 | 10 | -0.272 | ceb_Latn | Nahimutangan sa Gordon Lake sa Tinipong Bansa. |
+
+# Local axes
+
+How a cell differs from its region (its parent of resolution 3, about 12,000 km²): a PCA of each cell's mean minus its region's. On the maps they make a cell darker or lighter, then turn its hue. Scores below are the texts' projections on each axis.
+
+## Local axis 1: airport buildings ↔ lakes and nature reserves
+
+10.2% of how cells differ from their region.
+
+### Highest (lakes and nature reserves)
+
+Languages of the 1,000 sentences at this end: German · deu_Latn 36.0%, English · eng_Latn 15.3%, Cebuano · ceb_Latn 11.4%, Polish · pol_Latn 6.9%, French · fra_Latn 3.5%.
+
+| # | Score | Language | Sentence |
+|---:|---:|---|---|
+| 1 | 0.425 | eng_Latn | Wild lakes |
+| 2 | 0.421 | tur_Latn | Gölü doğa koruma bölgesi |
+| 3 | 0.416 | eng_Latn | Natural Lakes |
+| 4 | 0.415 | deu_Latn | Wasserschutzbiotop |
+| 5 | 0.414 | ita_Latn | Laghi naturali |
+| 6 | 0.413 | deu_Latn | Wasserschutzgebiet |
+| 7 | 0.412 | deu_Latn | Natürliche eutrophe Seen mit einer Vegetation des Magnopotamions oder Hydrocharitions |
+| 8 | 0.412 | spa_Latn | Vegetación de las lagunas de agua dulce  |
+| 9 | 0.411 | deu_Latn | Wasserschutzgebiet  |
+| 10 | 0.410 | nld_Latn | Waterrijke biotoop |
+
+### Lowest (airport buildings)
+
+Languages of the 1,000 sentences at this end: English · eng_Latn 88.7%, Mandarin Chinese · cmn_Hani 3.3%, Spanish · spa_Latn 2.5%, Russian · rus_Cyrl 1.9%, Standard Arabic · arb_Arab 1.1%.
+
+| # | Score | Language | Sentence |
+|---:|---:|---|---|
+| 1 | -0.393 | eng_Latn | A small single storey terminal building houses check-in counters for both airlines serving the airport. |
+| 2 | -0.391 | eng_Latn | Buildings at the airport house conference rooms, a pilot's lounge for flight planning and a passenger lobby with some concierge service.  |
+| 3 | -0.389 | eng_Latn | The airport boasts a historically-significant Main Terminal Building, which was opened in 1936. |
+| 4 | -0.388 | eng_Latn | The current passenger building, completed in 1914, was built with pretensions to elegance and functionality, and is now located amongst the historic buildings in the city.  |
+| 5 | -0.385 | eng_Latn | The airport has a passenger terminal building that opened in 1958 and has had several expansions and upgrades since its construction.  |
+| 6 | -0.382 | eng_Latn | The original terminal building meets the standards of today's airport was built as an architecture with a modern facility. |
+| 7 | -0.381 | eng_Latn | The Oakland Aviation Museum is located in a former Boeing School building, built in 1939. |
+| 8 | -0.379 | eng_Latn | Collections were housed in the original art deco building which served as the first purpose-built terminal for passenger flight in Houston.  |
+| 9 | -0.378 | eng_Latn | A terminal building was built in 1940, marking the beginning of commercial air service at the airport.  |
+| 10 | -0.376 | eng_Latn | Ohrid airport saw its terminal building and VIP sections modernized. |
+
+## Local axis 2: airports ↔ village churches and heritage
+
+8.5% of how cells differ from their region.
+
+### Highest (village churches and heritage)
+
+Languages of the 1,000 sentences at this end: English · eng_Latn 34.5%, German · deu_Latn 22.0%, French · fra_Latn 9.9%, Polish · pol_Latn 5.0%, Greek · ell_Grek 4.4%.
+
+| # | Score | Language | Sentence |
+|---:|---:|---|---|
+| 1 | 0.361 | fra_Latn | Le village a gardé son authenticité avec ses chapelles à fresques anciennes dans les hameaux. |
+| 2 | 0.361 | eng_Latn | At the heart of the village is a conservation area with stone buildings dating back to the 17th Century and a 13th Century church. |
+| 3 | 0.357 | eng_Latn | The church, featuring ornate architecture, still maintains many of its original features and is set in walled gardens with mature trees.  |
+| 4 | 0.356 | eng_Latn | The walls are covered with carved wood panels and confessionals from the 19th century, and by murals.  |
+| 5 | 0.354 | eng_Latn | traditional stone-built church |
+| 6 | 0.353 | por_Latn | É uma da mais antigas igrejas da cidade e a que melhor conserva seu aspecto primitivo, contendo uma rica decoração interna em talha dourada e estatuária.  |
+| 7 | 0.353 | eng_Latn | Traditional wooden church at the Village Museum  |
+| 8 | 0.352 | eng_Latn | The sanctuary retains its original carved pulpit and minister's chair, and has a band of tulip stencilwork bordering the tops of the walls.  |
+| 9 | 0.349 | deu_Latn | Die Kulturlandschaft prägten lange Zeit die Kirchen.  |
+| 10 | 0.349 | eng_Latn | Our sanctuary was built and dedicated, preserving stained glass windows from our former church. |
+
+### Lowest (airports)
+
+Languages of the 1,000 sentences at this end: Cebuano · ceb_Latn 57.7%, English · eng_Latn 17.5%, Indonesian · ind_Latn 9.4%, Standard Malay · zsm_Latn 5.1%, Northern Uzbek · uzn_Latn 1.4%.
+
+| # | Score | Language | Sentence |
+|---:|---:|---|---|
+| 1 | -0.465 | ind_Latn | Bandar udara ini merupakan lapangan terbang terbesar di negara ini.  |
+| 2 | -0.461 | eng_Latn | The commercial aviation airport offers intercontinental service to North America, Asia, Australia and Oceania.  |
+| 3 | -0.460 | eng_Latn | The airport is an international airport. |
+| 4 | -0.456 | ceb_Latn | Tugpahanan ang Lakefront Airport sa Tinipong Bansa .  |
+| 5 | -0.455 | ceb_Latn | Tugpahanan ang Port of Ilwaco Airport sa Tinipong Bansa .  |
+| 6 | -0.455 | ind_Latn | Lapangan terbang ini merupakan bandara yang dikelola oleh PT Pertamina Hulu Energi (PHE) NSB |
+| 7 | -0.453 | eng_Latn | The airport is equipped to handle international flights.  |
+| 8 | -0.453 | eng_Latn | The airport serves as the base of operations for regional carrier Quzhou Airlines. |
+| 9 | -0.453 | ceb_Latn | Tugpahanan ang Salem Lakefront Airport sa Tinipong Bansa .  |
+| 10 | -0.453 | ceb_Latn | Tugpahanan ang Lake Ridge Aero Park Airport sa Tinipong Bansa .  |

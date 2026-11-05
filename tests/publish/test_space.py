@@ -4,7 +4,7 @@ import h3.api.basic_int as h3_int
 import numpy as np
 import polars as pl
 
-from georeset.publish import geo, space, themes
+from georeset.publish import space, themes
 
 PARIS = (48.85, 2.35)
 CAPE = (-33.9, 18.4)
@@ -58,14 +58,21 @@ def _work(tmp_path):
     paris = h3_int.latlng_to_cell(*PARIS, 5)
     near = h3_int.latlng_to_cell(*_sibling(*PARIS), 5)
     cells = pl.DataFrame(
-        {"cell": [paris, near], "n": [6, 2], "pc1": [1.0, -1.0], "pc2": [0.0, 0.0], "pc3": [0.5, 0.5]},
-        schema={"cell": pl.UInt64, "n": pl.Int64, "pc1": pl.Float64, "pc2": pl.Float64, "pc3": pl.Float64},
+        {
+            "cell": pl.Series([paris, near], dtype=pl.UInt64),
+            "n": [6, 2],
+            "pc1": [1.0, -1.0],
+            "pc2": [0.0, 0.0],
+            "pc3": [0.5, 0.5],
+            "l1": [0.4, 0.0],
+            "l2": [-0.2, 0.0],
+        }
     )
     cells.write_parquet(folder / "cells.parquet")
-    pl.DataFrame(
-        {"hexagon": [1, 2], "pc1": [-2.0, 2.0], "pc2": [-1.0, 1.0], "pc3": [-1.0, 1.0]}
-    ).write_parquet(folder / "hexagons.parquet")
-    (folder / "summary.json").write_text(json.dumps({"sentences": 8, "explained": [0.3, 0.2, 0.1]}))
+    display = {"hexagon": [1, 2], "pc1": [-2.0, 2.0], "pc2": [-1.0, 1.0], "pc3": [-1.0, 1.0]}
+    pl.DataFrame({**display, "l1": [-0.5, 0.5], "l2": [-0.5, 0.5]}).write_parquet(folder / "hexagons.parquet")
+    summary = {"sentences": 8, "explained": [0.3, 0.2, 0.1], "local_explained": [0.2, 0.1]}
+    (folder / "summary.json").write_text(json.dumps(summary))
     return work
 
 
@@ -175,8 +182,23 @@ def test_copy_app(tmp_path):
 
 def test_colours_pack_rgb():
     scores = pl.DataFrame(
-        {"cell": [1, 2], "n": [9, 1], "pc1": [1.0, 0.0], "pc2": [-1.0, 0.0], "pc3": [0.0, 0.0]}
+        {
+            "cell": [1, 2],
+            "n": [9, 1],
+            "pc1": [1.0, 0.0],
+            "pc2": [-1.0, 0.0],
+            "pc3": [0.0, 0.0],
+            "l1": [0.0, 0.0],
+            "l2": [-2.0, 0.0],
+        }
     )
-    out = space._colours("x", scores, np.array([[-1.0, -1.0, -1.0], [1.0, 1.0, 1.0]]))
-    assert out.rows() == [(1, 255 << 16 | 0 << 8 | 128)]
-    assert geo.CELL_RESOLUTION == 5
+    limits = np.array([[-1.0, -1.0, -1.0], [1.0, 1.0, 1.0]])
+    out = space._colours("x", scores, limits, np.array([1.0, 1.0]))
+    assert out.columns == ["cell", "x", "x_local", "x_axes"]
+    # One cell with enough texts; its global colour, and its local positions as bytes: 0 and -1 (clipped).
+    assert out.rows()[0][:2] == (1, 255 << 16 | 0 << 8 | 128)
+    assert out["x_axes"][0] == (0 << 8 | (-127 & 255))
+    # The local colour is the global one turned back in hue, as the card draws it.
+    rgb = np.array([[1.0, 0.0, 0.5]])
+    expected = space._packed(space.colour.nudge(rgb, np.array([[0.0, -1.0]])))[0]
+    assert out["x_local"][0] == expected != out["x"][0]

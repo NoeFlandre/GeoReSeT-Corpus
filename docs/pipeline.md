@@ -81,7 +81,10 @@ Every map of the card has two layers (`georeset.publish.geo`): points are counte
 however much is written there; maps use the Equal Earth projection. For the PCA, each cell takes the mean
 embedding of its texts (a scene description counts in every cell where its scene has photos), each
 resolution-4 cell the mean of its child cells; those with fewer than 20 sentences (10 scene descriptions)
-are dropped and PCA is fitted on the rest. The three passes over the shards (cells, cell means, axis ends)
+are dropped and PCA is fitted on the rest. A second, local PCA is fitted on how each resolution-5 cell differs from its
+region (its resolution-3 parent, about 12,000 km²): on the colour maps its two axes make a cell a little
+darker or lighter and turn its hue a little (`georeset.publish.colour`, in OKLab), so a cell keeps the colour
+of its global scores and shows how it stands out from its surroundings. The three passes over the shards (cells, cell means, axis ends)
 load the next shards in the background. The axes' names in `georeset.publish.themes.LANDUSE`, `ENGLISH` and
 `SCENES` are read from the axes' extreme texts: [sentences](pca_axes.md), [English sentences](pca_axes_english.md),
 [scene descriptions](pca_axes_scenes.md). The sentences' axes are

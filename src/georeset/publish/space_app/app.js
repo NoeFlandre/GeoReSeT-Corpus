@@ -26,9 +26,12 @@ const PALETTE = ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948
   "#9c755f", "#86bcb6", "#d37295", "#8cd17d"];
 const OTHER = "#bab0ac";
 const AXIS_COLOURS = ["#e15759", "#59a14f", "#4e79a7"];
+// What each local axis does to a cell's colour, from its low end to its high end (as on the dataset card).
+const LOCAL_EFFECTS = ["Shade (darker → lighter)", "Hue (turned back → forward)"];
+const signedByte = (v) => (v > 127 ? v - 256 : v) / 127;
 const ZOOMS = [[2.5, 2], [4, 3], [5.5, 4], [Infinity, 5]];
 
-const state = { layer: "relevant", source: "relevant", res: 2, manifest: null, tables: {}, chunks: new Map(), samples: new Map(), selected: null, labels: undefined };
+const state = { layer: "relevant", source: "relevant", local: true, res: 2, manifest: null, tables: {}, chunks: new Map(), samples: new Map(), selected: null, labels: undefined };
 const ALPHA = 170; // translucent cells: roads, coasts and water stay readable underneath
 const $ = (id) => document.getElementById(id);
 const fmt = new Intl.NumberFormat("en");
@@ -68,6 +71,7 @@ function field(layer) { return layer.id === "relevant" ? state.source : layer.id
 
 function value(cell, layer) {
   if (layer.kind === "count") return res5() ? cell[field(layer)] : cell[`m_${field(layer)}`];
+  if (layer.kind === "pca") return cell[state.local ? `${layer.id}_local` : layer.id];
   return cell[layer.id];
 }
 const res5 = () => state.res === 5;
@@ -114,7 +118,7 @@ function render() {
     data: visible(layer),
     getHexagon: (d) => d.cell,
     getFillColor: colour(layer),
-    updateTriggers: { getFillColor: [state.layer, state.source, state.res] },
+    updateTriggers: { getFillColor: [state.layer, state.source, state.local, state.res] },
     stroked: false, extruded: false, pickable: true, highPrecision: "auto",
     autoHighlight: true, highlightColor: [20, 20, 20, 70],
     onClick: ({ object }) => object && select(object),
@@ -145,8 +149,12 @@ function legend() {
   } else {
     const pca = state.manifest.pca[layer.corpus];
     box.innerHTML = `<div class="axes-legend">${pca.axes.map(([low, high], i) =>
-      `<div><b style="background:${AXIS_COLOURS[i]}"></b><span>${["Red", "Green", "Blue"][i]} (${Math.round(pca.explained[i] * 100)}%): ${low} → ${high}</span></div>`).join("")}</div>
+      `<div><b style="background:${AXIS_COLOURS[i]}"></b><span>${["Red", "Green", "Blue"][i]} (${Math.round(pca.explained[i] * 100)}%): ${low} → ${high}</span></div>`).join("")}${
+      state.local ? pca.local_axes.map(([low, high], j) =>
+        `<div><b class="shade-${j}"></b><span>${LOCAL_EFFECTS[j]}: ${low} → ${high}</span></div>`).join("") : ""}</div>
+      <label class="toggle"><input type="checkbox" id="local" ${state.local ? "checked" : ""}> Local detail: shade and hue show how a cell differs from its surroundings</label>
       <p class="muted" style="margin:6px 0 0;font-size:12px">Similar colours, similar ${pca.what}.</p>`;
+    $("local").onchange = (event) => { state.local = event.target.checked; legend(); render(); };
   }
 }
 
@@ -215,9 +223,14 @@ function axes(cell) {
     const v = cell[`pca_${corpus}`];
     if (v === null || v === undefined) return "";
     const rgb = unpack(v);
-    return `<h4>What it talks about: ${pca.what}</h4>` + pca.axes.map(([low, high], i) =>
-      `<div class="axis"><div class="axis-names"><span>${low}</span><span>${high}</span></div>
-      <div class="axis-track"><i style="left:${(rgb[i] / 255) * 100}%;background:${AXIS_COLOURS[i]}"></i></div></div>`).join("");
+    const bar = (low, high, position, colour) => `<div class="axis"><div class="axis-names"><span>${low}</span><span>${high}</span></div>
+      <div class="axis-track"><i style="left:${position * 100}%;background:${colour}"></i></div></div>`;
+    const packed = cell[`pca_${corpus}_axes`];
+    const local = [packed >> 8 & 255, packed & 255].map(signedByte);
+    return `<h4>What it talks about: ${pca.what}</h4>`
+      + pca.axes.map(([low, high], i) => bar(low, high, rgb[i] / 255, AXIS_COLOURS[i])).join("")
+      + `<p class="muted axis-note">Compared with its surroundings</p>`
+      + pca.local_axes.map(([low, high], j) => bar(low, high, (local[j] + 1) / 2, "#6b6a66")).join("");
   }).join("");
 }
 

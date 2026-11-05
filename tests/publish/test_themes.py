@@ -94,13 +94,13 @@ def test_compute(computed):
     assert hexagons.height == 5
     assert hexagons["n"].to_list() == [12] * 5
     assert sorted(hexagons["language"].to_list()) == sorted(LANGUAGES)
-    assert hexagons.columns == ["hexagon", "n", "pc1", "pc2", "pc3", "language"]
+    assert hexagons.columns == ["hexagon", "n", "pc1", "pc2", "pc3", "l1", "l2", "language"]
     summary = json.loads((out / "summary.json").read_text())
     assert summary["sentences"] == n
     assert summary["explained"][0] > summary["explained"][1] > summary["explained"][2] > 0
     ends = pl.read_parquet(out / "ends.parquet")
     assert ends.group_by("pc", "end").len().sort("pc", "end").rows() == [
-        (pc, end, 6) for pc in (1, 2, 3) for end in ("high", "low")
+        (pc, end, 6) for pc in (1, 2, 3, 4, 5) for end in ("high", "low")
     ]
     high = ends.filter(pc=1, end="high")
     assert high["rank"].to_list() == list(range(1, 7))
@@ -136,7 +136,9 @@ def test_render(computed, monkeypatch):
     assert "### Highest (farms)" in text and "### Lowest (towns)" in text
     assert "## PC2\n" in text and "### Highest\n" in text
     assert text.count("**Warning: mostly language.**") == 3
-    assert text.count("| 3 |") == 6 and "| 4 |" not in text
+    # Three global and two local axes, three texts at each end.
+    assert text.count("| 3 |") == 10 and "| 4 |" not in text
+    assert "# Local axes" in text and "## Local axis 2" in text
     assert "Languages of the 6 sentences at this end:" in text
 
 
@@ -159,13 +161,13 @@ def test_render_scenes_names_files_and_skips_languages(computed):
 def test_axes_markdown_escapes_and_quiet_axes():
     ends = pl.DataFrame(
         {
-            "pc": [1, 1, 2, 2, 3, 3],
-            "end": ["high", "low"] * 3,
-            "rank": [1] * 6,
-            "id": list("abcdef"),
-            "text": ["a | b\nc", "x", "y", "z", "u", "v"],
-            "language": ["fra_Latn"] * 6,
-            "score": [1.0, -1.0, 1.0, -1.0, 1.0, -1.0],
+            "pc": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
+            "end": ["high", "low"] * 5,
+            "rank": [1] * 10,
+            "id": list("abcdefghij"),
+            "text": ["a | b\nc", "x", "y", "z", "u", "v", "p", "q", "r", "s"],
+            "language": ["fra_Latn"] * 10,
+            "score": [1.0, -1.0] * 5,
         },
         schema_overrides={"rank": pl.UInt32},
     )
@@ -178,8 +180,11 @@ def test_axes_markdown_escapes_and_quiet_axes():
         explained=[0.5, 0.2, 0.1],
         language_r2=[0.1, 0.6, 0.5],
         warning=0.5,
+        local_explained=[0.3, 0.2],
     )
     text = themes.axes_markdown(ends, axes)
+    assert "## Local axis 1: airport buildings ↔ lakes and nature reserves" in text
+    assert "30.0% of how cells differ from their region." in text
     assert "a \\| b c" in text
     assert "50.0% of the variance; language R² 0.10." in text
     assert text.count("Warning") == 1

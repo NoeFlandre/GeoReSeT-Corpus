@@ -163,12 +163,12 @@ def photo_cells(photos: pl.DataFrame) -> pl.DataFrame:
 
 
 def parent_sums(
-    cells: np.ndarray, values: np.ndarray
+    cells: np.ndarray, values: np.ndarray, resolution: int = geo.DISPLAY_RESOLUTION
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """The display layer: each parent of ``cells`` (``geo.DISPLAY_RESOLUTION``), the sum of its children's
+    """Each parent of ``cells`` at ``resolution`` (the display layer by default), the sum of its children's
     ``values`` rows, its number of children, and each child's index among the parents.
     """
-    parents, inverse = np.unique(geo.h3_parents(cells), return_inverse=True)
+    parents, inverse = np.unique(geo.h3_parents(cells, resolution), return_inverse=True)
     _, sums, sizes = group_sums(inverse, values)
     return parents, sums, sizes, inverse
 
@@ -199,7 +199,9 @@ def pca(x: np.ndarray, k: int) -> Pca:
     _, singular, vt = np.linalg.svd(x - mean, full_matrices=False)
     signs = np.sign(vt[np.arange(vt.shape[0]), np.abs(vt).argmax(axis=1)])
     variance = singular**2
-    return Pca(mean, (vt * signs[:, None])[:k], (variance / variance.sum())[:k])
+    total = variance.sum()
+    explained = np.divide(variance, total, out=np.zeros_like(variance), where=total > 0)
+    return Pca(mean, (vt * signs[:, None])[:k], explained[:k])
 
 
 CLIP = (2, 98)
@@ -214,6 +216,16 @@ def unit_scale(scores: np.ndarray, limits: np.ndarray | None = None) -> np.ndarr
     """Each column scaled to [0, 1] between ``limits`` (default: its own), clipped outside."""
     lo, hi = percentile_limits(scores) if limits is None else limits
     return np.clip((scores - lo) / np.where(hi > lo, hi - lo, 1), 0, 1)
+
+
+def signed_scale(scores: np.ndarray, limits: np.ndarray) -> np.ndarray:
+    """Each column divided by its limit (a positive half-width), clipped to [-1, 1]."""
+    return np.clip(scores / np.where(limits > 0, limits, 1), -1, 1)
+
+
+def symmetric_limits(scores: np.ndarray) -> np.ndarray:
+    """Each column's half-width of a scale centred on 0, covering ``CLIP`` percentiles."""
+    return np.abs(np.percentile(scores, CLIP, axis=0)).max(axis=0)
 
 
 def symmetric_limit(scores: np.ndarray) -> float:

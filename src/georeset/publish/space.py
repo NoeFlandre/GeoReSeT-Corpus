@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from georeset.publish import geo, stats, themes
+from georeset.publish import colour, geo, stats, themes
 
 RESOLUTIONS = (2, 3, 4)  # coarser than the data layer, as the map zooms out
 CHUNK_RESOLUTION = 1  # resolution-5 cells and samples are split by parent at this resolution
@@ -65,27 +65,43 @@ def photo_cells(photos: pl.LazyFrame) -> pl.DataFrame:
     return counts.group_by("cell").agg(pl.col("photos").sum())
 
 
-def pca_cells(work: Path) -> dict[str, tuple[pl.DataFrame, np.ndarray]]:
-    """Each computed corpus' resolution-5 cell scores (``cell``, ``n``, ``pc1``..) and colour limits."""
+def pca_cells(work: Path) -> dict[str, tuple[pl.DataFrame, np.ndarray, np.ndarray]]:
+    """Each computed corpus' resolution-5 cell scores (``cell``, ``n``, ``pc1``.., ``l1``..) and the colour
+    limits of the card's maps: global (2nd and 98th percentiles), then local (half-widths)."""
     out = {}
     for corpus in themes.CORPORA.values():
         folder = work / "themes" / corpus.name
         if (folder / "cells.parquet").is_file():
-            display = pl.read_parquet(folder / "hexagons.parquet").select(themes.PCS).to_numpy()
-            out[corpus.name] = (pl.read_parquet(folder / "cells.parquet"), stats.percentile_limits(display))
+            display = pl.read_parquet(folder / "hexagons.parquet")
+            out[corpus.name] = (
+                pl.read_parquet(folder / "cells.parquet"),
+                stats.percentile_limits(display.select(themes.PCS).to_numpy()),
+                stats.symmetric_limits(display.select(themes.LOCAL).to_numpy()),
+            )
     return out
 
 
-def _rgb(scores: np.ndarray, limits: np.ndarray) -> np.ndarray:
-    return np.round(stats.unit_scale(scores, limits) * 255).astype(np.uint8)
+def _packed(rgb: np.ndarray) -> np.ndarray:
+    """Colours in [0, 1] packed as ``r << 16 | g << 8 | b``."""
+    rgb = np.round(rgb * 255).astype(np.int32)
+    return rgb[:, 0] << 16 | rgb[:, 1] << 8 | rgb[:, 2]
 
 
-def _colours(name: str, scores: pl.DataFrame, limits: np.ndarray) -> pl.DataFrame:
-    """``cell`` and its colour packed as ``r << 16 | g << 8 | b``, for cells with ``PCA_MIN`` texts."""
+def _colours(name: str, scores: pl.DataFrame, limits: np.ndarray, local_limits: np.ndarray) -> pl.DataFrame:
+    """For cells with ``PCA_MIN`` texts: the global colour (``name``), the same nudged by the local axes as
+    on the card (``<name>_local``), and the local positions in [-1, 1] as two bytes (``<name>_axes``)."""
     kept = scores.filter(pl.col("n") >= PCA_MIN)
-    rgb = _rgb(kept.select(themes.PCS).to_numpy(), limits).astype(np.int32)
-    packed = rgb[:, 0] << 16 | rgb[:, 1] << 8 | rgb[:, 2]
-    return pl.DataFrame({"cell": kept["cell"], name: pl.Series(packed, dtype=pl.Int32)})
+    rgb = stats.unit_scale(kept.select(themes.PCS).to_numpy(), limits)
+    local = stats.signed_scale(kept.select(themes.LOCAL).to_numpy(), local_limits)
+    steps = np.round(local * 127).astype(np.int32) & 255
+    return pl.DataFrame(
+        {
+            "cell": kept["cell"],
+            name: pl.Series(_packed(rgb), dtype=pl.Int32),
+            f"{name}_local": pl.Series(_packed(colour.nudge(rgb, local)), dtype=pl.Int32),
+            f"{name}_axes": pl.Series(steps[:, 0] << 8 | steps[:, 1], dtype=pl.Int32),
+        }
+    )
 
 
 def rollup(cells: pl.DataFrame, languages: pl.DataFrame, pca: dict, resolution: int) -> pl.DataFrame:
@@ -105,13 +121,14 @@ def rollup(cells: pl.DataFrame, languages: pl.DataFrame, pca: dict, resolution: 
         languages.with_columns(hexagon=parents).group_by("hexagon", "language").agg(pl.col("n").sum())
     )
     out = out.join(top.rename({"hexagon": "parent"}), on="parent", how="left")
-    for name, (scores, limits) in pca.items():
+    for name, (scores, limits, local_limits) in pca.items():
         child = scores.with_columns(
             parent=pl.Series(geo.h3_parents(scores["cell"].to_numpy(), resolution), dtype=pl.UInt64)
         )
-        mean = child.group_by("parent").agg(pl.col("n").sum(), *[pl.col(pc).mean() for pc in themes.PCS])
+        mean = child.group_by("parent").agg(pl.col("n").sum(), *[pl.col(a).mean() for a in themes.AXES])
+        colours = _colours(PCA[name], mean.rename({"parent": "cell"}), limits, local_limits)
         out = out.join(
-            _colours(PCA[name], mean.rename({"parent": "cell"}), limits).rename({"cell": "parent"}),
+            colours.rename({"cell": "parent"}),
             on="parent",
             how="left",
         )
@@ -189,6 +206,8 @@ def _axes(work: Path, names: list[str]) -> dict:
             "what": corpus.what,
             "explained": summary["explained"],
             "axes": [list(corpus.axes[i]) for i in range(1, themes.COMPONENTS + 1)],
+            "local_explained": summary["local_explained"],
+            "local_axes": [list(corpus.local_axes[j]) for j in range(1, themes.LOCAL_COMPONENTS + 1)],
         }
     return out
 
