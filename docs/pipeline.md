@@ -68,7 +68,7 @@ sentences in English only (`--corpus english`: same vectors, no language effect)
 ```
 georeset themes-sentences --corpus C --sentences S/       distinct texts: 128 shards (landuse), 1 (scenes)
 uv run scripts/embed.py S/ --folder F --worker k --workers n   on GPUs; each shard → F/ on the Hub
-georeset themes --corpus C --work work-fused --sentences S/    hexagon means, PCA, axis ends → work-fused/themes/C/
+georeset themes --corpus C --work work-fused --sentences S/    cell means, PCA, axis ends → work-fused/themes/C/
 georeset fuse ...                                         card: maps, legends, work-fused/pca_axes*.md
 ```
 
@@ -76,10 +76,14 @@ georeset fuse ...                                         card: maps, legends, w
 self-contained (PEP 723 dependencies): `microsoft/harrier-oss-v1-0.6b` in bf16, the instruction
 `Identify the land use or land cover described`, L2-normalised vectors stored as float16. Shards already on
 the Hub are skipped, so jobs can be killed, resubmitted or run on several GPUs at once.
-`georeset.publish.geo.hexagons` puts each text in the hexagon `Axes.hexbin` would (the grid of the other
-maps); hexagons with fewer than 50 sentences (10 scene descriptions) are dropped and PCA is fitted on the
-hexagon means. The axes' names in `georeset.publish.themes.LANDUSE` and `SCENES` are read from the axes'
-extreme texts: [sentences](pca_axes.md), [English sentences](pca_axes_english.md),
+Every map of the card has two layers (`georeset.publish.geo`): points are counted in H3 cells of resolution
+5, then each H3 cell of resolution 4 shows the mean of its child cells, so that every place counts once
+however much is written there; maps use the Equal Earth projection. For the PCA, each cell takes the mean
+embedding of its texts (a scene description counts in every cell where its scene has photos), each
+resolution-4 cell the mean of its child cells; those with fewer than 20 sentences (10 scene descriptions)
+are dropped and PCA is fitted on the rest. The three passes over the shards (cells, cell means, axis ends)
+load the next shards in the background. The axes' names in `georeset.publish.themes.LANDUSE`, `ENGLISH` and
+`SCENES` are read from the axes' extreme texts: [sentences](pca_axes.md), [English sentences](pca_axes_english.md),
 [scene descriptions](pca_axes_scenes.md). The sentences' axes are
-also checked against language (R² of each axis on the hexagon's most frequent language); the scene
+also checked against language (R² of each axis on the cell's most frequent language); the scene
 descriptions are all English.

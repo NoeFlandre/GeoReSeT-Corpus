@@ -156,30 +156,31 @@ def scene_sentences(scenes: pl.LazyFrame) -> pl.LazyFrame:
     return rows.sort("id").unique("text", keep="first", maintain_order=True)
 
 
-def photo_hexagons(photos: pl.DataFrame, grid: geo.Grid = geo.COARSE) -> pl.DataFrame:
-    """Each (``id``, ``hexagon``) pair where scene ``id`` has ``photos`` (``scene_id``, ``lat``, ``lon``)."""
-    hexes = grid.hexagons(photos["lon"].to_numpy(), photos["lat"].to_numpy())
-    pairs = pl.DataFrame({"id": photos["scene_id"], "hexagon": hexes}).filter(pl.col("hexagon") >= 0)
-    return pairs.unique().sort("id", "hexagon")
+def photo_cells(photos: pl.DataFrame) -> pl.DataFrame:
+    """Each (``id``, H3 ``cell``) pair where scene ``id`` has ``photos`` (``scene_id``, ``lat``, ``lon``)."""
+    cells = geo.h3_cells(photos["lon"].to_numpy(), photos["lat"].to_numpy())
+    return pl.DataFrame({"id": photos["scene_id"], "cell": cells}).unique().sort("id", "cell")
 
 
-def score_sums(hexes: np.ndarray, scores: np.ndarray, count: int) -> np.ndarray:
-    """Per hexagon index (``count`` rows): each score column's sum, then the row count; -1 dropped."""
-    keep = hexes >= 0
-    columns = [*scores[keep].T, np.ones(int(keep.sum()))]
-    return np.stack([np.bincount(hexes[keep], weights=c, minlength=count) for c in columns], axis=1)
+def parent_sums(
+    cells: np.ndarray, values: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """The display layer: each parent of ``cells`` (``geo.DISPLAY_RESOLUTION``), the sum of its children's
+    ``values`` rows, its number of children, and each child's index among the parents.
+    """
+    parents, inverse = np.unique(geo.h3_parents(cells), return_inverse=True)
+    _, sums, sizes = group_sums(inverse, values)
+    return parents, sums, sizes, inverse
 
 
-def hexagon_sums(hexes: np.ndarray, vectors: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Sum of the vectors and their count per hexagon index (``geo.COARSE.count`` rows); -1 is dropped."""
-    sums = np.zeros((geo.COARSE.count, vectors.shape[1]))
-    keep = hexes >= 0
-    order = np.argsort(hexes[keep], kind="stable")
-    sorted_hexes = hexes[keep][order]
-    present, starts = np.unique(sorted_hexes, return_index=True)
-    if present.size:
-        sums[present] = np.add.reduceat(vectors[keep][order].astype(np.float64), starts)
-    return sums, np.bincount(sorted_hexes, minlength=geo.COARSE.count)
+def group_sums(groups: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The distinct ``groups`` (negative ones dropped), each one's sum of ``values`` rows, and its size."""
+    keep = groups >= 0
+    order = np.argsort(groups[keep], kind="stable")
+    present, starts, sizes = np.unique(groups[keep][order], return_index=True, return_counts=True)
+    if not present.size:
+        return present, np.zeros((0, values.shape[1])), sizes
+    return present, np.add.reduceat(values[keep][order].astype(np.float64), starts), sizes
 
 
 @dataclass(frozen=True)

@@ -152,7 +152,6 @@ class Corpus:
     # Parquet glob of the photos (``scene_id``, ``lat``, ``lon``) a text counts at; empty: its own lat/lon.
     photos: str = ""
     only_language: str = ""  # keep only the texts in this language; empty: all
-    fine_min: int = 5  # texts per hexagon of the fine RGB map (``geo.FINE``)
     suffix: str = ""  # of its maps and axes report
 
     @property
@@ -162,7 +161,7 @@ class Corpus:
 
 @dataclass(frozen=True)
 class Themes:
-    """The PCA of one corpus' embeddings per hexagon (``themes``)."""
+    """The PCA of one corpus' embeddings per display cell (``themes``)."""
 
     corpus: Corpus
     model: str
@@ -305,7 +304,7 @@ def legend(themes: Themes) -> str:
         line = f"* **PC{i}** ({_COLOURS[i - 1]}, {pct(share)} of the variance): {low} ↔ {high}."
         if themes.corpus.mixed_languages:
             flag = " Mostly language: read with care." if r2 > themes.warning else ""
-            line += f" The hexagon's most frequent language explains {r2:.0%} of it.{flag}"
+            line += f" The cell's most frequent language explains {r2:.0%} of it.{flag}"
         lines.append(line)
     return "\n".join(lines)
 
@@ -328,8 +327,8 @@ def _theme_values(ctx: Context, themes: Themes, step: int) -> dict[str, str]:
         "themes_unit": corpus.unit,
         "themes_selection": corpus.selection,
         "themes_placement": corpus.placement,
-        "themes_fine_degrees": f"{geo.FINE.degrees:g}",
-        "themes_fine_min": fmt(corpus.fine_min),
+        "themes_resolution": str(geo.CELL_RESOLUTION),
+        "themes_display": str(geo.DISPLAY_RESOLUTION),
         "themes_folder": corpus.folder,
         "themes_files": f"{corpus.folder}/train-*.parquet".ljust(_FILES_COLUMN),
         "themes_suffix": corpus.suffix,

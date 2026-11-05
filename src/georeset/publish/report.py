@@ -5,12 +5,12 @@ import shutil
 from importlib.resources import files
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 
 from georeset.build.pipeline import Layout
 from georeset.publish import card, figures, geo, stats, themes
 
-MAP_RESOLUTION = 5
 # Sentence maps after the full dataset (map.png): file name -> rows drawn.
 SENTENCE_MAPS = {
     "map_landuse.png": pl.col("landuse"),
@@ -49,20 +49,25 @@ def scene_points(out: Path) -> pl.DataFrame | None:
     return stats.points(pl.scan_parquet(out / "scene_photos" / "*.parquet"))
 
 
+def display_counts(points: pl.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """Each display cell and the mean count of its child H3 cells (each cell counts once)."""
+    counts = geo.hex_counts(points)
+    parents, sums, sizes, _ = stats.parent_sums(counts["cell"].to_numpy(), counts["n"].to_numpy()[:, None])
+    return parents, sums[:, 0] / sizes
+
+
 def draw_maps(data: pl.LazyFrame, out: Path) -> None:
     """The full dataset map, then the sentence subsets and the scenes over it in grey."""
     maps = out / "assets"
     photos = scene_points(out)
     sentences = stats.points(data)
-    full = geo.hex_counts(sentences if photos is None else pl.concat([sentences, photos]), MAP_RESOLUTION)
+    full, values = display_counts(sentences if photos is None else pl.concat([sentences, photos]))
     unit = "Sentences" if photos is None else "Sentences and scene photos"
-    figures.world_map(full, maps / "map.png", unit, MAP_RESOLUTION)
+    figures.world_map(full, values, maps / "map.png", unit)
     for name, rows in SENTENCE_MAPS.items():
-        counts = geo.hex_counts(stats.points(data.filter(rows)), MAP_RESOLUTION)
-        figures.world_map(counts, maps / name, "Sentences", MAP_RESOLUTION, full)
+        figures.world_map(*display_counts(stats.points(data.filter(rows))), maps / name, "Sentences", full)
     if photos is not None:
-        counts = geo.hex_counts(photos, MAP_RESOLUTION)
-        figures.world_map(counts, maps / "map_scenes.png", "Photos", MAP_RESOLUTION, full)
+        figures.world_map(*display_counts(photos), maps / "map_scenes.png", "Photos", full)
 
 
 def theme_context(work: Path, assets: Path) -> tuple[card.Themes, ...]:

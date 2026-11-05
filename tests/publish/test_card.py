@@ -273,18 +273,16 @@ def test_themed_card_shows_maps_legend_and_embeddings():
         < text.index("assets/map_wikimedia.png")
         < text.index("assets/map_landuse.png")
         < text.index("assets/map_pca.png")
-        < text.index("assets/map_pca_fine.png")
         < text.index("assets/map_pc3.png")
         < text.index("### Fields")
     )
     assert (
         "* **PC1** (red, 40.0% of the variance): towns ↔ farms. "
-        "The hexagon's most frequent language explains 20% of it." in text
+        "The cell's most frequent language explains 20% of it." in text
     )
     assert "* **PC2** (green, 20.0% of the variance): coast ↔ mountains." in text
-    assert "The same axes and colours on 0.25° hexagons holding 5 sentences or more:" in text
     assert text.count("Mostly language: read with care.") == 1
-    assert "each of the 56 2° hexagons holding 50 sentences or more" in text
+    assert "each of the 56 cells of resolution 4 holding 50 sentences or more" in text
     assert "https://github.com/me/code/blob/master/docs/pca_axes.md" in text
     assert "embeddings/train-*.parquet                 relevant sentences, one vector each" in text
     assert "`scenes`, `scene_photos`, `embeddings`." in text
@@ -337,8 +335,8 @@ def test_card_with_both_pcas():
         < text.index("assets/map_pc3_scenes.png")
         < text.index("A description belongs")
     )
-    assert "counted once in every hexagon where its scene has photos, and the mean embedding" in text
-    assert "the 56 2° hexagons holding 10 descriptions or more" in text
+    assert "counts once in every hexagon where its scene has photos (resolution 5). Each cell" in text
+    assert "the 56 cells of resolution 4 holding 10 descriptions or more" in text
     assert "docs/pca_axes_scenes.md" in text
     assert "scene_embeddings/train-*.parquet           scene descriptions, one vector each" in text
     assert "`embeddings`, `scene_embeddings`." in text
