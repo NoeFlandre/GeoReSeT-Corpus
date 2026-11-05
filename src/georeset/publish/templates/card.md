@@ -14,18 +14,6 @@ Sentences come from the websites, `description` tags and Wikipedia / Wikivoyage 
 
 ![The full dataset per H3 cell](assets/map.png)
 
-**Sentences the LLM labelled relevant** (`landuse` is true):
-
-![Sentences labelled relevant per H3 cell](assets/map_landuse.png)
-
-**Sentences per source**: `website`, `osm_description`, then `wikipedia` and `wikivoyage` together:
-
-![Website sentences per H3 cell](assets/map_website.png)
-
-![OSM description sentences per H3 cell](assets/map_description.png)
-
-![Wikipedia and Wikivoyage sentences per H3 cell](assets/map_wikimedia.png)$themes_section_landuse
-
 ## Quick start
 
 ```python
@@ -48,7 +36,19 @@ JOIN 'hf://datasets/$repo_id/polygons/*.parquet' p ON p.polygon_id = s.polygon_i
 WHERE s.region = 'afghanistan' AND s.landuse;
 ```
 $scenes_quickstart
-## Contents
+## Sentences
+
+**Sentences per source**: `website`, `osm_description`, then `wikipedia` and `wikivoyage` together:
+
+![Website sentences per H3 cell](assets/map_website.png)
+
+![OSM description sentences per H3 cell](assets/map_description.png)
+
+![Wikipedia and Wikivoyage sentences per H3 cell](assets/map_wikimedia.png)
+
+**Sentences the LLM labelled relevant** (`landuse` is true):
+
+![Sentences labelled relevant per H3 cell](assets/map_landuse.png)$themes_section_landuse
 
 $by_source
 
@@ -62,7 +62,7 @@ Polygon areas, over all $polygons polygons:
 
 $areas
 
-## Fields
+### Fields
 
 | Field | Type | Description |
 |---|---|---|
@@ -83,7 +83,7 @@ $areas
 
 The `polygons` config holds one row per polygon: `polygon_id`, `osm_type`, `osm_id`, `name`, `osm_tag`, `region`, `continent`, `lat`, `lon`, `area_m2` and `geometry` (WKB, [GeoParquet](https://geoparquet.org) 1.1, WGS 84).
 
-## Languages
+### Languages
 
 Labels follow GlotLID: ISO 639-3 + ISO 15924 script. How the language was found depends on the source:
 
@@ -95,17 +95,7 @@ Only text in the 85 languages of the [SaT](https://huggingface.co/segment-any-te
 Labels are finer than that: individual languages of a macrolanguage (`nob_Latn` and `nno_Latn` for Norwegian, `cmn_Hani` and `yue_Hani` for Chinese)
 and scripts (`srp_Cyrl` and `srp_Latn`) stay distinct. Other languages appear only in `unlabelled`, as `unsplit`.
 
-## Files
-
-```
-data/<source>/<language>/train-*.parquet   labelled sentences, sorted by region
-unlabelled/train-*.parquet                 sentences without a label (see below)
-polygons/train-*.parquet                   polygon shapes (GeoParquet)$scenes_files$themes_files
-```
-
-Configs: `all` (default), one per source, one per language, `unlabelled`, `polygons`$scenes_configs$themes_configs.
-
-## Unlabelled sentences
+### Unlabelled sentences
 
 The `unlabelled` config holds sentences without a usable label, kept to be labelled later. It has the same fields, with `status` and `failure_reason` instead of `landuse`:
 
@@ -114,6 +104,16 @@ The `unlabelled` config holds sentences without a usable label, kept to be label
 
 $unlabelled
 $scenes_section
+## Files
+
+```
+data/<source>/<language>/train-*.parquet   labelled sentences, sorted by region
+unlabelled/train-*.parquet                 sentences without a label (see above)
+polygons/train-*.parquet                   polygon shapes (GeoParquet)$scenes_files$themes_files
+```
+
+Configs: `all` (default), one per source, one per language, `unlabelled`, `polygons`$scenes_configs$themes_configs.
+
 ## Methodology
 
 1. **Polygons.** Closed ways and multipolygon relations from the 386 regional [Geofabrik](https://download.geofabrik.de) extracts of OpenStreetMap, assembled with [osmium](https://osmcode.org/libosmium/).

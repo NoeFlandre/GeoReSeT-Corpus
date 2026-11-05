@@ -265,12 +265,15 @@ def test_themed_card_shows_maps_legend_and_embeddings():
     text = card.render(ctx)
     parsed = DatasetCard(text)
     assert [c["config_name"] for c in parsed.data.configs][-1] == "embeddings"
-    maps = text.index("assets/map_wikimedia.png")
+    # In Sentences: the maps per source, then the relevant sentences' map with their PCA under it.
     assert (
-        maps
+        text.index("## Quick start")
+        < text.index("## Sentences")
+        < text.index("assets/map_wikimedia.png")
+        < text.index("assets/map_landuse.png")
         < text.index("assets/map_pca.png")
         < text.index("assets/map_pc3.png")
-        < text.index("## Quick start")
+        < text.index("### Fields")
     )
     assert (
         "* **PC1** (red, 40.0% of the variance): towns ↔ farms. "
@@ -299,7 +302,7 @@ def test_card_with_both_pcas():
     configs = [c["config_name"] for c in DatasetCard(text).data.configs]
     assert configs[-2:] == ["embeddings", "scene_embeddings"]
     # Each PCA sits after its corpus' density map: the sentences' in the overview, the scenes' in Scenes.
-    assert text.index("assets/map_pc3.png") < text.index("## Quick start") < text.index("## Scenes")
+    assert text.index("## Sentences") < text.index("assets/map_pc3.png") < text.index("## Scenes")
     assert (
         text.index("assets/map_scenes.png")
         < text.index("assets/map_pca_scenes.png")
