@@ -7,6 +7,10 @@
 
 $themes_legend
 
+The same axes and colours on $themes_fine_degrees° hexagons holding $themes_fine_min $themes_unit or more:
+
+![Mean embedding of the $themes_what per $themes_fine_degrees° hexagon, coloured as the map above](assets/map_pca_fine$themes_suffix.png)
+
 Each axis on its own, blue below zero and orange above. The $themes_what at both ends of each axis are in [`$themes_report`]($code_url/blob/master/docs/$themes_report).
 
 ![First principal component of the $themes_what per 2° hexagon](assets/map_pc1$themes_suffix.png)

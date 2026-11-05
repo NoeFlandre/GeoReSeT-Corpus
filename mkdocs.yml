@@ -9,6 +9,7 @@ nav:
   - Development: development.md
   - Reference: reference.md
   - PCA axes (sentences): pca_axes.md
+  - PCA axes (English sentences): pca_axes_english.md
   - PCA axes (scenes): pca_axes_scenes.md
 plugins:
   - search

@@ -129,7 +129,7 @@ def test_render(computed, monkeypatch):
     assert len(result.language_r2) == 3
     # One language per hexagon: language explains every axis.
     assert result.language_r2 == pytest.approx([1.0, 1.0, 1.0])
-    for name in ("map_pca.png", "map_pc1.png", "map_pc2.png", "map_pc3.png"):
+    for name in ("map_pca.png", "map_pca_fine.png", "map_pc1.png", "map_pc2.png", "map_pc3.png"):
         assert (tmp_path / "assets" / name).read_bytes()[:4] == b"\x89PNG"
     text = report.read_text()
     assert "## PC1: towns ↔ farms" in text
@@ -192,21 +192,39 @@ def test_compute_with_places_counts_each_text_once_per_hexagon(tmp_path, monkeyp
     sentences = sorted((tmp_path / "s").glob("*.parquet"))
     embeddings = _embed(sentences, tmp_path / "e")
     rows = pl.read_parquet(tmp_path / "s" / "*.parquet")
-    hexes = geo.hexagons(np.array([lon for _, lon in PLACES]), np.array([lat for lat, _ in PLACES]))
-    # Every text also counts in the first place's hexagon; texts of place 0 count there once.
-    own = geo.hexagons(rows["lon"].to_numpy(), rows["lat"].to_numpy())
-    places = pl.concat(
-        [
-            pl.DataFrame({"id": rows["id"], "hexagon": own}),
-            pl.DataFrame({"id": rows["id"], "hexagon": np.full(rows.height, hexes[0])}),
-        ]
-    ).unique()
+    hexes = geo.COARSE.hexagons(np.array([lon for _, lon in PLACES]), np.array([lat for lat, _ in PLACES]))
+    # Each text has photos at its own place and two at the first place; texts of place 0 count there once.
+    (lat0, lon0), n = PLACES[0], rows.height
+    photos = pl.DataFrame(
+        {
+            "scene_id": pl.concat([rows["id"]] * 3),
+            "lat": [*rows["lat"], *[lat0] * n, *[lat0 + 0.01] * n],
+            "lon": [*rows["lon"], *[lon0] * n, *[lon0 + 0.01] * n],
+        }
+    )
     corpus = replace(themes.LANDUSE, min_texts=10)
-    out = themes.compute(sentences, embeddings, tmp_path / "w", corpus, places)
+    out = themes.compute(sentences, embeddings, tmp_path / "w", corpus, photos)
     hexagons = pl.read_parquet(out / "hexagons.parquet").sort("hexagon")
     counts = dict(zip(hexagons["hexagon"].to_list(), hexagons["n"].to_list(), strict=True))
     assert counts[int(hexes[0])] == 60 and counts[int(hexes[1])] == 12
     assert json.loads((out / "summary.json").read_text())["sentences"] == 60
+    fine = pl.read_parquet(out / "fine.parquet")
+    assert fine.columns == ["hexagon", "n", "pc1", "pc2", "pc3"]
+    assert fine["n"].max() == 60 and fine["n"].min() >= corpus.fine_min
     # Axis ends list each text once, wherever it counts.
     ends = pl.read_parquet(out / "ends.parquet")
     assert ends.group_by("pc", "end").agg(pl.col("id").is_unique().all())["id"].all()
+
+
+def test_pairs_keep_only_one_language_with_its_vectors(tmp_path):
+    themes.write_sentences(_data(4), tmp_path / "s", shards=2)
+    sentences = sorted((tmp_path / "s").glob("*.parquet"))
+    embeddings = _embed(sentences, tmp_path / "e")
+    pairs = list(themes._pairs(sentences, embeddings, None, "eng_Latn"))
+    rows = pl.concat([rows for rows, _ in pairs])
+    assert rows["language"].unique().to_list() == ["eng_Latn"] and rows.height == 4
+    for rows, vectors in pairs:
+        assert len(vectors) == rows.height
+        # Place 3 (English) has the longest vectors, 4 times the unit one plus noise.
+        assert np.all(np.linalg.norm(vectors, axis=1) > 3.5)
+    assert sum(len(v) for _, v in themes._pairs(sentences, embeddings, None)) == 20

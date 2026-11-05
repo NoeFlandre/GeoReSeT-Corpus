@@ -156,24 +156,30 @@ def scene_sentences(scenes: pl.LazyFrame) -> pl.LazyFrame:
     return rows.sort("id").unique("text", keep="first", maintain_order=True)
 
 
-def photo_hexagons(photos: pl.LazyFrame) -> pl.DataFrame:
-    """Each (``id``, ``hexagon``) pair where scene ``id`` has photos, once."""
-    points = photos.select("scene_id", "lat", "lon").collect(engine="streaming")
-    hexes = geo.hexagons(points["lon"].to_numpy(), points["lat"].to_numpy())
-    pairs = pl.DataFrame({"id": points["scene_id"], "hexagon": hexes}).filter(pl.col("hexagon") >= 0)
+def photo_hexagons(photos: pl.DataFrame, grid: geo.Grid = geo.COARSE) -> pl.DataFrame:
+    """Each (``id``, ``hexagon``) pair where scene ``id`` has ``photos`` (``scene_id``, ``lat``, ``lon``)."""
+    hexes = grid.hexagons(photos["lon"].to_numpy(), photos["lat"].to_numpy())
+    pairs = pl.DataFrame({"id": photos["scene_id"], "hexagon": hexes}).filter(pl.col("hexagon") >= 0)
     return pairs.unique().sort("id", "hexagon")
 
 
+def score_sums(hexes: np.ndarray, scores: np.ndarray, count: int) -> np.ndarray:
+    """Per hexagon index (``count`` rows): each score column's sum, then the row count; -1 dropped."""
+    keep = hexes >= 0
+    columns = [*scores[keep].T, np.ones(int(keep.sum()))]
+    return np.stack([np.bincount(hexes[keep], weights=c, minlength=count) for c in columns], axis=1)
+
+
 def hexagon_sums(hexes: np.ndarray, vectors: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Sum of the vectors and their count per hexagon index (``geo.HEXAGONS`` rows); -1 is dropped."""
-    sums = np.zeros((geo.HEXAGONS, vectors.shape[1]))
+    """Sum of the vectors and their count per hexagon index (``geo.COARSE.count`` rows); -1 is dropped."""
+    sums = np.zeros((geo.COARSE.count, vectors.shape[1]))
     keep = hexes >= 0
     order = np.argsort(hexes[keep], kind="stable")
     sorted_hexes = hexes[keep][order]
     present, starts = np.unique(sorted_hexes, return_index=True)
     if present.size:
         sums[present] = np.add.reduceat(vectors[keep][order].astype(np.float64), starts)
-    return sums, np.bincount(sorted_hexes, minlength=geo.HEXAGONS)
+    return sums, np.bincount(sorted_hexes, minlength=geo.COARSE.count)
 
 
 @dataclass(frozen=True)
@@ -198,9 +204,14 @@ def pca(x: np.ndarray, k: int) -> Pca:
 CLIP = (2, 98)
 
 
-def unit_scale(scores: np.ndarray) -> np.ndarray:
-    """Each column scaled to [0, 1] between its ``CLIP`` percentiles, clipped outside."""
-    lo, hi = np.percentile(scores, CLIP, axis=0)
+def percentile_limits(scores: np.ndarray) -> np.ndarray:
+    """Each column's ``CLIP`` percentiles: rows low, high."""
+    return np.percentile(scores, CLIP, axis=0)
+
+
+def unit_scale(scores: np.ndarray, limits: np.ndarray | None = None) -> np.ndarray:
+    """Each column scaled to [0, 1] between ``limits`` (default: its own), clipped outside."""
+    lo, hi = percentile_limits(scores) if limits is None else limits
     return np.clip((scores - lo) / np.where(hi > lo, hi - lo, 1), 0, 1)
 
 
