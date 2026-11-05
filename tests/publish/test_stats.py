@@ -140,20 +140,17 @@ def test_landuse_sentences_keeps_relevant_distinct_texts():
     assert out.rows() == [("a", "x", "eng_Latn", 2.0, 6.0), ("d", "z", "deu_Latn", 4.0, 8.0)]
 
 
-def test_hexagon_sums():
-    vectors = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]], dtype=np.float32)
-    sums, counts = stats.hexagon_sums(np.array([3, -1, 3, 0]), vectors)
-    assert sums.shape == (geo.COARSE.count, 2)
-    assert sums[3].tolist() == [6.0, 8.0]
-    assert sums[0].tolist() == [7.0, 8.0]
-    assert sums.sum() == 29.0
-    assert counts[3] == 2 and counts[0] == 1 and counts.sum() == 3
-    assert counts.shape == (geo.COARSE.count,)
+def test_group_sums():
+    values = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]], dtype=np.float32)
+    present, sums, sizes = stats.group_sums(np.array([3, -1, 3, 0]), values)
+    assert present.tolist() == [0, 3]
+    assert sums.tolist() == [[7.0, 8.0], [6.0, 8.0]] and sums.dtype == np.float64
+    assert sizes.tolist() == [1, 2]
 
 
-def test_hexagon_sums_of_nothing_inside():
-    sums, counts = stats.hexagon_sums(np.array([-1]), np.ones((1, 2)))
-    assert sums.sum() == 0 and counts.sum() == 0
+def test_group_sums_of_nothing():
+    present, sums, sizes = stats.group_sums(np.array([-1]), np.ones((1, 2)))
+    assert present.size == 0 and sums.shape == (0, 2) and sizes.size == 0
 
 
 def test_pca_recovers_the_main_direction():
@@ -216,27 +213,30 @@ def test_extremes_and_language_mix():
     assert stats.language_mix(scored).rows() == [("x", 0.75), ("y", 0.25)]
 
 
-def test_photo_hexagons_pairs_each_scene_with_its_photos_hexagons():
+def test_photo_cells_pairs_each_scene_with_its_photos_cells():
     photos = pl.DataFrame(
-        {
-            "scene_id": [1, 1, 1, 2, 2],
-            "lat": [48.85, 48.86, -33.9, 48.85, 95.0],
-            "lon": [2.35, 2.36, 18.4, 2.35, 0.0],
-        }
+        {"scene_id": [1, 1, 1, 2], "lat": [48.85, 48.85, -33.9, 48.85], "lon": [2.35, 2.35, 18.4, 2.35]}
     )
-    paris, cape = geo.COARSE.hexagons(np.array([2.35, 18.4]), np.array([48.85, -33.9]))
-    expected = sorted([(1, paris), (1, cape), (2, paris)])
-    assert stats.photo_hexagons(photos).rows() == expected
-    fine = geo.FINE.hexagons(photos["lon"].to_numpy(), photos["lat"].to_numpy())
-    expected = sorted({(s, int(h)) for s, h in zip(photos["scene_id"], fine, strict=True) if h >= 0})
-    assert stats.photo_hexagons(photos, geo.FINE).rows() == expected
+    paris, cape = geo.h3_cells(np.array([2.35, 18.4]), np.array([48.85, -33.9]))
+    assert stats.photo_cells(photos).rows() == sorted([(1, paris), (1, cape), (2, paris)])
 
 
-def test_score_sums_and_shared_limits():
-    sums = stats.score_sums(
-        np.array([2, 0, 2, -1]), np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]]), 3
-    )
-    np.testing.assert_array_equal(sums, [[3, 4, 1], [0, 0, 0], [6, 8, 2]])
+def test_unit_scale_with_shared_limits():
     scores = np.array([[0.0], [10.0]])
     limits = np.array([[0.0], [20.0]])
     np.testing.assert_allclose(stats.unit_scale(scores, limits), [[0.0], [0.5]])
+
+
+def test_parent_sums_group_children_under_their_display_cell():
+    import h3.api.basic_int as h3_int
+
+    parent = h3_int.latlng_to_cell(48.85, 2.35, geo.DISPLAY_RESOLUTION)
+    a, b = sorted(h3_int.cell_to_children(parent, geo.CELL_RESOLUTION))[:2]
+    other = h3_int.latlng_to_cell(-33.9, 18.4, geo.CELL_RESOLUTION)
+    cells = np.array([a, other, b], np.uint64)
+    parents, sums, sizes, inverse = stats.parent_sums(cells, np.array([[1.0], [10.0], [3.0]]))
+    by_parent = dict(
+        zip(parents.tolist(), zip(sums[:, 0].tolist(), sizes.tolist(), strict=True), strict=True)
+    )
+    assert by_parent[parent] == (4.0, 2)
+    assert parents[inverse].tolist() == [parent, h3_int.cell_to_parent(other, geo.DISPLAY_RESOLUTION), parent]

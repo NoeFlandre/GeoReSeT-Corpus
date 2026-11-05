@@ -1,16 +1,18 @@
-"""What places talk about: PCA of the mean text embedding per 2° hexagon, one per corpus.
+"""What places talk about: PCA of the mean text embedding per H3 cell, one per corpus.
 
 Three corpora: the relevant sentences (``LANDUSE``), the same in English only (``ENGLISH``, on the same
 vectors) and the scene descriptions (``SCENES``). ``write_sentences`` splits a corpus' texts into its
 shards; ``scripts/embed.py`` embeds each into the same-named file of the corpus' folder (``id``, ``lat``,
-``lon``, ``vector``), row for row. ``compute`` reads one pair of shards at a time, twice: hexagon means
-and their PCA first, then each text's scores (axis ends, fine-hexagon means). ``render`` turns its
-outputs into the maps and the corpus' axes report.
+``lon``, ``vector``), row for row. ``compute`` reads the shards three times: the texts' H3 cells, the
+cells' mean vectors (then the display cells' means and their PCA), and each text's scores (axis ends).
+``render`` turns its outputs into the maps and the corpus' axes report.
 """
 
 import json
-from collections.abc import Iterator
-from dataclasses import replace
+from collections import deque
+from collections.abc import Callable, Iterable, Iterator
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +30,7 @@ LANGUAGE_WARNING = 0.5
 MODEL = "microsoft/harrier-oss-v1-0.6b"  # as in scripts/embed.py
 PROMPT = "Instruct: Identify the land use or land cover described\nQuery: "
 PCS = [f"pc{i}" for i in range(1, COMPONENTS + 1)]
+AHEAD = 4  # shards loading in the background while one is processed
 LANDUSE = card.Corpus(
     name="landuse",
     source="data/*/*/*.parquet",
@@ -36,14 +39,14 @@ LANDUSE = card.Corpus(
     unit="sentences",
     selection="distinct sentences with `landuse` true (the first `id` keeps a repeated text)",
     shards=128,
-    min_texts=50,
+    min_texts=20,
     axes={
-        1: ("tropical beaches and leisure", "Russian village histories"),
-        2: ("buildings and transport hubs", "islands and rocky coasts"),
-        3: ("remote airports", "church ornament and architecture"),
+        1: ("Cebuano place stubs", "Russian village histories"),
+        2: ("airports and stations", "lakes, wetlands and islands"),
+        3: ("Cebuano airport stubs", "Iberian church architecture"),
     },
     mixed_languages=True,
-    placement="at its location",
+    placement="in the H3 cell of its location",
 )
 SCENES = card.Corpus(
     name="scenes",
@@ -56,11 +59,11 @@ SCENES = card.Corpus(
     min_texts=10,
     axes={
         1: ("paved urban streets", "arid rugged land"),
-        2: ("lakes and forests", "dry open land"),
-        3: ("lush tropical vegetation", "snow, ice and rock"),
+        2: ("dry open land", "lakes and forests"),
+        3: ("lush tropical vegetation", "polar ice and cold seas"),
     },
     mixed_languages=False,
-    placement="once in every hexagon where its scene has photos",
+    placement="once in every H3 cell where its scene has photos",
     photos="scene_photos/*.parquet",
     suffix="_scenes",
 )
@@ -71,9 +74,9 @@ ENGLISH = replace(
     what="relevant sentences in English",
     selection="relevant sentences in English (`language` `eng_Latn`)",
     axes={
-        1: ("wild coasts and wilderness", "historic city buildings"),
-        2: ("ancient ruins and history", "park and community amenities"),
-        3: ("tropical beaches and resorts", "glacial lakes and valleys"),
+        1: ("historic city buildings", "lakes and outdoor recreation"),
+        2: ("residential amenities", "islands and geology"),
+        3: ("airports and cargo hubs", "rural churches and woodland"),
     },
     mixed_languages=False,
     only_language="eng_Latn",
@@ -113,11 +116,31 @@ def read_vectors(source, filesystem=None) -> tuple[pl.Series, np.ndarray]:
     return ids, vectors.astype(np.float32)
 
 
+def _prefetched(load: Callable, items: Iterable, ahead: int = AHEAD) -> Iterator:
+    """``load(item)`` for each item, in order, with up to ``ahead`` more loading in the background."""
+    with ThreadPoolExecutor(ahead) as pool:
+        pending = deque()
+        for item in items:
+            pending.append(pool.submit(load, item))
+            if len(pending) > ahead:
+                yield pending.popleft().result()
+        while pending:
+            yield pending.popleft().result()
+
+
+def _rows(text: Path, language: str) -> pl.DataFrame:
+    """A sentence shard, only its rows in ``language`` if given."""
+    rows = pl.read_parquet(text)
+    return rows.filter(language=language) if language else rows
+
+
 def _pairs(
     sentences: list[Path], embeddings: list, filesystem, language: str = ""
 ) -> Iterator[tuple[pl.DataFrame, np.ndarray]]:
     """Each sentence shard and the vectors of its rows; only the rows in ``language`` if given."""
-    for text, source in zip(sentences, embeddings, strict=True):
+
+    def load(pair: tuple[Path, object]) -> tuple[pl.DataFrame, np.ndarray]:
+        text, source = pair
         rows = pl.read_parquet(text)
         ids, vectors = read_vectors(source, filesystem)
         if not rows["id"].equals(ids, check_names=False):
@@ -125,15 +148,69 @@ def _pairs(
         if language:
             keep = (rows["language"] == language).to_numpy()
             rows, vectors = rows.filter(keep), vectors[keep]
-        yield rows, vectors
+        return rows, vectors
+
+    yield from _prefetched(load, zip(sentences, embeddings, strict=True))
 
 
-def _place(rows: pl.DataFrame, places: pl.DataFrame | None, grid: geo.Grid) -> tuple[np.ndarray, np.ndarray]:
-    """The ``grid`` hexagon each row counts in and that row's index: its location's, or each of ``places``."""
-    if places is None:
-        return grid.hexagons(rows["lon"].to_numpy(), rows["lat"].to_numpy()), np.arange(rows.height)
-    placed = rows.select("id").with_row_index("row").join(places, on="id")
-    return placed["hexagon"].to_numpy(), placed["row"].to_numpy()
+@dataclass(frozen=True)
+class _Cells:
+    """The maps' first layer: the H3 cells the texts count in."""
+
+    ids: np.ndarray  # sorted cell ids
+    placements: list[tuple[np.ndarray, np.ndarray]]  # per shard: row index, then index in ``ids``
+    texts: np.ndarray  # texts per cell
+    languages: pl.DataFrame  # (``cell`` index, ``language``, ``n`` texts)
+
+
+def _placement(rows: pl.DataFrame, pairs: pl.DataFrame | None) -> tuple[np.ndarray, np.ndarray, pl.Series]:
+    """Each placement's row, H3 cell and language: the text's own location, or each cell of its photos."""
+    if pairs is None:
+        index, cells = np.arange(rows.height), geo.h3_cells(rows["lon"].to_numpy(), rows["lat"].to_numpy())
+    else:
+        placed = rows.select("id").with_row_index("row").join(pairs, on="id")
+        index, cells = placed["row"].to_numpy(), placed["cell"].to_numpy()
+    return index, cells, rows["language"].gather(index)
+
+
+def _languages(cells: tuple[np.ndarray, ...], languages: tuple[pl.Series, ...]) -> pl.DataFrame:
+    """Texts per (``cell``, ``language``), from each shard's placements."""
+    shards = (pl.DataFrame({"cell": c, "language": lang}) for c, lang in zip(cells, languages, strict=True))
+    return pl.concat(shards).group_by("cell", "language").agg(n=pl.len())
+
+
+def _locate(sentences: list[Path], language: str, photos: pl.DataFrame | None) -> _Cells:
+    """First pass, without vectors: each text's H3 cell, or each cell where its scene has photos."""
+    pairs = None if photos is None else stats.photo_cells(photos)
+    index, cells, languages = zip(
+        *(_placement(_rows(text, language), pairs) for text in sentences), strict=True
+    )
+    ids = np.unique(np.concatenate(cells))
+    positions = tuple(np.searchsorted(ids, c) for c in cells)
+    texts = np.bincount(np.concatenate(positions), minlength=len(ids))
+    return _Cells(ids, list(zip(index, positions, strict=True)), texts, _languages(positions, languages))
+
+
+def _cell_means(pairs, cells: _Cells) -> np.ndarray:
+    """Second pass: each cell's mean vector."""
+    sums = None
+    for (_, vectors), (index, cell) in zip(pairs, cells.placements, strict=True):
+        sums = np.zeros((len(cells.ids), vectors.shape[1])) if sums is None else sums
+        present, part, _ = stats.group_sums(cell, vectors[index])
+        sums[present] += part
+    return np.asarray(sums) / cells.texts[:, None]
+
+
+def _display(cells: _Cells, values: np.ndarray, minimum: int) -> tuple[np.ndarray, ...]:
+    """The display layer: the parent cells with ``minimum`` texts or more.
+
+    Returns those cells, the mean of their child cells' ``values`` (each child counts once), their number
+    of texts, and every child's parent.
+    """
+    parents, sums, size, inverse = stats.parent_sums(cells.ids, values)
+    _, texts, _, _ = stats.parent_sums(cells.ids, cells.texts[:, None])
+    kept = texts[:, 0] >= minimum
+    return parents[kept], sums[kept] / size[kept, None], texts[kept, 0].astype(np.int64), parents[inverse]
 
 
 def ends(scored: pl.DataFrame, n: int) -> pl.DataFrame:
@@ -155,35 +232,13 @@ def _with_scores(rows: pl.DataFrame, scores: np.ndarray) -> pl.DataFrame:
     return rows.with_columns([pl.Series(pc, scores[:, i]) for i, pc in enumerate(PCS)])
 
 
-def _hexagon_totals(pairs, places: pl.DataFrame | None) -> tuple[np.ndarray, np.ndarray, pl.DataFrame]:
-    """First pass: vector sums, text counts and (hexagon, language) counts."""
-    sums, counts, languages = None, np.zeros(geo.COARSE.count, dtype=np.int64), []
+def _ends(pairs, fit: stats.Pca) -> tuple[int, pl.DataFrame]:
+    """Third pass: the number of texts and each axis' most extreme texts."""
+    texts, best = 0, []
     for rows, vectors in pairs:
-        hexes, index = _place(rows, places, geo.COARSE)
-        shard_sums, shard_counts = stats.hexagon_sums(hexes, vectors[index])
-        sums = shard_sums if sums is None else sums + shard_sums
-        counts += shard_counts
-        placed = pl.DataFrame({"hexagon": hexes, "language": rows["language"].gather(index)})
-        languages.append(placed.group_by("hexagon", "language").agg(n=pl.len()))
-    mix = pl.concat(languages).group_by("hexagon", "language").agg(pl.col("n").sum())
-    return np.asarray(sums), counts, mix
-
-
-def _scored(
-    pairs, fit: stats.Pca, places: pl.DataFrame | None, fine_min: int
-) -> tuple[int, pl.DataFrame, pl.DataFrame]:
-    """Second pass: the number of texts, each axis' most extreme texts, and mean scores per fine hexagon."""
-    texts, best, fine = 0, [], np.zeros((geo.FINE.count, COMPONENTS + 1))
-    for rows, vectors in pairs:
-        scores = fit.scores(vectors)
         texts += rows.height
-        best.append(ends(_with_scores(rows, scores), MIX))
-        hexes, index = _place(rows, places, geo.FINE)
-        fine += stats.score_sums(hexes, scores[index], geo.FINE.count)
-    kept = np.flatnonzero(fine[:, -1] >= fine_min)
-    means = fine[kept, :-1] / fine[kept, -1:]
-    hexagons = _with_scores(pl.DataFrame({"hexagon": kept, "n": fine[kept, -1].astype(np.int64)}), means)
-    return texts, _final_ends(pl.concat(best)), hexagons
+        best.append(ends(_with_scores(rows, fit.scores(vectors)), MIX))
+    return texts, _final_ends(pl.concat(best))
 
 
 def _final_ends(candidates: pl.DataFrame) -> pl.DataFrame:
@@ -208,29 +263,25 @@ def compute(
     photos: pl.DataFrame | None = None,
     filesystem=None,
 ) -> Path:
-    """Hexagon means, their PCA, axis ends and fine-hexagon scores, in ``work/themes/<corpus>``.
+    """Two-layer means (H3 cells, then their parents), their PCA and axis ends, in ``work/themes/<corpus>``.
 
-    ``photos`` (``scene_id``, ``lat``, ``lon``): each text counts once in every hexagon of its photos,
-    instead of at its own location.
+    ``photos`` (``scene_id``, ``lat``, ``lon``): each text counts once in every cell of its photos,
+    instead of in its own location's.
     """
-    places = {
-        grid: None if photos is None else stats.photo_hexagons(photos, grid)
-        for grid in (geo.COARSE, geo.FINE)
-    }
-    pairs = _pairs(sentences, embeddings, filesystem, corpus.only_language)
-    sums, counts, mix = _hexagon_totals(pairs, places[geo.COARSE])
-    kept = np.flatnonzero(counts >= corpus.min_texts)
-    means = sums[kept] / counts[kept, None]
-    fit = stats.pca(means, COMPONENTS)
-    hexagons = _with_scores(pl.DataFrame({"hexagon": kept, "n": counts[kept]}), fit.scores(means))
-    pairs = _pairs(sentences, embeddings, filesystem, corpus.only_language)
-    texts, best, fine = _scored(pairs, fit, places[geo.FINE], corpus.fine_min)
+    language = corpus.only_language
+    cells = _locate(sentences, language, photos)
+    means = _cell_means(_pairs(sentences, embeddings, filesystem, language), cells)
+    kept, display_means, texts, parents = _display(cells, means, corpus.min_texts)
+    fit = stats.pca(display_means, COMPONENTS)
+    hexagons = _with_scores(pl.DataFrame({"hexagon": kept, "n": texts}), fit.scores(display_means))
+    mix = cells.languages.with_columns(hexagon=pl.Series(parents).gather(cells.languages["cell"]))
+    total, best = _ends(_pairs(sentences, embeddings, filesystem, language), fit)
     out = work / "themes" / corpus.name
     out.mkdir(parents=True, exist_ok=True)
-    hexagons.join(stats.dominant_language(mix), on="hexagon").write_parquet(out / "hexagons.parquet")
+    languages = stats.dominant_language(mix.group_by("hexagon", "language").agg(pl.col("n").sum()))
+    hexagons.join(languages, on="hexagon").write_parquet(out / "hexagons.parquet")
     best.write_parquet(out / "ends.parquet")
-    fine.write_parquet(out / "fine.parquet")
-    summary = {"sentences": texts, "explained": fit.explained.tolist()}
+    summary = {"sentences": total, "cells": len(cells.ids), "explained": fit.explained.tolist()}
     (out / "summary.json").write_text(json.dumps(summary))
     return out
 
@@ -294,7 +345,7 @@ def axes_markdown(ranked: pl.DataFrame, axes: card.Themes) -> str:
     """A corpus' axes report: each axis with its most extreme texts (and their languages)."""
     corpus = axes.corpus
     check = (
-        " Language R²: share of the axis' variance across hexagons explained by the hexagon's "
+        " Language R²: share of the axis' variance across cells explained by the cell's "
         "most frequent language."
         if corpus.mixed_languages
         else ""
@@ -302,9 +353,11 @@ def axes_markdown(ranked: pl.DataFrame, axes: card.Themes) -> str:
     lines = [
         f"# What places talk about: the PCA axes of the {corpus.what}",
         "",
-        f"PCA of the mean embedding of the {axes.texts:,} {corpus.what}, each counted {corpus.placement}, "
-        f"in each of {axes.hexagons:,} {geo.HEX_DEGREES}° hexagons with {corpus.min_texts} {corpus.unit} "
-        f"or more. Scores below are projections on each axis.{check}",
+        f"The {axes.texts:,} {corpus.what} each count {corpus.placement} (resolution {geo.CELL_RESOLUTION}); "
+        f"each cell takes the mean embedding of its texts, and each of the {axes.hexagons:,} resolution-"
+        f"{geo.DISPLAY_RESOLUTION} cells with {corpus.min_texts} {corpus.unit} or more the mean of its child "
+        "cells. "
+        f"PCA of those means; scores below are the texts' projections on each axis.{check}",
         "",
     ]
     for i in range(1, COMPONENTS + 1):
@@ -312,25 +365,19 @@ def axes_markdown(ranked: pl.DataFrame, axes: card.Themes) -> str:
     return "\n".join(lines)
 
 
-def _grey(minimum: int, corpus: card.Corpus) -> str:
-    return f"grey: land with fewer than {minimum} {corpus.unit} per hexagon"
-
-
-def _fine_map(out: Path, assets: Path, corpus: card.Corpus, limits: np.ndarray) -> None:
-    """The RGB map again on the fine grid, coloured as the coarse one (same axes, same limits)."""
-    fine = pl.read_parquet(out / "fine.parquet")
-    degrees = geo.FINE.degrees
-    caption = (
-        f"Mean embedding of the {corpus.what} per {degrees}° hexagon on the {geo.HEX_DEGREES}° map's "
-        f"principal components, coloured as that map\n{_grey(corpus.fine_min, corpus)}"
+def _layers(corpus: card.Corpus) -> str:
+    return (
+        f"Mean embedding of the {corpus.what} per H3 cell (resolution {geo.CELL_RESOLUTION}), "
+        f"mean per resolution-{geo.DISPLAY_RESOLUTION} cell"
     )
-    rgb = stats.unit_scale(fine.select(PCS).to_numpy(), limits)
-    path = assets / f"map_pca_fine{corpus.suffix}.png"
-    figures.rgb_map(fine["hexagon"].to_numpy(), rgb, path, geo.FINE.land(), caption, geo.FINE)
+
+
+def _grey(minimum: int, corpus: card.Corpus) -> str:
+    return f"grey: land with fewer than {minimum} {corpus.unit} per resolution-{geo.DISPLAY_RESOLUTION} cell"
 
 
 def render(work: Path, assets: Path, corpus: card.Corpus = LANDUSE) -> card.Themes:
-    """A corpus' maps of the hexagon scores (RGB, then one per component) and its axes report in ``work``."""
+    """A corpus: maps of the display cells (RGB, then one per axis) and its axes report in ``work``."""
     out = work / "themes" / corpus.name
     hexagons = pl.read_parquet(out / "hexagons.parquet")
     summary = json.loads((out / "summary.json").read_text())
@@ -346,14 +393,13 @@ def render(work: Path, assets: Path, corpus: card.Corpus = LANDUSE) -> card.Them
         language_r2=stats.r_squared(scores, hexagons["language"].to_list()).tolist(),
         warning=LANGUAGE_WARNING,
     )
-    land = geo.COARSE.land()
+    land = geo.land_cells()
     grey = _grey(corpus.min_texts, corpus)
     caption = (
-        f"Mean embedding of the {corpus.what} per {geo.HEX_DEGREES}° hexagon: principal components 1, 2, 3 "
-        f"as red, green, blue (each from its 2nd to 98th percentile)\n{grey}"
+        f"{_layers(corpus)}: principal components 1, 2, 3 as red, green, blue "
+        f"(each from its 2nd to 98th percentile)\n{grey}"
     )
     figures.rgb_map(index, stats.unit_scale(scores), assets / f"map_pca{corpus.suffix}.png", land, caption)
-    _fine_map(out, assets, corpus, stats.percentile_limits(scores))
     for i in range(COMPONENTS):
         low, high = corpus.axes[i + 1]
         label = (

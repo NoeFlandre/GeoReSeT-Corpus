@@ -1,23 +1,34 @@
-import h3
+import h3.api.basic_int as h3_int
+import numpy as np
 import polars as pl
 
 from georeset.publish import figures
 
 
-def _counts(cells: list[str], n: list[int]) -> pl.DataFrame:
-    return pl.DataFrame({"cell": cells, "n": n}, schema={"cell": pl.String, "n": pl.Int64})
+def _cells(*points) -> np.ndarray:
+    return np.array([h3_int.latlng_to_cell(lat, lon, 4) for lat, lon in points], np.uint64)
 
 
 def test_world_map_writes_png(tmp_path):
-    counts = _counts([h3.latlng_to_cell(48.85, 2.35, 5), h3.latlng_to_cell(0.0, 179.99, 5)], [10, 5])
-    full = _counts([h3.latlng_to_cell(-33.9, 18.4, 5)], [3])
-    path = figures.world_map(counts, tmp_path / "a" / "map.png", "Sentences", 5, full)
+    cells = _cells((48.85, 2.35), (0.0, 179.99))
+    path = figures.world_map(
+        cells, np.array([10.0, 5.0]), tmp_path / "a" / "map.png", "Sentences", _cells((-33.9, 18.4))
+    )
     assert path.read_bytes()[:4] == b"\x89PNG"
 
 
 def test_world_map_draws_an_empty_subset(tmp_path):
-    path = figures.world_map(_counts([], []), tmp_path / "map.png", "Photos", 5)
+    path = figures.world_map(np.array([], np.uint64), np.array([]), tmp_path / "map.png", "Photos")
     assert path.read_bytes()[:4] == b"\x89PNG"
+
+
+def test_pca_maps_write_png(tmp_path):
+    cells, land = _cells((48.85, 2.35), (-33.9, 18.4)), _cells((40.0, -100.0))
+    rgb = figures.rgb_map(
+        cells, np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.5]]), tmp_path / "rgb.png", land, "x"
+    )
+    pc = figures.diverging_map(cells, np.array([-1.0, 2.0]), 1.5, "PC1", tmp_path / "pc.png", land)
+    assert rgb.read_bytes()[:4] == pc.read_bytes()[:4] == b"\x89PNG"
 
 
 def test_language_bars_writes_png(tmp_path):

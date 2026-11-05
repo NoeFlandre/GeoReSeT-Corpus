@@ -1,43 +1,79 @@
 import h3
+import h3.api.basic_int as h3_int
 import numpy as np
 import polars as pl
 import pytest
-import shapely
 
 from georeset.publish import geo
 
-PARIS = h3.latlng_to_cell(48.85, 2.35, 3)
+
+def _cell(lat: float, lon: float, resolution: int = 5) -> int:
+    return h3_int.latlng_to_cell(lat, lon, resolution)
 
 
 def test_hex_counts_sums_points_per_cell():
     pts = pl.DataFrame({"lat": [48.85, 48.8501, -33.9], "lon": [2.35, 2.3501, 18.4], "n": [2, 3, 7]})
     out = geo.hex_counts(pts, 3).sort("n")
-    assert out.rows() == [(PARIS, 5), (h3.latlng_to_cell(-33.9, 18.4, 3), 7)]
+    assert out.rows() == [(_cell(48.85, 2.35, 3), 5), (_cell(-33.9, 18.4, 3), 7)]
+    assert out.schema == {"cell": pl.UInt64, "n": pl.Int64}
 
 
-def test_hex_counts_resolution_matters():
+def test_hex_counts_defaults_to_the_cell_resolution():
     pts = pl.DataFrame({"lat": [48.85], "lon": [2.35], "n": [1]})
-    assert geo.hex_counts(pts, 5)["cell"].item() == h3.latlng_to_cell(48.85, 2.35, 5)
+    assert geo.hex_counts(pts)["cell"].item() == _cell(48.85, 2.35, geo.CELL_RESOLUTION)
 
 
 def test_hex_counts_of_no_points():
     pts = pl.DataFrame(
         {"lat": [], "lon": [], "n": []}, schema={"lat": pl.Float64, "lon": pl.Float64, "n": pl.Int64}
     )
-    assert geo.hex_counts(pts, 5).height == 0
+    assert geo.hex_counts(pts).height == 0
 
 
-def test_cell_centres():
-    out = geo.cell_centres(pl.DataFrame({"cell": [PARIS], "n": [4]}))
-    lat, lon = h3.cell_to_latlng(PARIS)
-    assert out.rows() == [(lat, lon, 4)]
-    assert abs(lat - 48.85) < 1 and abs(lon - 2.35) < 1
+def test_h3_cells_parents_and_centres():
+    lon, lat = np.array([2.35, 18.4]), np.array([48.85, -33.9])
+    cells = geo.h3_cells(lon, lat)
+    assert cells.dtype == np.uint64
+    assert cells.tolist() == [
+        h3.str_to_int(h3.latlng_to_cell(a, o, 5)) for a, o in zip(lat, lon, strict=True)
+    ]
+    parents = geo.h3_parents(cells)
+    assert parents.tolist() == [h3_int.cell_to_parent(int(c), geo.DISPLAY_RESOLUTION) for c in cells]
+    centre_lon, centre_lat = geo.h3_centres(cells)
+    np.testing.assert_allclose(centre_lon, lon, atol=0.2)
+    np.testing.assert_allclose(centre_lat, lat, atol=0.2)
+    assert geo.h3_centres(np.array([], np.uint64))[0].size == 0
 
 
-def test_cell_centres_of_nothing():
-    out = geo.cell_centres(pl.DataFrame({"cell": [], "n": []}, schema={"cell": pl.String, "n": pl.Int64}))
-    assert out.schema == {"lat": pl.Float64, "lon": pl.Float64, "n": pl.Int64}
-    assert out.height == 0
+def test_equal_earth():
+    x, y = geo.equal_earth(np.array([0.0, 180.0, -90.0, 0.0]), np.array([0.0, 0.0, 30.0, 90.0]))
+    # Published extents on a unit sphere: 2.7066 at the equator's ends, 1.3174 at the pole.
+    np.testing.assert_allclose(x, [0.0, 2.70663, -x[2] * -1, 0.0], atol=1e-4)
+    np.testing.assert_allclose(y[[0, 1, 3]], [0.0, 0.0, 1.31736], atol=1e-4)
+    assert x[2] < 0 < y[2] < y[3]
+
+
+def test_outline_is_the_closed_edge_of_the_world():
+    ring = geo.outline(5)
+    assert ring.shape == (10, 2)
+    np.testing.assert_allclose(ring[:, 0].max(), 2.70663, atol=1e-4)
+    np.testing.assert_allclose(ring[:5, 0], -ring[5:, 0][::-1])
+
+
+def test_cell_rings_split_cells_across_180():
+    paris, fiji = _cell(48.85, 2.35, 4), _cell(-17.0, 180.0, 4)
+    rings, owners = geo.cell_rings(np.array([paris, fiji], np.uint64))
+    assert owners.tolist() == [0, 1, 1]
+    # The two copies of the cell across ±180° lie on either side of the map.
+    assert rings[1][:, 0].mean() < 0 < rings[2][:, 0].mean()
+    assert all(r.shape == (6, 2) for r in rings)
+
+
+def test_land_cells():
+    land = geo.land_cells()
+    assert _cell(48.85, 2.35, 4) in land and _cell(-10.0, -140.0, 4) not in land
+    assert _cell(-80.0, 0.0, 4) not in land  # Antarctica is south of the maps
+    assert land.dtype == np.uint64 and np.all(np.diff(land.astype(np.int64)) != 0)
 
 
 @pytest.mark.parametrize(
@@ -73,66 +109,3 @@ def test_edge_labels():
 )
 def test_short(n, expected):
     assert geo.short(n) == expected
-
-
-def _hexbin_cells(lon, lat):
-    """Index of the hexagon matplotlib's own ``hexbin`` puts each point in."""
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots()
-    cells = []
-    for x, y in zip(lon, lat, strict=True):
-        hexes = ax.hexbin([x], [y], gridsize=geo.COARSE.size, extent=geo.HEX_EXTENT, mincnt=1)
-        lon_c, lat_c = hexes.get_offsets()[0]
-        cells.append((round(float(lon_c), 6), round(float(lat_c), 6)))
-        hexes.remove()
-    plt.close(fig)
-    return cells
-
-
-def test_hexagons_match_matplotlib_hexbin():
-    rng = np.random.default_rng(0)
-    lon = np.concatenate([rng.uniform(-180, 180, 300), [-180.0, 180.0, 0.0]])
-    lat = np.concatenate([rng.uniform(-89, 89, 300), [0.0, 0.0, -90.0]])
-    index = geo.COARSE.hexagons(lon, lat)
-    assert (index >= 0).all()
-    assert (index < geo.COARSE.count).all()
-    centre_lon, centre_lat = geo.COARSE.centres(index)
-    ours = [(round(float(x), 6), round(float(y), 6)) for x, y in zip(centre_lon, centre_lat, strict=True)]
-    assert ours == _hexbin_cells(lon, lat)
-
-
-def test_hexagons_both_lattices_and_outside():
-    centre_lon, centre_lat = geo.COARSE.centres(np.array([0, geo.COARSE.count - 1]))
-    assert geo.COARSE.hexagons(centre_lon, centre_lat).tolist() == [0, geo.COARSE.count - 1]
-    assert geo.COARSE.hexagons(np.array([200.0, 0.0]), np.array([0.0, 120.0])).tolist() == [-1, -1]
-
-
-def test_hexagon_grid_is_two_degrees():
-    assert geo.COARSE.size == (180, 52)
-    lon, lat = geo.COARSE.centres(np.array([0, 1, 53]))
-    assert lon[1] == lon[0] and lat[1] - lat[0] == pytest.approx(180 / 52)
-    assert lon[2] - lon[0] == pytest.approx(2)
-
-
-def test_hexagon_shapes_are_the_hexagons_around_their_centres():
-    index = np.array([0, 5, geo.COARSE.count - 1])
-    shapes = geo.COARSE.shapes(index)
-    lon, lat = geo.COARSE.centres(index)
-    centroids = shapely.centroid(shapes)
-    np.testing.assert_allclose(shapely.get_x(centroids), lon)
-    np.testing.assert_allclose(shapely.get_y(centroids), lat)
-    # Two interleaved lattices of hexagons tile the plane: each covers half a lattice cell.
-    cell = 360 / geo.COARSE.size[0] * 180 / geo.COARSE.size[1]
-    np.testing.assert_allclose(shapely.area(shapes), cell / 2)
-
-
-def test_land_hexagons():
-    land = geo.COARSE.land()
-    paris, pacific = geo.COARSE.hexagons(np.array([2.35, -140.0]), np.array([48.85, -10.0]))
-    assert paris in land and pacific not in land
-    assert 0.2 < len(land) / geo.COARSE.count < 0.5
-    assert np.all(np.diff(land) > 0)
