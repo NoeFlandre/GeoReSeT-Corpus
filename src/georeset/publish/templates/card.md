@@ -24,7 +24,7 @@ Sentences come from the websites, `description` tags and Wikipedia / Wikivoyage 
 
 ![OSM description sentences per H3 cell](assets/map_description.png)
 
-![Wikipedia and Wikivoyage sentences per H3 cell](assets/map_wikimedia.png)
+![Wikipedia and Wikivoyage sentences per H3 cell](assets/map_wikimedia.png)$themes_section
 
 ## Quick start
 
@@ -100,10 +100,10 @@ and scripts (`srp_Cyrl` and `srp_Latn`) stay distinct. Other languages appear on
 ```
 data/<source>/<language>/train-*.parquet   labelled sentences, sorted by region
 unlabelled/train-*.parquet                 sentences without a label (see below)
-polygons/train-*.parquet                   polygon shapes (GeoParquet)$scenes_files
+polygons/train-*.parquet                   polygon shapes (GeoParquet)$scenes_files$themes_files
 ```
 
-Configs: `all` (default), one per source, one per language, `unlabelled`, `polygons`$scenes_configs.
+Configs: `all` (default), one per source, one per language, `unlabelled`, `polygons`$scenes_configs$themes_configs.
 
 ## Unlabelled sentences
 
@@ -126,7 +126,7 @@ $scenes_section
 5. **Labels.** Each sentence is classified by [`LiquidAI/LFM2.5-2.6B`](https://huggingface.co/LiquidAI/LFM2.5-2.6B): does it describe land use, land cover or a geographic environment observable by remote sensing? Greedy decoding with reasoning, up to 4,096 tokens, served with SGLang and the [DSpark](https://huggingface.co/LiquidAI/LFM2.5-2.6B-DSpark) draft model, on about 4,500 GPU-hours of [Grid'5000](https://www.grid5000.fr). The model and prompt were chosen on [`benchmark-llms-landuse-relevance`](https://huggingface.co/datasets/NoeFlandre/benchmark-llms-landuse-relevance) (53 models, 25,500 labelled sentences in 85 languages), where this setup reaches macro F1 0.81 and balanced accuracy 0.77. Labels and raw model outputs, with reasoning ([code](https://github.com/NoeFlandre/filter-osm-datasets-llms-landuse)):
 $sources
 6. **This dataset.** One row per sentence of each document (a document linked to several polygons appears once); overlapping extracts resolved to the most specific one; language codes normalized; sentences with fewer than two letters dropped, and Wikipedia / Wikivoyage rows made only of bracketed edit links or citations (`[ edit | edit source ]`, `[Smith 1998]`) removed. Join the raw outputs on `sha256(text)` = `text_sha256`. Code: $code_url
-$scenes_method
+$scenes_method$themes_method
 ## License
 
 * OpenStreetMap data (`osm_description` text, polygons, names, tags): [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/), © OpenStreetMap contributors.

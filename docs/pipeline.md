@@ -58,3 +58,26 @@ The raw geo-rag files are pinned in the private repo `NoeFlandre/geo-rag-scenes-
 mapped), one row per photo (local paths and links to non-reusable photos removed, Mapillary keys turned
 into links), and how far each scene's photos are spread. `scene_photos` repeats each scene's text on its
 photos, sorted by scene so the text compresses to one copy per row group.
+
+## What places talk about
+
+Two PCA maps added to the fused card, one of the relevant sentences (`--corpus landuse`, the default) and one
+of the scene descriptions (`--corpus scenes`):
+
+```
+georeset themes-sentences --corpus C --sentences S/       distinct texts: 128 shards (landuse), 1 (scenes)
+uv run scripts/embed.py S/ --folder F --worker k --workers n   on GPUs; each shard → F/ on the Hub
+georeset themes --corpus C --work work-fused --sentences S/    hexagon means, PCA, axis ends → work-fused/themes/C/
+georeset fuse ...                                         card: maps, legends, work-fused/pca_axes*.md
+```
+
+`F` is `embeddings` for the sentences and `scene_embeddings` for the scenes. `scripts/embed.py` is
+self-contained (PEP 723 dependencies): `microsoft/harrier-oss-v1-0.6b` in bf16, the instruction
+`Identify the land use or land cover described`, L2-normalised vectors stored as float16. Shards already on
+the Hub are skipped, so jobs can be killed, resubmitted or run on several GPUs at once.
+`georeset.publish.geo.hexagons` puts each text in the hexagon `Axes.hexbin` would (the grid of the other
+maps); hexagons with fewer than 50 sentences (10 scene descriptions) are dropped and PCA is fitted on the
+hexagon means. The axes' names in `georeset.publish.themes.LANDUSE` and `SCENES` are read from the axes'
+extreme texts: [sentences](pca_axes.md), [scene descriptions](pca_axes_scenes.md). The sentences' axes are
+also checked against language (R² of each axis on the hexagon's most frequent language); the scene
+descriptions are all English.

@@ -1,6 +1,8 @@
+import numpy as np
 import polars as pl
+import pytest
 
-from georeset.publish import stats
+from georeset.publish import geo, stats
 
 
 def _data():
@@ -119,3 +121,96 @@ def test_scene_platforms():
 
 def test_scene_locality_is_inclusive():
     assert stats.scene_locality(_scenes()).rows(named=True) == [{"km10": 1, "km100": 2, "km1000": 2}]
+
+
+def test_landuse_sentences_keeps_relevant_distinct_texts():
+    data = pl.LazyFrame(
+        {
+            "id": ["c", "a", "b", "d"],
+            "text": ["x", "x", "y", "z"],
+            "landuse": [True, True, False, True],
+            "language": ["fra_Latn", "eng_Latn", "fra_Latn", "deu_Latn"],
+            "lat": [1.0, 2.0, 3.0, 4.0],
+            "lon": [5.0, 6.0, 7.0, 8.0],
+            "source": ["w", "w", "w", "w"],
+        }
+    )
+    out = stats.landuse_sentences(data).collect()
+    assert out.columns == ["id", "text", "language", "lat", "lon"]
+    assert out.rows() == [("a", "x", "eng_Latn", 2.0, 6.0), ("d", "z", "deu_Latn", 4.0, 8.0)]
+
+
+def test_hexagon_sums():
+    vectors = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0], [7.0, 8.0]], dtype=np.float32)
+    sums, counts = stats.hexagon_sums(np.array([3, -1, 3, 0]), vectors)
+    assert sums.shape == (geo.HEXAGONS, 2)
+    assert sums[3].tolist() == [6.0, 8.0]
+    assert sums[0].tolist() == [7.0, 8.0]
+    assert sums.sum() == 29.0
+    assert counts[3] == 2 and counts[0] == 1 and counts.sum() == 3
+    assert counts.shape == (geo.HEXAGONS,)
+
+
+def test_hexagon_sums_of_nothing_inside():
+    sums, counts = stats.hexagon_sums(np.array([-1]), np.ones((1, 2)))
+    assert sums.sum() == 0 and counts.sum() == 0
+
+
+def test_pca_recovers_the_main_direction():
+    rng = np.random.default_rng(0)
+    t = rng.normal(size=500)
+    x = np.column_stack([3 * t, -3 * t, rng.normal(scale=0.1, size=500)]) + 5
+    fit = stats.pca(x, 2)
+    assert fit.components.shape == (2, 3)
+    assert np.allclose(np.abs(fit.components[0]), [2**-0.5, 2**-0.5, 0], atol=0.01)
+    assert fit.components[0][np.abs(fit.components[0]).argmax()] > 0
+    assert fit.explained[0] > 0.99 and fit.explained.sum() <= 1
+    assert np.allclose(fit.mean, x.mean(axis=0))
+    scores = fit.scores(x)
+    assert np.allclose(scores.mean(axis=0), 0)
+    assert np.allclose(scores[:, 0] ** 2, ((x - x.mean(axis=0)) @ fit.components[0]) ** 2)
+
+
+def test_pca_sign_is_fixed_by_the_largest_loading():
+    x = np.array([[0.0, 0.0], [-1.0, 0.0], [1.0, 0.1]])
+    assert stats.pca(x, 1).components[0][0] > 0
+    assert stats.pca(-x, 1).components[0][0] > 0
+
+
+def test_unit_scale_clips_at_percentiles():
+    scores = np.column_stack([np.arange(101.0), np.full(101, 4.0)])
+    out = stats.unit_scale(scores)
+    assert out[0, 0] == 0 and out[100, 0] == 1
+    assert out[50, 0] == pytest.approx(0.5)
+    assert out[2, 0] == 0 and out[98, 0] == 1
+    assert out[3, 0] == pytest.approx(1 / 96)
+    assert (out[:, 1] == 0).all()
+
+
+def test_symmetric_limit():
+    assert stats.symmetric_limit(np.arange(-10.0, 91.0)) == pytest.approx(88.0)
+    assert stats.symmetric_limit(np.arange(-90.0, 11.0)) == pytest.approx(88.0)
+
+
+def test_dominant_language_breaks_ties_by_name():
+    counts = pl.DataFrame(
+        {"hexagon": [1, 1, 2, 2, 2], "language": ["b", "a", "z", "y", "x"], "n": [5, 5, 1, 3, 2]}
+    )
+    assert stats.dominant_language(counts).sort("hexagon").rows() == [(1, "a"), (2, "y")]
+
+
+def test_r_squared():
+    scores = np.array([[1.0, 1.0], [3.0, 2.0], [10.0, 1.0], [12.0, 2.0]])
+    r2 = stats.r_squared(scores, ["a", "a", "b", "b"])
+    assert r2[0] == pytest.approx(1 - 4 / 85)
+    assert r2[1] == pytest.approx(0)
+
+
+def test_extremes_and_language_mix():
+    scored = pl.DataFrame(
+        {"id": ["a", "b", "c", "d"], "language": ["x", "y", "x", "x"], "score": [3.0, 1.0, 3.0, -2.0]}
+    )
+    high, low = stats.extremes(scored, "score", 2)
+    assert high["id"].to_list() == ["a", "c"]
+    assert low["id"].to_list() == ["d", "b"]
+    assert stats.language_mix(scored).rows() == [("x", 0.75), ("y", 0.25)]

@@ -1,14 +1,16 @@
 """``georeset`` command line: each step is resumable, ``run`` chains them all."""
 
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
+import polars as pl
 import typer
 
 from georeset import hub
 from georeset.build import fuse as fusion
 from georeset.build import pipeline, stage
-from georeset.publish import report
+from georeset.publish import report, themes
 from georeset.sources import description, website, wiki
 
 SOURCES = (website.SOURCE, description.SOURCE, wiki.SOURCE)
@@ -64,6 +66,52 @@ def shards(work: Work = Path("work"), out: Out = Path("out"), workers: Workers =
 def card_cmd(work: Work = Path("work"), out: Out = Path("out"), repo: str = REPO_ID) -> None:
     """Compute stats and figures, write README.md."""
     typer.echo(report.build_card(pipeline.Layout(work, out), repo, CODE_URL))
+
+
+Sentences = Annotated[Path, typer.Option(help="Directory of the sentence shards to embed.")]
+
+
+class CorpusName(StrEnum):
+    """Keys of ``themes.CORPORA``."""
+
+    landuse = "landuse"
+    scenes = "scenes"
+
+
+Corpus = Annotated[
+    CorpusName, typer.Option(help="landuse: the relevant sentences; scenes: the scene descriptions.")
+]
+
+
+@app.command("themes-sentences")
+def themes_sentences(
+    corpus: Corpus = CorpusName.landuse,
+    sentences: Sentences = Path("sentences"),
+    data: Annotated[
+        str, typer.Option(help="Parquet glob of the texts (default: the corpus on the Hub).")
+    ] = "",
+) -> None:
+    """Write a corpus' distinct texts in shards, for scripts/embed.py."""
+    chosen = themes.CORPORA[corpus]
+    source = data or f"hf://datasets/{FUSED_REPO_ID}/{chosen.source}"
+    typer.echo(themes.write_sentences(pl.scan_parquet(source), sentences, chosen))
+
+
+@app.command("themes")
+def themes_cmd(
+    work: Work = Path("work-fused"),
+    sentences: Sentences = Path("sentences"),
+    cache: Annotated[
+        Path, typer.Option(help="Where the embeddings are downloaded (~45 GB, node-local).")
+    ] = Path("/tmp/georeset"),
+    repo: str = FUSED_REPO_ID,
+    corpus: Corpus = CorpusName.landuse,
+) -> None:
+    """PCA of a corpus' embeddings per hexagon, from its folder on the Hub, into ``work/themes/<corpus>``."""
+    chosen = themes.CORPORA[corpus]
+    hub.snapshot(repo, hub.revision(repo), cache, [f"{chosen.folder}/*"])
+    shards = sorted(sentences.glob("train-*.parquet"))
+    typer.echo(themes.compute(shards, [cache / chosen.folder / s.name for s in shards], work, chosen))
 
 
 @app.command()

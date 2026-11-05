@@ -98,3 +98,68 @@ def test_fuse_publishes_public_by_default(tmp_path, monkeypatch):
     result = runner.invoke(cli.app, ["fuse", "--work", str(tmp_path), "--publish"])
     assert result.exit_code == 0, result.output
     assert seen == [False]
+
+
+def test_themes_sentences(tmp_path):
+    import polars as pl
+
+    data = tmp_path / "data.parquet"
+    pl.DataFrame(
+        {"id": ["a"], "text": ["x"], "landuse": [True], "language": ["fra_Latn"], "lat": [1.0], "lon": [2.0]}
+    ).write_parquet(data)
+    result = runner.invoke(
+        cli.app, ["themes-sentences", "--sentences", str(tmp_path / "s"), "--data", str(data)]
+    )
+    assert result.exit_code == 0, result.output
+    assert result.output.strip() == "1"
+    assert len(list((tmp_path / "s").glob("train-*.parquet"))) == cli.themes.LANDUSE.shards
+
+
+def test_themes_sentences_reads_the_corpus_from_the_hub(tmp_path, monkeypatch):
+    import polars as pl
+
+    seen = []
+    scenes = pl.LazyFrame({"scene_id": [1], "text": ["x"], "lat": [1.0], "lon": [2.0]})
+    monkeypatch.setattr(cli.pl, "scan_parquet", lambda source: seen.append(source) or scenes)
+    result = runner.invoke(cli.app, ["themes-sentences", "--corpus", "scenes", "--sentences", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert seen == [f"hf://datasets/{cli.FUSED_REPO_ID}/scenes/*.parquet"]
+    assert [p.name for p in tmp_path.glob("*.parquet")] == ["train-00000-of-00001.parquet"]
+    assert runner.invoke(cli.app, ["themes-sentences", "--corpus", "nope"]).exit_code == 2
+
+
+def test_themes_downloads_embeddings_then_computes(tmp_path, monkeypatch):
+    for name in ("train-00001-of-00002.parquet", "train-00000-of-00002.parquet"):
+        (tmp_path / name).touch()
+    seen = {}
+    monkeypatch.setattr(hub, "revision", lambda repo: f"{repo}@rev")
+    monkeypatch.setattr(
+        hub, "snapshot", lambda repo, rev, dest, patterns: seen.update(get=(rev, dest, patterns))
+    )
+
+    def compute(sentences, embeddings, work, corpus):
+        seen.update(sentences=[p.name for p in sentences], embeddings=embeddings, work=work, corpus=corpus)
+        return work / "themes"
+
+    monkeypatch.setattr(cli.themes, "compute", compute)
+    cache, work = tmp_path / "c", tmp_path / "w"
+    args = [
+        "themes",
+        "--work",
+        str(work),
+        "--sentences",
+        str(tmp_path),
+        "--cache",
+        str(cache),
+        "--repo",
+        "me/x",
+        "--corpus",
+        "scenes",
+    ]
+    result = runner.invoke(cli.app, args)
+    assert result.exit_code == 0, result.output
+    assert seen["get"] == ("me/x@rev", cache, ["scene_embeddings/*"])
+    assert seen["sentences"] == ["train-00000-of-00002.parquet", "train-00001-of-00002.parquet"]
+    assert seen["embeddings"] == [cache / "scene_embeddings" / n for n in seen["sentences"]]
+    assert seen["corpus"] is cli.themes.SCENES
+    assert seen["work"] == work

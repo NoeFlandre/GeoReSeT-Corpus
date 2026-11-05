@@ -8,6 +8,8 @@ nav:
   - Pipeline: pipeline.md
   - Development: development.md
   - Reference: reference.md
+  - PCA axes (sentences): pca_axes.md
+  - PCA axes (scenes): pca_axes_scenes.md
 plugins:
   - search
   - mkdocstrings:
