@@ -22,6 +22,7 @@ THEME_SECTIONS = ("landuse", "english", "scenes")
 SCENE_PARTS = (
     "headline",
     "intro",
+    "explore",
     "overview",
     "quickstart",
     "files",

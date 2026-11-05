@@ -86,9 +86,13 @@ def test_sentence_cells_count_per_cell_and_language():
 
 
 def test_build_writes_every_resolution_samples_and_manifest(tmp_path):
-    out = space.build(_data(), _photos(), _scenes(), _work(tmp_path), tmp_path / "out", "me/data", "abc123")
+    commits = {"data": "c1", "scenes": "c2"}
+    out = space.build(
+        _data(), _photos(), _scenes(), _work(tmp_path), tmp_path / "out", "me/data", "abc123", commits
+    )
     manifest = json.loads((out / "manifest.json").read_text())
     assert manifest["revision"] == "abc123" and manifest["dataset"] == "me/data"
+    assert manifest["folders"] == commits
     assert manifest["resolutions"] == [2, 3, 4, 5]
     assert manifest["languages"][0] == "fra_Latn"
     assert manifest["pca"]["landuse"]["axes"] == [list(themes.LANDUSE.axes[i]) for i in (1, 2, 3)]

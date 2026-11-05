@@ -18,6 +18,8 @@ configs: [{"config_name": "all", "data_files": [{"split": "train", "path": "data
 
 Sentences come from the websites, `description` tags and Wikipedia / Wikivoyage articles linked to OpenStreetMap polygons. Every row is one sentence with a boolean `landuse` label, the language, and the location of the polygon it describes. Polygon shapes are in a separate `polygons` table. Scene descriptions come from ground-level photos (Mapillary, Flickr, Google Landmarks v2, iNaturalist, KartaView, camera traps) grouped by look with [geo-rag](https://github.com/ananthu-aniraj/geo-rag); see [Scenes](#scenes). No photo is included.
 
+**Explore it on a map:** the [GeoReSeT Explorer](https://huggingface.co/spaces/me/data) shows the land-use sentences and scene photos on H3 cells, with their sources, languages and what places talk about.
+
 **The full dataset**, all sentences and all scene photos (each photo stands for its scene's description at that place):
 
 ![The full dataset per H3 cell](assets/map.png)

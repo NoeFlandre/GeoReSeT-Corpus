@@ -172,3 +172,27 @@ def test_publish_space_creates_a_static_space_and_replaces_its_data(tmp_path, mo
         and upload["delete_patterns"] == ["data/**"]
         and upload["folder_path"] == tmp_path
     )
+
+
+def test_folder_commits_keeps_the_asked_folders(monkeypatch):
+    from types import SimpleNamespace
+
+    entries = [
+        SimpleNamespace(path="data", last_commit=SimpleNamespace(oid="c1")),
+        SimpleNamespace(path="README.md", last_commit=SimpleNamespace(oid="c9")),
+        SimpleNamespace(path="scenes", last_commit=SimpleNamespace(oid="c2")),
+        SimpleNamespace(path="embeddings", last_commit=None),
+    ]
+    seen = {}
+
+    class _Api:
+        def list_repo_tree(self, repo, **kwargs):
+            seen.update(repo=repo, **kwargs)
+            return entries
+
+    monkeypatch.setattr(hub, "HfApi", _Api)
+    assert hub.folder_commits("me/d", "rev", ("data", "scenes", "embeddings")) == {
+        "data": "c1",
+        "scenes": "c2",
+    }
+    assert seen == {"repo": "me/d", "repo_type": "dataset", "revision": "rev", "expand": True}

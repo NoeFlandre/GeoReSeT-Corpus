@@ -4,6 +4,10 @@
 **Plus $scene_texts English scene descriptions, each labelled with a land-use / land-cover class by a vision-language model, tied to the locations of the $scene_photos geotagged photos they describe.**
 <!-- intro -->
  Scene descriptions come from ground-level photos (Mapillary, Flickr, Google Landmarks v2, iNaturalist, KartaView, camera traps) grouped by look with [geo-rag]($geo_rag_url); see [Scenes](#scenes). No photo is included.
+<!-- explore -->
+
+
+**Explore it on a map:** the [GeoReSeT Explorer](https://huggingface.co/spaces/$repo_id) shows the land-use sentences and scene photos on H3 cells, with their sources, languages and what places talk about.
 <!-- overview -->
  and all scene photos (each photo stands for its scene's description at that place)
 <!-- quickstart -->

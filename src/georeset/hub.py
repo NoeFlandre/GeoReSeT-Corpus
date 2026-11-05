@@ -28,6 +28,12 @@ def snapshot(repo: str, rev: str, dest: Path, patterns: list[str]) -> Path:
 EXTRA_UNITS = ("unlabelled", "polygons", "scenes", "scene_photos", "assets")
 
 
+def folder_commits(repo: str, rev: str, folders: tuple[str, ...]) -> dict[str, str]:
+    """The last commit of each top-level folder of a dataset repo at ``rev``."""
+    tree = HfApi().list_repo_tree(repo, repo_type="dataset", revision=rev, expand=True)
+    return {e.path: e.last_commit.oid for e in tree if e.path in folders and e.last_commit is not None}
+
+
 def publish_space(folder: Path, space: str) -> str:
     """Upload ``folder`` as the static Space ``space`` (created if missing), replacing its ``data/``."""
     api = HfApi()
