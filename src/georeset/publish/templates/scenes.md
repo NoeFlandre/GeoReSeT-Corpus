@@ -30,7 +30,7 @@ $scene_texts descriptions ($scene_words words) of $scene_photos geotagged ground
 
 Photos of the scenes per H3 cell:
 
-![Scene photos per H3 cell](assets/map_scenes.png)
+![Scene photos per H3 cell](assets/map_scenes.png)$themes_section_scenes
 
 A description belongs to all the photos of its cluster, and a cluster groups photos that **look** alike, not photos of one place: half the clusters have photos in 20 countries or more. So:
 

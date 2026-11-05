@@ -295,8 +295,14 @@ def test_card_with_both_pcas():
     text = card.render(card.Context(**{**_fused().__dict__, "themes": both}))
     configs = [c["config_name"] for c in DatasetCard(text).data.configs]
     assert configs[-2:] == ["embeddings", "scene_embeddings"]
-    assert text.index("assets/map_pc3.png") < text.index("assets/map_pca_scenes.png")
-    assert text.index("assets/map_pc3_scenes.png") < text.index("## Quick start")
+    # Each PCA sits after its corpus' density map: the sentences' in the overview, the scenes' in Scenes.
+    assert text.index("assets/map_pc3.png") < text.index("## Quick start") < text.index("## Scenes")
+    assert (
+        text.index("assets/map_scenes.png")
+        < text.index("assets/map_pca_scenes.png")
+        < text.index("assets/map_pc3_scenes.png")
+        < text.index("A description belongs")
+    )
     assert "the 56 2° hexagons holding 10 descriptions or more" in text
     assert "docs/pca_axes_scenes.md" in text
     assert "scene_embeddings/train-*.parquet           scene descriptions, one vector each" in text
@@ -308,7 +314,8 @@ def test_card_with_both_pcas():
 
 
 def test_card_without_themes_has_no_embeddings():
-    assert card.theme_parts(_fused()) == dict.fromkeys(card.THEME_PARTS, "")
+    names = ("section_landuse", "section_scenes", "files", "configs", "method")
+    assert card.theme_parts(_fused()) == dict.fromkeys(names, "")
     text = card.render(_fused())
     assert "embeddings" not in text and "map_pca" not in text
 

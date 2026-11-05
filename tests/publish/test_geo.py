@@ -2,6 +2,7 @@ import h3
 import numpy as np
 import polars as pl
 import pytest
+import shapely
 
 from georeset.publish import geo
 
@@ -115,3 +116,23 @@ def test_hexagon_grid_is_two_degrees():
     lon, lat = geo.hexagon_centres(np.array([0, 1, 53]))
     assert lon[1] == lon[0] and lat[1] - lat[0] == pytest.approx(180 / 52)
     assert lon[2] - lon[0] == pytest.approx(2)
+
+
+def test_hexagon_shapes_are_the_hexagons_around_their_centres():
+    index = np.array([0, 5, geo.HEXAGONS - 1])
+    shapes = geo.hexagon_shapes(index)
+    lon, lat = geo.hexagon_centres(index)
+    centroids = shapely.centroid(shapes)
+    np.testing.assert_allclose(shapely.get_x(centroids), lon)
+    np.testing.assert_allclose(shapely.get_y(centroids), lat)
+    # Two interleaved lattices of hexagons tile the plane: each covers half a lattice cell.
+    cell = 360 / geo.HEX_GRID[0] * 180 / geo.HEX_GRID[1]
+    np.testing.assert_allclose(shapely.area(shapes), cell / 2)
+
+
+def test_land_hexagons():
+    land = geo.land_hexagons()
+    paris, pacific = geo.hexagons(np.array([2.35, -140.0]), np.array([48.85, -10.0]))
+    assert paris in land and pacific not in land
+    assert 0.2 < len(land) / geo.HEXAGONS < 0.5
+    assert np.all(np.diff(land) > 0)

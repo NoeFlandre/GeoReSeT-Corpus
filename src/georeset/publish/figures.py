@@ -109,26 +109,31 @@ def _hexagons(ax, index: np.ndarray, values: np.ndarray, **kwargs):
     return _hexbin(ax, centres, C=values, reduce_C_function=np.max, edgecolors="face", **kwargs)
 
 
-def rgb_map(index: np.ndarray, rgb: np.ndarray, path: Path) -> Path:
-    """Hexagons coloured by ``rgb`` (one row of three values in [0, 1] per hexagon)."""
+def _land(ax, land: np.ndarray) -> None:
+    """``land`` hexagons in light grey, under the data."""
+    _hexagons(ax, land, np.zeros(len(land)), cmap=ListedColormap([EMPTY]))
+
+
+def rgb_map(index: np.ndarray, rgb: np.ndarray, path: Path, land: np.ndarray, caption: str) -> Path:
+    """Hexagons coloured by ``rgb`` (one row of three values in [0, 1] per hexagon), over grey ``land``."""
     fig, ax = _figure(12, 6.4)
+    _land(ax, land)
     hexes = _hexagons(ax, index, np.arange(len(index)))
     drawn = rgb[np.asarray(hexes.get_array(), dtype=int)]
     hexes.set_array(None)
     hexes.set_facecolor(drawn)
     hexes.set_edgecolor(drawn)
     _world(ax)
-    caption = (
-        f"Mean sentence embedding per {HEX_DEGREES}° hexagon: principal components 1, 2, 3 "
-        "as red, green, blue (each from its 2nd to 98th percentile)"
-    )
     fig.text(0.5, 0.06, caption, ha="center", color=TEXT_SECONDARY, fontsize=9)
     return _save(fig, path)
 
 
-def diverging_map(index: np.ndarray, values: np.ndarray, limit: float, label: str, path: Path) -> Path:
+def diverging_map(
+    index: np.ndarray, values: np.ndarray, limit: float, label: str, path: Path, land: np.ndarray
+) -> Path:
     """Hexagons coloured by ``values`` on a two-sided ramp from ``-limit`` to ``limit``, clipped beyond."""
     fig, ax = _figure(12, 6.4)
+    _land(ax, land)
     cmap = LinearSegmentedColormap.from_list("diverging", DIVERGING)
     hexes = _hexagons(ax, index, values, cmap=cmap, norm=Normalize(-limit, limit))
     _world(ax)
