@@ -214,3 +214,16 @@ def test_extremes_and_language_mix():
     assert high["id"].to_list() == ["a", "c"]
     assert low["id"].to_list() == ["d", "b"]
     assert stats.language_mix(scored).rows() == [("x", 0.75), ("y", 0.25)]
+
+
+def test_photo_hexagons_pairs_each_scene_with_its_photos_hexagons():
+    photos = pl.LazyFrame(
+        {
+            "scene_id": [1, 1, 1, 2, 2],
+            "lat": [48.85, 48.86, -33.9, 48.85, 95.0],
+            "lon": [2.35, 2.36, 18.4, 2.35, 0.0],
+        }
+    )
+    paris, cape = geo.hexagons(np.array([2.35, 18.4]), np.array([48.85, -33.9]))
+    expected = sorted([(1, paris), (1, cape), (2, paris)])
+    assert stats.photo_hexagons(photos).rows() == expected

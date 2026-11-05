@@ -7,7 +7,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from georeset.publish import card, themes
+from georeset.publish import card, geo, themes
 
 # Five places, far apart, each with its own direction in a 4-d embedding space.
 PLACES = [(48.8, 2.3), (-33.9, 18.4), (35.7, 139.7), (40.7, -74.0), (-22.9, -43.2)]
@@ -184,3 +184,29 @@ def test_axes_markdown_escapes_and_quiet_axes():
     assert "50.0% of the variance; language R² 0.10." in text
     assert text.count("Warning") == 1
     assert "French · fra_Latn 100.0%" in text
+
+
+def test_compute_with_places_counts_each_text_once_per_hexagon(tmp_path, monkeypatch):
+    monkeypatch.setattr(themes, "MIX", 6)
+    themes.write_sentences(_data(12), tmp_path / "s", shards=2)
+    sentences = sorted((tmp_path / "s").glob("*.parquet"))
+    embeddings = _embed(sentences, tmp_path / "e")
+    rows = pl.read_parquet(tmp_path / "s" / "*.parquet")
+    hexes = geo.hexagons(np.array([lon for _, lon in PLACES]), np.array([lat for lat, _ in PLACES]))
+    # Every text also counts in the first place's hexagon; texts of place 0 count there once.
+    own = geo.hexagons(rows["lon"].to_numpy(), rows["lat"].to_numpy())
+    places = pl.concat(
+        [
+            pl.DataFrame({"id": rows["id"], "hexagon": own}),
+            pl.DataFrame({"id": rows["id"], "hexagon": np.full(rows.height, hexes[0])}),
+        ]
+    ).unique()
+    corpus = replace(themes.LANDUSE, min_texts=10)
+    out = themes.compute(sentences, embeddings, tmp_path / "w", corpus, places)
+    hexagons = pl.read_parquet(out / "hexagons.parquet").sort("hexagon")
+    counts = dict(zip(hexagons["hexagon"].to_list(), hexagons["n"].to_list(), strict=True))
+    assert counts[int(hexes[0])] == 60 and counts[int(hexes[1])] == 12
+    assert json.loads((out / "summary.json").read_text())["sentences"] == 60
+    # Axis ends list each text once, wherever it counts.
+    ends = pl.read_parquet(out / "ends.parquet")
+    assert ends.group_by("pc", "end").agg(pl.col("id").is_unique().all())["id"].all()

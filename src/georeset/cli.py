@@ -10,7 +10,7 @@ import typer
 from georeset import hub
 from georeset.build import fuse as fusion
 from georeset.build import pipeline, stage
-from georeset.publish import report, themes
+from georeset.publish import report, stats, themes
 from georeset.sources import description, website, wiki
 
 SOURCES = (website.SOURCE, description.SOURCE, wiki.SOURCE)
@@ -109,9 +109,14 @@ def themes_cmd(
 ) -> None:
     """PCA of a corpus' embeddings per hexagon, from its folder on the Hub, into ``work/themes/<corpus>``."""
     chosen = themes.CORPORA[corpus]
-    hub.snapshot(repo, hub.revision(repo), cache, [f"{chosen.folder}/*"])
+    revision = hub.revision(repo)
+    hub.snapshot(repo, revision, cache, [f"{chosen.folder}/*"])
+    places = None
+    if chosen.places:
+        places = stats.photo_hexagons(pl.scan_parquet(f"hf://datasets/{repo}@{revision}/{chosen.places}"))
     shards = sorted(sentences.glob("train-*.parquet"))
-    typer.echo(themes.compute(shards, [cache / chosen.folder / s.name for s in shards], work, chosen))
+    vectors = [cache / chosen.folder / s.name for s in shards]
+    typer.echo(themes.compute(shards, vectors, work, chosen, places))
 
 
 @app.command()

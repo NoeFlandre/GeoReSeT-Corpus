@@ -37,6 +37,7 @@ LANDUSE = card.Corpus(
     min_texts=50,
     axes={1: ("", ""), 2: ("", ""), 3: ("", "")},
     languages=True,
+    placement="at its location",
 )
 SCENES = card.Corpus(
     name="scenes",
@@ -48,11 +49,13 @@ SCENES = card.Corpus(
     shards=1,
     min_texts=10,
     axes={
-        1: ("dense towns", "arid open land"),
-        2: ("paved roads", "lakes and forests"),
-        3: ("roads through forest", "historic city centres"),
+        1: ("paved urban streets", "arid rugged land"),
+        2: ("lakes and forests", "dry open land"),
+        3: ("lush tropical vegetation", "snow, ice and rock"),
     },
     languages=False,
+    placement="once in every hexagon where its scene has photos",
+    places="scene_photos/*.parquet",
     suffix="_scenes",
 )
 CORPORA = {corpus.name: corpus for corpus in (LANDUSE, SCENES)}
@@ -85,13 +88,26 @@ def read_vectors(source, filesystem=None) -> tuple[pl.Series, np.ndarray]:
 
 
 def _pairs(sentences: list[Path], embeddings: list, filesystem) -> Iterator[tuple[pl.DataFrame, np.ndarray]]:
-    """Each sentence shard with a ``hexagon`` column, and the vectors of its rows."""
+    """Each sentence shard and the vectors of its rows."""
     for text, source in zip(sentences, embeddings, strict=True):
         rows = pl.read_parquet(text)
         ids, vectors = read_vectors(source, filesystem)
         if not rows["id"].equals(ids, check_names=False):
             raise ValueError(f"{source} does not match {text} row for row")
-        yield rows.with_columns(hexagon=geo.hexagons(rows["lon"].to_numpy(), rows["lat"].to_numpy())), vectors
+        yield rows, vectors
+
+
+def _placed(pairs, places: pl.DataFrame | None) -> Iterator[tuple[pl.DataFrame, np.ndarray]]:
+    """Rows with a ``hexagon`` column: their own location's, or one row per hexagon in ``places``."""
+    for rows, vectors in pairs:
+        if places is None:
+            yield (
+                rows.with_columns(hexagon=geo.hexagons(rows["lon"].to_numpy(), rows["lat"].to_numpy())),
+                vectors,
+            )
+            continue
+        placed = rows.with_row_index("row").join(places, on="id")
+        yield placed, vectors[placed["row"].to_numpy()]
 
 
 def ends(scored: pl.DataFrame, n: int) -> pl.DataFrame:
@@ -140,23 +156,31 @@ def _final_ends(candidates: pl.DataFrame) -> pl.DataFrame:
 
 
 def compute(
-    sentences: list[Path], embeddings: list, work: Path, corpus: card.Corpus = LANDUSE, filesystem=None
+    sentences: list[Path],
+    embeddings: list,
+    work: Path,
+    corpus: card.Corpus = LANDUSE,
+    places: pl.DataFrame | None = None,
+    filesystem=None,
 ) -> Path:
-    """Hexagon means, their PCA, and each axis' most extreme texts, into ``work/themes/<corpus>``."""
-    sums, counts, mix = _hexagon_totals(_pairs(sentences, embeddings, filesystem))
+    """Hexagon means, their PCA, and each axis' most extreme texts, into ``work/themes/<corpus>``.
+
+    ``places`` (``id``, ``hexagon``): the hexagons each text counts in, instead of its own location's.
+    """
+    sums, counts, mix = _hexagon_totals(_placed(_pairs(sentences, embeddings, filesystem), places))
     kept = np.flatnonzero(counts >= corpus.min_texts)
     means = sums[kept] / counts[kept, None]
     fit = stats.pca(means, COMPONENTS)
     hexagons = _with_scores(pl.DataFrame({"hexagon": kept, "n": counts[kept]}), fit.scores(means))
-    best = [
-        ends(_with_scores(rows, fit.scores(vectors)), MIX)
-        for rows, vectors in _pairs(sentences, embeddings, filesystem)
-    ]
+    texts, best = 0, []
+    for rows, vectors in _pairs(sentences, embeddings, filesystem):
+        texts += rows.height
+        best.append(ends(_with_scores(rows, fit.scores(vectors)), MIX))
     out = work / "themes" / corpus.name
     out.mkdir(parents=True, exist_ok=True)
     hexagons.join(stats.dominant_language(mix), on="hexagon").write_parquet(out / "hexagons.parquet")
     _final_ends(pl.concat(best)).write_parquet(out / "ends.parquet")
-    summary = {"sentences": int(counts.sum()), "explained": fit.explained.tolist()}
+    summary = {"sentences": texts, "explained": fit.explained.tolist()}
     (out / "summary.json").write_text(json.dumps(summary))
     return out
 
@@ -239,7 +263,8 @@ def axes_markdown(ends: pl.DataFrame, axes: card.Themes) -> str:
     lines = [
         f"# What places talk about: the PCA axes of the {corpus.what}",
         "",
-        f"PCA of the mean embedding of the {axes.texts:,} {corpus.what} in each of "
+        f"PCA of the mean embedding of the {axes.texts:,} {corpus.what}, each counted {corpus.placement}, "
+        "in each of "
         f"{axes.hexagons:,} {geo.HEX_DEGREES}° hexagons with {corpus.min_texts} {corpus.unit} or more. "
         f"Scores below are projections on each axis.{check}",
         "",

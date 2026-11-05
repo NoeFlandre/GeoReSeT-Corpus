@@ -156,6 +156,14 @@ def scene_sentences(scenes: pl.LazyFrame) -> pl.LazyFrame:
     return rows.sort("id").unique("text", keep="first", maintain_order=True)
 
 
+def photo_hexagons(photos: pl.LazyFrame) -> pl.DataFrame:
+    """Each (``id``, ``hexagon``) pair where scene ``id`` has photos, once."""
+    points = photos.select("scene_id", "lat", "lon").collect(engine="streaming")
+    hexes = geo.hexagons(points["lon"].to_numpy(), points["lat"].to_numpy())
+    pairs = pl.DataFrame({"id": points["scene_id"], "hexagon": hexes}).filter(pl.col("hexagon") >= 0)
+    return pairs.unique().sort("id", "hexagon")
+
+
 def hexagon_sums(hexes: np.ndarray, vectors: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Sum of the vectors and their count per hexagon index (``geo.HEXAGONS`` rows); -1 is dropped."""
     sums = np.zeros((geo.HEXAGONS, vectors.shape[1]))
