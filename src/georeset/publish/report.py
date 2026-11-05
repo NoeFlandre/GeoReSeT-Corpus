@@ -8,7 +8,7 @@ from pathlib import Path
 import polars as pl
 
 from georeset.build.pipeline import Layout
-from georeset.publish import card, figures, geo, stats
+from georeset.publish import card, figures, geo, stats, themes
 
 MAP_RESOLUTION = 5
 # Sentence maps after the full dataset (map.png): file name -> rows drawn.
@@ -65,6 +65,15 @@ def draw_maps(data: pl.LazyFrame, out: Path) -> None:
         figures.world_map(counts, maps / "map_scenes.png", "Photos", MAP_RESOLUTION, full)
 
 
+def theme_context(work: Path, assets: Path) -> tuple[card.Themes, ...]:
+    """Maps and axes report of each embeddings PCA that ``georeset themes`` has computed."""
+    return tuple(
+        themes.render(work, assets, corpus)
+        for corpus in themes.CORPORA.values()
+        if (work / "themes" / corpus.name / "summary.json").is_file()
+    )
+
+
 def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
     data = pl.scan_parquet(layout.out / "data" / "*" / "*" / "*.parquet")
     draw_maps(data, layout.out)
@@ -81,6 +90,7 @@ def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
         sources=json.loads((layout.work / "revisions.json").read_text()),
         code_url=code_url,
         scenes=scene_context(layout.out, layout.work),
+        themes=theme_context(layout.work, layout.out / "assets"),
     )
     hero = HERO if context.scenes is None else FUSED_HERO
     shutil.copyfile(str(hero), layout.out / "assets" / "hero.png")

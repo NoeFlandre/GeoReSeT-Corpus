@@ -14,6 +14,8 @@ from georeset.sources import scenes as scenes_source
 
 TEMPLATE = files("georeset.publish").joinpath("templates/card.md")
 SCENES_TEMPLATE = files("georeset.publish").joinpath("templates/scenes.md")
+THEMES_TEMPLATE = files("georeset.publish").joinpath("templates/themes.md")
+THEME_PARTS = ("section", "files", "configs", "method")
 SCENE_PARTS = (
     "headline",
     "intro",
@@ -130,6 +132,41 @@ class Scenes:
 
 
 @dataclass(frozen=True)
+class Corpus:
+    """The texts of one embeddings PCA, where their vectors live, and what its outputs are called."""
+
+    name: str
+    source: str  # parquet glob of the texts in the dataset repo
+    folder: str  # of the dataset repo holding the vectors
+    what: str  # the texts, plural
+    unit: str  # what a hexagon's texts are counted in
+    selection: str  # which texts, for the methodology
+    shards: int
+    min_texts: int  # per hexagon
+    axes: dict[int, tuple[str, str]]  # (low end, high end) per component, named from its axes report
+    languages: bool  # whether the texts vary in language, so the language check applies
+    suffix: str = ""  # of its maps and axes report
+
+    @property
+    def report(self) -> str:
+        return f"pca_axes{self.suffix}.md"
+
+
+@dataclass(frozen=True)
+class Themes:
+    """The PCA of one corpus' embeddings per hexagon (``themes``)."""
+
+    corpus: Corpus
+    model: str
+    prompt: str
+    texts: int
+    hexagons: int
+    explained: list[float]
+    language_r2: list[float]
+    warning: float  # language R² above which an axis is flagged
+
+
+@dataclass(frozen=True)
 class Context:
     repo_id: str
     by_source: pl.DataFrame
@@ -141,6 +178,7 @@ class Context:
     sources: dict[str, str]
     code_url: str
     scenes: Scenes | None = None
+    themes: tuple[Themes, ...] = ()
 
 
 def _bold_total(df: pl.DataFrame, column: str) -> pl.DataFrame:
@@ -188,7 +226,9 @@ def _front_matter(ctx: Context) -> str:
         "task_categories": ["text-classification"],
         "tags": list(kind.tags),
         "size_categories": [size_category(_total(ctx)["sentences"])],
-        "configs": configs(ctx.partitions) + folder_configs(kind.folders),
+        "configs": configs(ctx.partitions)
+        + folder_configs(kind.folders)
+        + folder_configs(tuple(themes.corpus.folder for themes in ctx.themes)),
     }
     # JSON is valid YAML: no YAML dependency, no quoting surprises.
     return "\n".join(f"{key}: {json.dumps(value)}" for key, value in meta.items())
@@ -246,13 +286,74 @@ def scene_parts(ctx: Context) -> dict[str, str]:
     }
 
 
+_COLOURS = ("red", "green", "blue")
+
+
+def legend(themes: Themes) -> str:
+    """One line per principal component: its colour, share of variance, ends and (if any) language R²."""
+    lines = []
+    for i, (share, r2) in enumerate(zip(themes.explained, themes.language_r2, strict=True), 1):
+        low, high = themes.corpus.axes[i]
+        line = f"* **PC{i}** ({_COLOURS[i - 1]}, {pct(share)} of the variance): {low} ↔ {high}."
+        if themes.corpus.languages:
+            flag = " Mostly language: read with care." if r2 > themes.warning else ""
+            line += f" The hexagon's most frequent language explains {r2:.0%} of it.{flag}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+# Method steps are list items, one per line; the other parts carry their own separators.
+_THEME_JOINS = {"method": "\n"}
+
+
+def _theme_values(ctx: Context, themes: Themes, step: int) -> dict[str, str]:
+    corpus = themes.corpus
+    return {
+        "themes_model": themes.model,
+        "themes_prompt": themes.prompt.replace("\n", "\\n"),
+        "themes_texts": fmt(themes.texts),
+        "themes_hexagons": fmt(themes.hexagons),
+        "themes_min": fmt(corpus.min_texts),
+        "themes_what": corpus.what,
+        "themes_unit": corpus.unit,
+        "themes_selection": corpus.selection,
+        "themes_folder": corpus.folder,
+        "themes_files": f"{corpus.folder}/train-*.parquet".ljust(43),
+        "themes_suffix": corpus.suffix,
+        "themes_report": corpus.report,
+        "themes_legend": legend(themes),
+        "themes_step": str(step),
+        "code_url": ctx.code_url,
+    }
+
+
+def theme_parts(ctx: Context) -> dict[str, str]:
+    """The embeddings sections and their mentions, one per PCA (empty strings without any)."""
+    first = 7 + bool(ctx.scenes)  # after the six common steps and, if fused, the scenes step
+    template = parts(THEMES_TEMPLATE.read_text())
+    rendered = [
+        {
+            name: Template(body).substitute(_theme_values(ctx, themes, first + i))
+            for name, body in template.items()
+        }
+        for i, themes in enumerate(ctx.themes)
+    ]
+    return {name: _THEME_JOINS.get(name, "").join(r[name] for r in rendered) for name in THEME_PARTS}
+
+
+def _optional_parts(ctx: Context) -> dict[str, str]:
+    """``scenes_*`` and ``themes_*`` template values."""
+    scenes = {f"scenes_{name}": text for name, text in scene_parts(ctx).items()}
+    return scenes | {f"themes_{name}": text for name, text in theme_parts(ctx).items()}
+
+
 def render(ctx: Context) -> str:
     total = _total(ctx)
     template = Template(TEMPLATE.read_text())
     languages = sorted({lang for _, lang in ctx.partitions})
     kind = flavor(ctx)
     return template.substitute(
-        {f"scenes_{name}": text for name, text in scene_parts(ctx).items()},
+        _optional_parts(ctx),
         front_matter=_front_matter(ctx),
         title=kind.title,
         hero_alt=kind.hero_alt,

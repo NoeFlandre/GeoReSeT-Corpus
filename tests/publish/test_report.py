@@ -54,3 +54,11 @@ def test_plain_card_uses_plain_hero(layout):
     assert (layout.out / "assets" / "hero.png").read_bytes() == report.HERO.read_bytes()
     assert report.scene_context(layout.out, layout.work) is None
     assert report.scene_points(layout.out) is None
+
+
+def test_theme_context_renders_each_computed_pca(tmp_path, monkeypatch):
+    assert report.theme_context(tmp_path, tmp_path / "assets") == ()
+    (tmp_path / "themes" / "scenes").mkdir(parents=True)
+    (tmp_path / "themes" / "scenes" / "summary.json").write_text("{}")
+    monkeypatch.setattr(report.themes, "render", lambda work, assets, corpus: (work, assets, corpus.name))
+    assert report.theme_context(tmp_path, tmp_path / "assets") == ((tmp_path, tmp_path / "assets", "scenes"),)

@@ -1,4 +1,5 @@
 import h3
+import numpy as np
 import polars as pl
 import pytest
 
@@ -71,3 +72,46 @@ def test_edge_labels():
 )
 def test_short(n, expected):
     assert geo.short(n) == expected
+
+
+def _hexbin_cells(lon, lat):
+    """Index of the hexagon matplotlib's own ``hexbin`` puts each point in."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    cells = []
+    for x, y in zip(lon, lat, strict=True):
+        hexes = ax.hexbin([x], [y], gridsize=geo.HEX_GRID, extent=geo.HEX_EXTENT, mincnt=1)
+        lon_c, lat_c = hexes.get_offsets()[0]
+        cells.append((round(float(lon_c), 6), round(float(lat_c), 6)))
+        hexes.remove()
+    plt.close(fig)
+    return cells
+
+
+def test_hexagons_match_matplotlib_hexbin():
+    rng = np.random.default_rng(0)
+    lon = np.concatenate([rng.uniform(-180, 180, 300), [-180.0, 180.0, 0.0]])
+    lat = np.concatenate([rng.uniform(-89, 89, 300), [0.0, 0.0, -90.0]])
+    index = geo.hexagons(lon, lat)
+    assert (index >= 0).all()
+    assert (index < geo.HEXAGONS).all()
+    centre_lon, centre_lat = geo.hexagon_centres(index)
+    ours = [(round(float(x), 6), round(float(y), 6)) for x, y in zip(centre_lon, centre_lat, strict=True)]
+    assert ours == _hexbin_cells(lon, lat)
+
+
+def test_hexagons_both_lattices_and_outside():
+    centre_lon, centre_lat = geo.hexagon_centres(np.array([0, geo.HEXAGONS - 1]))
+    assert geo.hexagons(centre_lon, centre_lat).tolist() == [0, geo.HEXAGONS - 1]
+    assert geo.hexagons(np.array([200.0, 0.0]), np.array([0.0, 120.0])).tolist() == [-1, -1]
+
+
+def test_hexagon_grid_is_two_degrees():
+    assert geo.HEX_GRID == (180, 52)
+    lon, lat = geo.hexagon_centres(np.array([0, 1, 53]))
+    assert lon[1] == lon[0] and lat[1] - lat[0] == pytest.approx(180 / 52)
+    assert lon[2] - lon[0] == pytest.approx(2)

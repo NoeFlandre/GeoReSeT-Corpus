@@ -214,3 +214,104 @@ def test_sources_are_listed_one_per_line():
 )
 def test_area(m2, text):
     assert card.area(m2) == text
+
+
+_AXES = {1: ("towns", "farms"), 2: ("coast", "mountains"), 3: ("old", "new")}
+_LANDUSE = card.Corpus(
+    name="landuse",
+    source="data/*.parquet",
+    folder="embeddings",
+    what="relevant sentences",
+    unit="sentences",
+    selection="distinct sentences",
+    shards=2,
+    min_texts=50,
+    axes=_AXES,
+    languages=True,
+)
+_SCENES = card.Corpus(
+    name="scenes",
+    source="scenes/*.parquet",
+    folder="scene_embeddings",
+    what="scene descriptions",
+    unit="descriptions",
+    selection="distinct scene descriptions",
+    shards=1,
+    min_texts=10,
+    axes=_AXES,
+    languages=False,
+    suffix="_scenes",
+)
+
+
+def _themes(r2=(0.2, 0.7, 0.1), corpus=_LANDUSE):
+    return card.Themes(
+        corpus=corpus,
+        model="org/model",
+        prompt="Instruct: x\nQuery: ",
+        texts=1234,
+        hexagons=56,
+        explained=[0.4, 0.2, 0.1],
+        language_r2=list(r2),
+        warning=0.5,
+    )
+
+
+def test_themed_card_shows_maps_legend_and_embeddings():
+    ctx = card.Context(**{**_fused().__dict__, "themes": (_themes(),)})
+    text = card.render(ctx)
+    parsed = DatasetCard(text)
+    assert [c["config_name"] for c in parsed.data.configs][-1] == "embeddings"
+    maps = text.index("assets/map_wikimedia.png")
+    assert (
+        maps
+        < text.index("assets/map_pca.png")
+        < text.index("assets/map_pc3.png")
+        < text.index("## Quick start")
+    )
+    assert (
+        "* **PC1** (red, 40.0% of the variance): towns ↔ farms. "
+        "The hexagon's most frequent language explains 20% of it." in text
+    )
+    assert "* **PC2** (green, 20.0% of the variance): coast ↔ mountains." in text
+    assert text.count("Mostly language: read with care.") == 1
+    assert "each of the 56 2° hexagons holding 50 sentences or more" in text
+    assert "https://github.com/me/code/blob/master/docs/pca_axes.md" in text
+    assert "embeddings/train-*.parquet                 relevant sentences, one vector each" in text
+    assert "`scenes`, `scene_photos`, `embeddings`." in text
+    assert "\n8. **Embeddings of the relevant sentences.** The 1,234 distinct sentences" in text
+    assert "`Instruct: x\\nQuery: `" in text
+    assert "$" not in text.replace("$ ", "")
+    assert "\n\n\n" not in text.split("---", 2)[2].replace("```\n\n", "")
+
+
+def test_themes_step_follows_the_last_method_step():
+    text = card.render(card.Context(**{**_context().__dict__, "themes": (_themes(),)}))
+    assert "Code: https://github.com/me/code\n7. **Embeddings of the relevant sentences.**" in text
+
+
+def test_card_with_both_pcas():
+    both = (_themes(), _themes(corpus=_SCENES))
+    text = card.render(card.Context(**{**_fused().__dict__, "themes": both}))
+    configs = [c["config_name"] for c in DatasetCard(text).data.configs]
+    assert configs[-2:] == ["embeddings", "scene_embeddings"]
+    assert text.index("assets/map_pc3.png") < text.index("assets/map_pca_scenes.png")
+    assert text.index("assets/map_pc3_scenes.png") < text.index("## Quick start")
+    assert "the 56 2° hexagons holding 10 descriptions or more" in text
+    assert "docs/pca_axes_scenes.md" in text
+    assert "scene_embeddings/train-*.parquet           scene descriptions, one vector each" in text
+    assert "`embeddings`, `scene_embeddings`." in text
+    assert "**Embeddings of the relevant sentences.**" in text
+    assert "\n9. **Embeddings of the scene descriptions.** The 1,234 distinct scene descriptions" in text
+    # The language check is shown for the sentences only.
+    assert text.count("most frequent language explains") == 3
+
+
+def test_card_without_themes_has_no_embeddings():
+    assert card.theme_parts(_fused()) == dict.fromkeys(card.THEME_PARTS, "")
+    text = card.render(_fused())
+    assert "embeddings" not in text and "map_pca" not in text
+
+
+def test_themes_template_has_every_part():
+    assert tuple(card.parts(card.THEMES_TEMPLATE.read_text())) == card.THEME_PARTS
