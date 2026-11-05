@@ -7,8 +7,8 @@ family of its global scores; how it differs from its surroundings shifts it a li
 
 import numpy as np
 
-LIGHTNESS = 0.10  # OKLab lightness added at a local score of ±1
-HUE = 20.0  # degrees of hue turned at a local score of ±1
+LIGHTNESS = 0.22  # OKLab lightness added at a local score of ±1
+HUE = 45.0  # degrees of hue turned at a local score of ±1
 _L_RANGE = (0.2, 0.97)  # keep nudged colours away from black and white
 
 _TO_LMS = np.array(
