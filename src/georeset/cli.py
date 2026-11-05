@@ -10,7 +10,7 @@ import typer
 from georeset import hub
 from georeset.build import fuse as fusion
 from georeset.build import pipeline, stage
-from georeset.publish import report, themes
+from georeset.publish import report, space, themes
 from georeset.sources import description, website, wiki
 
 SOURCES = (website.SOURCE, description.SOURCE, wiki.SOURCE)
@@ -122,6 +122,32 @@ def themes_cmd(
     shards = sorted(sentences.glob("train-*.parquet"))
     vectors = [cache / chosen.folder / s.name for s in shards]
     typer.echo(themes.compute(shards, vectors, work, chosen, photos))
+
+
+@app.command("space")
+def space_cmd(
+    work: Work = Path("work-fused"),
+    cache: Annotated[Path, typer.Option(help="Where the dataset is downloaded (node-local).")] = Path(
+        "/tmp/georeset"
+    ),
+    out: Annotated[Path, typer.Option(help="The Space's files.")] = Path("space"),
+    repo: str = FUSED_REPO_ID,
+    target: Annotated[str, typer.Option(help="The Space to upload to; empty: build only.")] = FUSED_REPO_ID,
+) -> None:
+    """Build the explorer Space from the dataset (current revision) and ``georeset themes``; upload it."""
+    revision = hub.revision(repo)
+    hub.snapshot(repo, revision, cache, ["data/*", "scene_photos/*", "scenes/*"])
+    space.build(
+        pl.scan_parquet(cache / "data" / "*" / "*" / "*.parquet"),
+        pl.scan_parquet(cache / "scene_photos" / "*.parquet"),
+        pl.scan_parquet(cache / "scenes" / "*.parquet"),
+        work,
+        out / "data",
+        repo,
+        revision,
+    )
+    space.copy_app(out)
+    typer.echo(hub.publish_space(out, target) if target else out)
 
 
 @app.command()

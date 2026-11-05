@@ -149,3 +149,26 @@ def test_download(tmp_path, monkeypatch):
         "revision": "abc",
         "local_dir": tmp_path,
     }
+
+
+def test_publish_space_creates_a_static_space_and_replaces_its_data(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    api = _FakeApi()
+    api.upload_folder = lambda **kwargs: (
+        api.calls.append(("upload_folder", (), kwargs))
+        or SimpleNamespace(commit_url="https://hf.co/spaces/me/s/commit/1")
+    )
+    monkeypatch.setattr(hub, "HfApi", lambda: api)
+    assert hub.publish_space(tmp_path, "me/s") == "https://hf.co/spaces/me/s/commit/1"
+    assert api.calls[0] == (
+        "create_repo",
+        ("me/s",),
+        {"repo_type": "space", "space_sdk": "static", "exist_ok": True},
+    )
+    upload = api.calls[1][2]
+    assert (
+        upload["repo_type"] == "space"
+        and upload["delete_patterns"] == ["data/**"]
+        and upload["folder_path"] == tmp_path
+    )

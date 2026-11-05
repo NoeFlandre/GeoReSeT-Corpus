@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GeoReSeT Explorer</title>
+<meta name="description" content="Explore where the GeoReSeT corpus speaks about the land, on H3 cells.">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="map"></div>
+
+<aside id="panel">
+  <header>
+    <h1>GeoReSeT Explorer</h1>
+    <button id="collapse" aria-label="Collapse the panel" aria-expanded="true">−</button>
+  </header>
+  <div id="panel-body">
+    <form id="search" role="search">
+      <input id="search-input" type="search" placeholder="Search a place" aria-label="Search a place" autocomplete="off">
+    </form>
+    <div id="layers" role="radiogroup" aria-label="Layer"></div>
+    <div id="legend" aria-live="polite"></div>
+    <p id="resolution" class="muted"></p>
+    <details id="about">
+      <summary>How to read this</summary>
+      <p>Only the sentences labelled relevant to land use (<code>landuse</code> true) are shown, from every source
+      or one. Every number is counted per H3 cell of resolution 5 (about 250&nbsp;km²). Zoomed out, each larger cell
+      shows the <em>mean</em> of its resolution-5 cells, so every place counts once however much is written there.
+      Zoom in to reach resolution 5. Click a cell for its numbers, sample sentences and a scene.</p>
+      <p>The <em>what places talk about</em> layers colour each cell by its mean text embedding on three
+      principal components, as on the dataset card: similar colours, similar descriptions.</p>
+    </details>
+  </div>
+  <footer id="source" class="muted"></footer>
+</aside>
+
+<aside id="drawer" hidden>
+  <button id="close" aria-label="Close">×</button>
+  <div id="drawer-body"></div>
+</aside>
+
+<div id="loading" hidden>Loading…</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
+<script src="https://unpkg.com/deck.gl@9.0.38/dist.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

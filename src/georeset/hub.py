@@ -28,6 +28,20 @@ def snapshot(repo: str, rev: str, dest: Path, patterns: list[str]) -> Path:
 EXTRA_UNITS = ("unlabelled", "polygons", "scenes", "scene_photos", "assets")
 
 
+def publish_space(folder: Path, space: str) -> str:
+    """Upload ``folder`` as the static Space ``space`` (created if missing), replacing its ``data/``."""
+    api = HfApi()
+    api.create_repo(space, repo_type="space", space_sdk="static", exist_ok=True)
+    info = api.upload_folder(
+        folder_path=folder,
+        repo_id=space,
+        repo_type="space",
+        delete_patterns=["data/**"],
+        commit_message="Explorer: data and app",
+    )
+    return str(info.commit_url)
+
+
 def upload_units(folder: Path) -> list[str]:
     """Commit units: each data source, then unlabelled, polygons, scenes, assets; README last."""
     dirs = [*sorted(folder.glob("data/*")), *(folder / unit for unit in EXTRA_UNITS)]
