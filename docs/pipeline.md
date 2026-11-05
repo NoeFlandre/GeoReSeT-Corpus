@@ -87,3 +87,22 @@ load the next shards in the background. The axes' names in `georeset.publish.the
 [scene descriptions](pca_axes_scenes.md). The sentences' axes are
 also checked against language (R² of each axis on the cell's most frequent language); the scene
 descriptions are all English.
+
+## Explorer Space
+
+[An interactive map](https://huggingface.co/spaces/NoeFlandre/GeoReSeT-Corpus-Fused) of the fused dataset,
+on the same two layers: numbers per H3 cell of resolution 5, and coarser cells (resolutions 2 to 4, as the map
+zooms out) showing the mean of their resolution-5 cells. It shows only the sentences labelled relevant
+(`landuse` true), from every source or one; layers: those sentences, scene photos, their most frequent
+language and the three PCA maps; a click shows a cell's numbers, up to three relevant sentences and the
+scene with the most photos there. The dataset itself is not changed.
+
+```
+georeset themes --corpus C ...   (each corpus, as above: also writes every resolution-5 cell's scores)
+georeset space                   data from the dataset's current revision, app files → the Space
+```
+
+`georeset.publish.space` writes the data (`r2`–`r4.parquet`, `r5/` and `samples/` split by resolution-1
+parent, loaded as the map zooms in) and `manifest.json`, which names the dataset revision it was built from.
+The app (`georeset/publish/space_app`, a static page: MapLibre, deck.gl, h3-js, hyparquet) shows that
+revision and says when the dataset has changed since: rebuild with the two steps above after each release.

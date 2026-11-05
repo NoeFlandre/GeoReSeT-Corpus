@@ -19,5 +19,6 @@
 ::: georeset.publish.figures
 ::: georeset.publish.card
 ::: georeset.publish.themes
+::: georeset.publish.space
 ::: georeset.publish.report
 ::: georeset.hub

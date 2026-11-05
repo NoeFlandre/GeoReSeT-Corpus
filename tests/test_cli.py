@@ -182,3 +182,28 @@ def test_themes_downloads_embeddings_then_computes(tmp_path, monkeypatch):
 
 def test_corpus_choices_are_the_corpora():
     assert [c.value for c in cli.CorpusName] == list(cli.themes.CORPORA)
+
+
+def test_space_builds_from_the_current_revision_then_uploads(tmp_path, monkeypatch):
+    seen = {}
+    monkeypatch.setattr(hub, "revision", lambda repo: "rev")
+    monkeypatch.setattr(
+        hub, "snapshot", lambda repo, rev, dest, patterns: seen.update(get=(repo, rev, patterns))
+    )
+    monkeypatch.setattr(cli.pl, "scan_parquet", lambda glob: glob)
+    monkeypatch.setattr(
+        cli.space,
+        "build",
+        lambda data, photos, scenes, work, out, repo, rev: seen.update(build=(data, out, repo, rev)),
+    )
+    monkeypatch.setattr(cli.space, "copy_app", lambda out: seen.update(app=out))
+    monkeypatch.setattr(hub, "publish_space", lambda out, target: f"uploaded {out} to {target}")
+    cache, out = tmp_path / "c", tmp_path / "s"
+    args = ["space", "--cache", str(cache), "--out", str(out), "--repo", "me/d", "--target", "me/s"]
+    result = runner.invoke(cli.app, args)
+    assert result.exit_code == 0, result.output
+    assert seen["get"] == ("me/d", "rev", ["data/*", "scene_photos/*", "scenes/*"])
+    assert seen["build"] == (cache / "data" / "*" / "*" / "*.parquet", out / "data", "me/d", "rev")
+    assert seen["app"] == out and result.output.strip() == f"uploaded {out} to me/s"
+    built = runner.invoke(cli.app, [*args[:-2], "--target", ""])
+    assert built.output.strip() == str(out)

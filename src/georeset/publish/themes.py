@@ -265,6 +265,8 @@ def compute(
 ) -> Path:
     """Two-layer means (H3 cells, then their parents), their PCA and axis ends, in ``work/themes/<corpus>``.
 
+    ``cells.parquet`` keeps every resolution-5 cell's scores on the axes, for the explorer Space.
+
     ``photos`` (``scene_id``, ``lat``, ``lon``): each text counts once in every cell of its photos,
     instead of in its own location's.
     """
@@ -281,6 +283,10 @@ def compute(
     languages = stats.dominant_language(mix.group_by("hexagon", "language").agg(pl.col("n").sum()))
     hexagons.join(languages, on="hexagon").write_parquet(out / "hexagons.parquet")
     best.write_parquet(out / "ends.parquet")
+    cell_scores = pl.DataFrame(
+        {"cell": cells.ids, "n": cells.texts}, schema={"cell": pl.UInt64, "n": pl.Int64}
+    )
+    _with_scores(cell_scores, fit.scores(means)).write_parquet(out / "cells.parquet")
     summary = {"sentences": total, "cells": len(cells.ids), "explained": fit.explained.tolist()}
     (out / "summary.json").write_text(json.dumps(summary))
     return out
