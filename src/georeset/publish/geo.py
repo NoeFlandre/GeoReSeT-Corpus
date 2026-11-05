@@ -1,10 +1,13 @@
 """Numbers behind the maps: H3 binning, cell centres, log-spaced colour bins, the hexagon grid."""
 
 import itertools
+from functools import cache
+from importlib.resources import files
 
 import h3
 import numpy as np
 import polars as pl
+import shapely
 
 HEX_DEGREES = 2
 # Rows of the hexagon grid that make regular hexagons over 180° of latitude.
@@ -18,6 +21,13 @@ _X0 = HEX_EXTENT[0] - 1e-9 * (HEX_EXTENT[1] - HEX_EXTENT[0])
 _SX = (HEX_EXTENT[1] - HEX_EXTENT[0]) * (1 + 2e-9) / _NX
 _Y0 = HEX_EXTENT[2]
 _SY = (HEX_EXTENT[3] - HEX_EXTENT[2]) / _NY
+# Corners of a hexbin hexagon around its centre, as matplotlib draws them.
+_CORNERS = np.array([[0.5, -0.5], [0.5, 0.5], [0.0, 1.0], [-0.5, 0.5], [-0.5, -0.5], [0.0, -1.0]]) * [
+    _SX,
+    _SY / 3,
+]
+# Natural Earth 1:110m land (public domain, v5.1.2).
+LAND = files("georeset.publish").joinpath("assets/ne_110m_land.geojson")
 
 
 def hex_counts(points: pl.DataFrame, resolution: int) -> pl.DataFrame:
@@ -84,3 +94,17 @@ def hexagon_centres(index: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     column = np.where(first, index // (_NY + 1), second // _NY + 0.5)
     row = np.where(first, index % (_NY + 1), second % _NY + 0.5)
     return _X0 + column * _SX, _Y0 + row * _SY
+
+
+def hexagon_shapes(index: np.ndarray) -> np.ndarray:
+    """Each hexagon as a shapely polygon, the shape ``hexbin`` draws."""
+    lon, lat = hexagon_centres(index)
+    return shapely.polygons(np.stack([lon, lat], axis=1)[:, None, :] + _CORNERS)
+
+
+@cache
+def land_hexagons() -> np.ndarray:
+    """Indices of the hexagons that touch land."""
+    land = shapely.from_geojson(LAND.read_text())
+    shapely.prepare(land)
+    return np.flatnonzero(shapely.intersects(land, hexagon_shapes(np.arange(HEXAGONS))))

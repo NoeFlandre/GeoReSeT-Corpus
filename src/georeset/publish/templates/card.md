@@ -24,7 +24,7 @@ Sentences come from the websites, `description` tags and Wikipedia / Wikivoyage 
 
 ![OSM description sentences per H3 cell](assets/map_description.png)
 
-![Wikipedia and Wikivoyage sentences per H3 cell](assets/map_wikimedia.png)$themes_section
+![Wikipedia and Wikivoyage sentences per H3 cell](assets/map_wikimedia.png)$themes_section_landuse
 
 ## Quick start
 

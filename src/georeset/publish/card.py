@@ -16,6 +16,8 @@ TEMPLATE = files("georeset.publish").joinpath("templates/card.md")
 SCENES_TEMPLATE = files("georeset.publish").joinpath("templates/scenes.md")
 THEMES_TEMPLATE = files("georeset.publish").joinpath("templates/themes.md")
 THEME_PARTS = ("section", "files", "configs", "method")
+# Each corpus' section goes where its template asks for ``themes_section_<corpus>``.
+THEME_SECTIONS = ("landuse", "scenes")
 SCENE_PARTS = (
     "headline",
     "intro",
@@ -280,7 +282,7 @@ def scene_parts(ctx: Context) -> dict[str, str]:
     """The fused card's extra text, or empty strings for the plain corpus."""
     if ctx.scenes is None:
         return {name: "" for name in SCENE_PARTS}
-    values = _scene_values(ctx, ctx.scenes)
+    values = _scene_values(ctx, ctx.scenes) | {"themes_section_scenes": theme_parts(ctx)["section_scenes"]}
     return {
         name: Template(body).substitute(values) for name, body in parts(SCENES_TEMPLATE.read_text()).items()
     }
@@ -327,18 +329,24 @@ def _theme_values(ctx: Context, themes: Themes, step: int) -> dict[str, str]:
     }
 
 
-def theme_parts(ctx: Context) -> dict[str, str]:
-    """The embeddings sections and their mentions, one per PCA (empty strings without any)."""
+def _rendered_themes(ctx: Context) -> list[dict[str, str]]:
+    """The themes template's parts filled in for each PCA, in order."""
     first = 7 + bool(ctx.scenes)  # after the six common steps and, if fused, the scenes step
     template = parts(THEMES_TEMPLATE.read_text())
-    rendered = [
-        {
-            name: Template(body).substitute(_theme_values(ctx, themes, first + i))
-            for name, body in template.items()
-        }
+    return [
+        {name: Template(body).substitute(_theme_values(ctx, themes, first + i)) for name, body in template.items()}
         for i, themes in enumerate(ctx.themes)
     ]
-    return {name: _THEME_JOINS.get(name, "").join(r[name] for r in rendered) for name in THEME_PARTS}
+
+
+def theme_parts(ctx: Context) -> dict[str, str]:
+    """Each PCA's section (``section_<corpus>``) and their joint mentions (empty strings without any)."""
+    rendered = _rendered_themes(ctx)
+    sections = {f"section_{corpus}": "" for corpus in THEME_SECTIONS} | {
+        f"section_{themes.corpus.name}": r["section"] for themes, r in zip(ctx.themes, rendered, strict=True)
+    }
+    shared = {name: _THEME_JOINS.get(name, "").join(r[name] for r in rendered) for name in THEME_PARTS[1:]}
+    return sections | shared
 
 
 def _optional_parts(ctx: Context) -> dict[str, str]:

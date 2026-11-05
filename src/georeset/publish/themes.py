@@ -266,13 +266,20 @@ def render(work: Path, assets: Path, corpus: card.Corpus = LANDUSE) -> card.Them
         language_r2=stats.r_squared(scores, hexagons["language"].to_list()).tolist(),
         warning=LANGUAGE_WARNING,
     )
-    figures.rgb_map(index, stats.unit_scale(scores), assets / f"map_pca{corpus.suffix}.png")
+    land = geo.land_hexagons()
+    grey = f"grey: land with fewer than {corpus.min_texts} {corpus.unit} per hexagon"
+    caption = (
+        f"Mean embedding of the {corpus.what} per {geo.HEX_DEGREES}° hexagon: principal components 1, 2, 3 "
+        f"as red, green, blue (each from its 2nd to 98th percentile)\n{grey}"
+    )
+    figures.rgb_map(index, stats.unit_scale(scores), assets / f"map_pca{corpus.suffix}.png", land, caption)
     for i in range(COMPONENTS):
         low, high = corpus.axes[i + 1]
-        label = f"PC{i + 1} ({_share(axes.explained[i])} of variance): {low or 'low'} ↔ {high or 'high'}"
-        values = scores[:, i]
-        figures.diverging_map(
-            index, values, stats.symmetric_limit(values), label, assets / f"map_pc{i + 1}{corpus.suffix}.png"
+        label = (
+            f"PC{i + 1} ({_share(axes.explained[i])} of variance): {low or 'low'} ↔ {high or 'high'} ({grey})"
         )
+        values = scores[:, i]
+        path = assets / f"map_pc{i + 1}{corpus.suffix}.png"
+        figures.diverging_map(index, values, stats.symmetric_limit(values), label, path, land)
     (work / corpus.report).write_text(axes_markdown(pl.read_parquet(out / "ends.parquet"), axes))
     return axes
