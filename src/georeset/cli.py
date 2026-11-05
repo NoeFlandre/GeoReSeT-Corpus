@@ -145,6 +145,7 @@ def space_cmd(
         out / "data",
         repo,
         revision,
+        hub.folder_commits(repo, revision, space.FOLDERS),
     )
     space.copy_app(out)
     typer.echo(hub.publish_space(out, target) if target else out)

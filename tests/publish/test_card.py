@@ -286,6 +286,7 @@ def test_themed_card_shows_maps_legend_and_embeddings():
     assert "https://github.com/me/code/blob/master/docs/pca_axes.md" in text
     assert "embeddings/train-*.parquet                 relevant sentences, one vector each" in text
     assert "`scenes`, `scene_photos`, `embeddings`." in text
+    assert "[GeoReSeT Explorer](https://huggingface.co/spaces/me/data)" in text
     assert "\n8. **Embeddings of the relevant sentences.** The 1,234 distinct sentences" in text
     assert "`Instruct: x\\nQuery: `" in text
     assert "$" not in text.replace("$ ", "")

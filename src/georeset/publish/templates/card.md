@@ -8,7 +8,7 @@ $front_matter
 
 **$sentences sentences in $languages languages, tied to $polygons OpenStreetMap polygons in $regions regions, each labelled for land-use / land-cover relevance by an LLM.**$scenes_headline
 
-Sentences come from the websites, `description` tags and Wikipedia / Wikivoyage articles linked to OpenStreetMap polygons. Every row is one sentence with a boolean `landuse` label, the language, and the location of the polygon it describes. Polygon shapes are in a separate `polygons` table.$scenes_intro
+Sentences come from the websites, `description` tags and Wikipedia / Wikivoyage articles linked to OpenStreetMap polygons. Every row is one sentence with a boolean `landuse` label, the language, and the location of the polygon it describes. Polygon shapes are in a separate `polygons` table.$scenes_intro$scenes_explore
 
 **The full dataset**, all sentences$scenes_overview:
 

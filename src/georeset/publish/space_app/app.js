@@ -4,13 +4,14 @@ const { MapboxOverlay, H3HexagonLayer } = deck;
 const DATA = "data/";
 const API = "https://huggingface.co/api/datasets/";
 
+const PCA = "What places talk about (PCA)";
 const LAYERS = [
   { id: "relevant", group: "Volume", label: "Land-use sentences", kind: "count" },
   { id: "photos", group: "Volume", label: "Scene photos", kind: "count" },
   { id: "language", group: "Language", label: "Most frequent", kind: "language" },
-  { id: "pca_landuse", group: "What places talk about", label: "All languages", kind: "pca", corpus: "landuse" },
-  { id: "pca_english", group: "What places talk about", label: "English only", kind: "pca", corpus: "english" },
-  { id: "pca_scenes", group: "What places talk about", label: "Scenes", kind: "pca", corpus: "scenes" },
+  { id: "pca_landuse", group: PCA, row: "Land-use sentences", label: "All languages", kind: "pca", corpus: "landuse" },
+  { id: "pca_english", group: PCA, row: "Land-use sentences", label: "English only", kind: "pca", corpus: "english" },
+  { id: "pca_scenes", group: PCA, row: "Scene photos", label: "Their descriptions", kind: "pca", corpus: "scenes" },
 ];
 const RAMP = ["#dbe8fa", "#b7d3f6", "#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281", "#0d2b5e"];
 // Source filter of the sentence layer and samples: field of the data, ``source`` value of the samples.
@@ -152,10 +153,16 @@ function legend() {
 function controls() {
   const box = $("layers");
   const groups = [...new Set(LAYERS.map((l) => l.group))];
-  box.innerHTML = groups.map((g) => `<div class="group"><h2>${g}</h2><div class="chips">${
-    LAYERS.filter((l) => l.group === g && (l.kind !== "pca" || state.manifest.pca[l.corpus])).map((l) =>
-      `<button class="chip" role="radio" data-layer="${l.id}" aria-checked="${l.id === state.layer}">${l.label}</button>`).join("")
-  }</div></div>`).join("");
+  const chip = (l) => `<button class="chip" role="radio" data-layer="${l.id}" aria-checked="${l.id === state.layer}">${l.label}</button>`;
+  const shown = (l) => l.kind !== "pca" || state.manifest.pca[l.corpus];
+  // A group's chips, under a small label per row where its layers have one (the PCA maps: what they embed).
+  const chips = (g) => {
+    const layers = LAYERS.filter((l) => l.group === g && shown(l));
+    const rows = [...new Set(layers.map((l) => l.row))];
+    return rows.map((row) => `${row ? `<p class="row">${row}</p>` : ""}<div class="chips">${
+      layers.filter((l) => l.row === row).map(chip).join("")}</div>`).join("");
+  };
+  box.innerHTML = groups.map((g) => `<div class="group"><h2>${g}</h2>${chips(g)}</div>`).join("");
   box.querySelector(".group .chips").insertAdjacentHTML("afterend", `<div id="sources" class="chips sources" role="radiogroup" aria-label="Source">${
     SOURCES.map((s) => `<button class="chip small" role="radio" data-source="${s.id}" aria-checked="${s.id === state.source}">${s.label}</button>`).join("")
   }</div>`);
@@ -259,10 +266,13 @@ async function source() {
   $("source").innerHTML = `Data: <a href="https://huggingface.co/datasets/${m.dataset}" target="_blank" rel="noopener">${m.dataset}</a>
     @ <a href="${link}" target="_blank" rel="noopener">${m.revision.slice(0, 7)}</a>, built ${m.built.slice(0, 10)}.
     Search by <a href="https://nominatim.openstreetmap.org" target="_blank" rel="noopener">Nominatim</a>.`;
+  // Stale only if a folder the explorer is built from has a newer commit: card edits do not count.
   try {
-    const latest = await (await fetch(API + m.dataset)).json();
-    if (latest.sha && latest.sha !== m.revision) {
-      $("source").insertAdjacentHTML("beforeend", `<span class="stale">The dataset has changed since this build (now @ ${latest.sha.slice(0, 7)}).</span>`);
+    const tree = await (await fetch(`${API}${m.dataset}/tree/main?expand=true`)).json();
+    const now = Object.fromEntries(tree.map((entry) => [entry.path, entry.lastCommit?.id]));
+    const changed = Object.entries(m.folders || {}).filter(([folder, commit]) => now[folder] !== commit).map(([folder]) => folder);
+    if (changed.length) {
+      $("source").insertAdjacentHTML("beforeend", `<span class="stale">The dataset's ${changed.join(", ")} changed since this build.</span>`);
     }
   } catch { /* offline: no check */ }
 }

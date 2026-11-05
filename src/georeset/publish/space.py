@@ -35,6 +35,8 @@ SOURCES = {
     "wikivoyage": "wikivoyage",
 }
 COUNTS = ("relevant", *SOURCES, "photos")
+# The dataset folders the explorer is built from: texts, scenes, and the vectors of the PCA.
+FOLDERS = ("data", "scenes", "scene_photos", "embeddings", "scene_embeddings")
 PCA = {"landuse": "pca_landuse", "english": "pca_english", "scenes": "pca_scenes"}
 
 
@@ -199,8 +201,13 @@ def build(
     out: Path,
     repo: str,
     revision: str,
+    commits: dict[str, str],
 ) -> Path:
-    """Every file of the explorer's data into ``out``; ``revision`` is the dataset commit they come from."""
+    """Every file of the explorer's data into ``out``.
+
+    ``revision`` is the dataset commit they come from; ``commits``, the last commit of each of its ``FOLDERS``
+    then, which the app compares with the dataset's to tell when the data (not just the card) has changed.
+    """
     counts, languages = sentence_cells(data)
     cells = counts.join(photo_cells(photos), on="cell", how="full", coalesce=True).fill_null(0)
     pca = pca_cells(work)
@@ -215,6 +222,7 @@ def build(
     manifest = {
         "dataset": repo,
         "revision": revision,
+        "folders": commits,
         "built": datetime.now(UTC).isoformat(timespec="seconds"),
         "resolutions": [*RESOLUTIONS, geo.CELL_RESOLUTION],
         "chunk_resolution": CHUNK_RESOLUTION,
