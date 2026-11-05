@@ -10,7 +10,7 @@ import typer
 from georeset import hub
 from georeset.build import fuse as fusion
 from georeset.build import pipeline, stage
-from georeset.publish import report, stats, themes
+from georeset.publish import report, themes
 from georeset.sources import description, website, wiki
 
 SOURCES = (website.SOURCE, description.SOURCE, wiki.SOURCE)
@@ -75,11 +75,15 @@ class CorpusName(StrEnum):
     """Keys of ``themes.CORPORA``."""
 
     landuse = "landuse"
+    english = "english"
     scenes = "scenes"
 
 
 Corpus = Annotated[
-    CorpusName, typer.Option(help="landuse: the relevant sentences; scenes: the scene descriptions.")
+    CorpusName,
+    typer.Option(
+        help="landuse: the relevant sentences; english: those in English; scenes: the scene descriptions."
+    ),
 ]
 
 
@@ -111,12 +115,13 @@ def themes_cmd(
     chosen = themes.CORPORA[corpus]
     revision = hub.revision(repo)
     hub.snapshot(repo, revision, cache, [f"{chosen.folder}/*"])
-    places = None
-    if chosen.places:
-        places = stats.photo_hexagons(pl.scan_parquet(f"hf://datasets/{repo}@{revision}/{chosen.places}"))
+    photos = None
+    if chosen.photos:
+        located = pl.scan_parquet(f"hf://datasets/{repo}@{revision}/{chosen.photos}")
+        photos = located.select("scene_id", "lat", "lon").collect(engine="streaming")
     shards = sorted(sentences.glob("train-*.parquet"))
     vectors = [cache / chosen.folder / s.name for s in shards]
-    typer.echo(themes.compute(shards, vectors, work, chosen, places))
+    typer.echo(themes.compute(shards, vectors, work, chosen, photos))
 
 
 @app.command()

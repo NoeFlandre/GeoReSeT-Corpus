@@ -1,4 +1,5 @@
 import os
+from dataclasses import replace
 from pathlib import Path
 
 import polars as pl
@@ -227,7 +228,7 @@ _LANDUSE = card.Corpus(
     shards=2,
     min_texts=50,
     axes=_AXES,
-    languages=True,
+    mixed_languages=True,
     placement="at its location",
 )
 _SCENES = card.Corpus(
@@ -240,9 +241,9 @@ _SCENES = card.Corpus(
     shards=1,
     min_texts=10,
     axes=_AXES,
-    languages=False,
+    mixed_languages=False,
     placement="once in every hexagon where its scene has photos",
-    places="scene_photos/*.parquet",
+    photos="scene_photos/*.parquet",
     suffix="_scenes",
 )
 
@@ -272,6 +273,7 @@ def test_themed_card_shows_maps_legend_and_embeddings():
         < text.index("assets/map_wikimedia.png")
         < text.index("assets/map_landuse.png")
         < text.index("assets/map_pca.png")
+        < text.index("assets/map_pca_fine.png")
         < text.index("assets/map_pc3.png")
         < text.index("### Fields")
     )
@@ -280,6 +282,7 @@ def test_themed_card_shows_maps_legend_and_embeddings():
         "The hexagon's most frequent language explains 20% of it." in text
     )
     assert "* **PC2** (green, 20.0% of the variance): coast ↔ mountains." in text
+    assert "The same axes and colours on 0.25° hexagons holding 5 sentences or more:" in text
     assert text.count("Mostly language: read with care.") == 1
     assert "each of the 56 2° hexagons holding 50 sentences or more" in text
     assert "https://github.com/me/code/blob/master/docs/pca_axes.md" in text
@@ -294,6 +297,31 @@ def test_themed_card_shows_maps_legend_and_embeddings():
 def test_themes_step_follows_the_last_method_step():
     text = card.render(card.Context(**{**_context().__dict__, "themes": (_themes(),)}))
     assert "Code: https://github.com/me/code\n7. **Embeddings of the relevant sentences.**" in text
+
+
+def test_english_pca_follows_the_sentences_pca_and_shares_its_vectors():
+    english = replace(
+        _LANDUSE,
+        name="english",
+        what="relevant sentences in English",
+        mixed_languages=False,
+        suffix="_english",
+    )
+    three = (_themes(), _themes(corpus=english), _themes(corpus=_SCENES))
+    text = card.render(card.Context(**{**_fused().__dict__, "themes": three}))
+    assert (
+        text.index("assets/map_pc3.png")
+        < text.index("assets/map_pca_english.png")
+        < text.index("assets/map_pc3_english.png")
+        < text.index("### Fields")
+    )
+    # Same vectors: one file line, one config, one method step; the scenes' step follows.
+    assert text.count("embeddings/train-*.parquet                 ") == 1
+    configs = [c["config_name"] for c in DatasetCard(text).data.configs]
+    assert configs.count("embeddings") == 1 and configs[-1] == "scene_embeddings"
+    assert "`scene_photos`, `embeddings`, `scene_embeddings`." in text
+    assert "**Embeddings of the relevant sentences in English.**" not in text
+    assert "\n9. **Embeddings of the scene descriptions.**" in text
 
 
 def test_card_with_both_pcas():
@@ -321,7 +349,7 @@ def test_card_with_both_pcas():
 
 
 def test_card_without_themes_has_no_embeddings():
-    names = ("section_landuse", "section_scenes", "files", "configs", "method")
+    names = ("section_landuse", "section_english", "section_scenes", "files", "configs", "method")
     assert card.theme_parts(_fused()) == dict.fromkeys(names, "")
     text = card.render(_fused())
     assert "embeddings" not in text and "map_pca" not in text

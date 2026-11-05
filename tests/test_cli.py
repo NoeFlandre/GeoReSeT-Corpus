@@ -1,3 +1,4 @@
+import polars as pl
 from typer.testing import CliRunner
 
 from georeset import cli, hub
@@ -136,8 +137,9 @@ def test_themes_downloads_embeddings_then_computes(tmp_path, monkeypatch):
     monkeypatch.setattr(
         hub, "snapshot", lambda repo, rev, dest, patterns: seen.update(get=(rev, dest, patterns))
     )
-    monkeypatch.setattr(cli.pl, "scan_parquet", lambda glob: f"scan {glob}")
-    monkeypatch.setattr(cli.stats, "photo_hexagons", lambda photos: f"places from {photos}")
+    scanned = []
+    points = pl.LazyFrame({"scene_id": [7], "lat": [1.0], "lon": [2.0], "url": ["u"]})
+    monkeypatch.setattr(cli.pl, "scan_parquet", lambda glob: scanned.append(glob) or points)
 
     def compute(sentences, embeddings, work, corpus, places):
         seen.update(
@@ -167,7 +169,8 @@ def test_themes_downloads_embeddings_then_computes(tmp_path, monkeypatch):
     result = runner.invoke(cli.app, args)
     assert result.exit_code == 0, result.output
     assert seen["get"] == ("rev", cache, ["scene_embeddings/*"])
-    assert seen["places"] == "places from scan hf://datasets/me/x@rev/scene_photos/*.parquet"
+    assert scanned == ["hf://datasets/me/x@rev/scene_photos/*.parquet"]
+    assert seen["places"].rows() == [(7, 1.0, 2.0)]
     assert seen["sentences"] == ["train-00000-of-00002.parquet", "train-00001-of-00002.parquet"]
     assert seen["embeddings"] == [cache / "scene_embeddings" / n for n in seen["sentences"]]
     assert seen["corpus"] is cli.themes.SCENES
@@ -175,3 +178,7 @@ def test_themes_downloads_embeddings_then_computes(tmp_path, monkeypatch):
     # The sentences count at their own location.
     assert runner.invoke(cli.app, args[:-2]).exit_code == 0
     assert seen["corpus"] is cli.themes.LANDUSE and seen["places"] is None
+
+
+def test_corpus_choices_are_the_corpora():
+    assert [c.value for c in cli.CorpusName] == list(cli.themes.CORPORA)

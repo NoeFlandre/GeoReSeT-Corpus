@@ -10,6 +10,7 @@ from string import Template
 import polars as pl
 
 from georeset.normalize.languages import UNDETERMINED
+from georeset.publish import geo
 from georeset.sources import scenes as scenes_source
 
 TEMPLATE = files("georeset.publish").joinpath("templates/card.md")
@@ -17,7 +18,7 @@ SCENES_TEMPLATE = files("georeset.publish").joinpath("templates/scenes.md")
 THEMES_TEMPLATE = files("georeset.publish").joinpath("templates/themes.md")
 THEME_PARTS = ("section", "files", "configs", "method")
 # Each corpus' section goes where its template asks for ``themes_section_<corpus>``.
-THEME_SECTIONS = ("landuse", "scenes")
+THEME_SECTIONS = ("landuse", "english", "scenes")
 SCENE_PARTS = (
     "headline",
     "intro",
@@ -146,11 +147,12 @@ class Corpus:
     shards: int
     min_texts: int  # per hexagon
     axes: dict[int, tuple[str, str]]  # (low end, high end) per component, named from its axes report
-    languages: bool  # whether the texts vary in language, so the language check applies
+    mixed_languages: bool  # the texts vary in language, so each axis is checked against it
     placement: str  # where a text counts on the map, for the card
-    places: str = (
-        ""  # parquet glob of (``scene_id``, ``lat``, ``lon``) placing each text; empty: its own lat/lon
-    )
+    # Parquet glob of the photos (``scene_id``, ``lat``, ``lon``) a text counts at; empty: its own lat/lon.
+    photos: str = ""
+    only_language: str = ""  # keep only the texts in this language; empty: all
+    fine_min: int = 5  # texts per hexagon of the fine RGB map (``geo.FINE``)
     suffix: str = ""  # of its maps and axes report
 
     @property
@@ -234,7 +236,7 @@ def _front_matter(ctx: Context) -> str:
         "size_categories": [size_category(_total(ctx)["sentences"])],
         "configs": configs(ctx.partitions)
         + folder_configs(kind.folders)
-        + folder_configs(tuple(themes.corpus.folder for themes in ctx.themes)),
+        + folder_configs(tuple(dict.fromkeys(themes.corpus.folder for themes in ctx.themes))),
     }
     # JSON is valid YAML: no YAML dependency, no quoting surprises.
     return "\n".join(f"{key}: {json.dumps(value)}" for key, value in meta.items())
@@ -301,7 +303,7 @@ def legend(themes: Themes) -> str:
     for i, (share, r2) in enumerate(zip(themes.explained, themes.language_r2, strict=True), 1):
         low, high = themes.corpus.axes[i]
         line = f"* **PC{i}** ({_COLOURS[i - 1]}, {pct(share)} of the variance): {low} ↔ {high}."
-        if themes.corpus.languages:
+        if themes.corpus.mixed_languages:
             flag = " Mostly language: read with care." if r2 > themes.warning else ""
             line += f" The hexagon's most frequent language explains {r2:.0%} of it.{flag}"
         lines.append(line)
@@ -310,6 +312,8 @@ def legend(themes: Themes) -> str:
 
 # Method steps are list items, one per line; the other parts carry their own separators.
 _THEME_JOINS = {"method": "\n"}
+# Where descriptions start in the card's Files block.
+_FILES_COLUMN = 43
 
 
 def _theme_values(ctx: Context, themes: Themes, step: int) -> dict[str, str]:
@@ -324,8 +328,10 @@ def _theme_values(ctx: Context, themes: Themes, step: int) -> dict[str, str]:
         "themes_unit": corpus.unit,
         "themes_selection": corpus.selection,
         "themes_placement": corpus.placement,
+        "themes_fine_degrees": f"{geo.FINE.degrees:g}",
+        "themes_fine_min": fmt(corpus.fine_min),
         "themes_folder": corpus.folder,
-        "themes_files": f"{corpus.folder}/train-*.parquet".ljust(43),
+        "themes_files": f"{corpus.folder}/train-*.parquet".ljust(_FILES_COLUMN),
         "themes_suffix": corpus.suffix,
         "themes_report": corpus.report,
         "themes_legend": legend(themes),
@@ -334,27 +340,38 @@ def _theme_values(ctx: Context, themes: Themes, step: int) -> dict[str, str]:
     }
 
 
-def _rendered_themes(ctx: Context) -> list[dict[str, str]]:
-    """The themes template's parts filled in for each PCA, in order."""
+def _rendered_themes(ctx: Context) -> list[tuple[Themes, dict[str, str], bool]]:
+    """Each PCA, the themes template's parts filled in for it, and whether its vectors are new.
+
+    A PCA on vectors an earlier one already uses (a subset of them) gets no file, config or method step.
+    """
     first = 7 + bool(ctx.scenes)  # after the six common steps and, if fused, the scenes step
     template = parts(THEMES_TEMPLATE.read_text())
-    return [
-        {
-            name: Template(body).substitute(_theme_values(ctx, themes, first + i))
-            for name, body in template.items()
-        }
-        for i, themes in enumerate(ctx.themes)
-    ]
+    folders: dict[str, int] = {}  # each vectors folder and its method step, in order
+    rendered = []
+    for themes in ctx.themes:
+        new = themes.corpus.folder not in folders
+        step = folders.setdefault(themes.corpus.folder, first + len(folders))
+        values = _theme_values(ctx, themes, step)
+        filled = {name: Template(body).substitute(values) for name, body in template.items()}
+        rendered.append((themes, filled, new))
+    return rendered
 
 
 def theme_parts(ctx: Context) -> dict[str, str]:
     """Each PCA's section (``section_<corpus>``) and their joint mentions (empty strings without any)."""
     rendered = _rendered_themes(ctx)
     sections = {f"section_{corpus}": "" for corpus in THEME_SECTIONS} | {
-        f"section_{themes.corpus.name}": r["section"] for themes, r in zip(ctx.themes, rendered, strict=True)
+        f"section_{themes.corpus.name}": filled["section"] for themes, filled, _ in rendered
     }
-    shared = {name: _THEME_JOINS.get(name, "").join(r[name] for r in rendered) for name in THEME_PARTS[1:]}
-    return sections | shared
+    return sections | _shared_parts([filled for _, filled, new in rendered if new])
+
+
+def _shared_parts(rendered: list[dict[str, str]]) -> dict[str, str]:
+    """Files, configs and method steps of the PCAs with vectors of their own, joined."""
+    return {
+        name: _THEME_JOINS.get(name, "").join(filled[name] for filled in rendered) for name in THEME_PARTS[1:]
+    }
 
 
 def _optional_parts(ctx: Context) -> dict[str, str]:

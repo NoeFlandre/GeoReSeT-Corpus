@@ -17,12 +17,12 @@ from matplotlib.colors import BoundaryNorm, LinearSegmentedColormap, ListedColor
 
 from georeset.normalize.languages import display_name
 from georeset.publish.geo import (
+    COARSE,
     HEX_DEGREES,
     HEX_EXTENT,
-    HEX_GRID,
+    Grid,
     cell_centres,
     edge_labels,
-    hexagon_centres,
     log_edges,
 )
 
@@ -52,10 +52,10 @@ def _save(fig, path: Path) -> Path:
     return path
 
 
-def _hexbin(ax, centres: pl.DataFrame, **kwargs):
-    return ax.hexbin(
-        centres["lon"], centres["lat"], gridsize=HEX_GRID, extent=HEX_EXTENT, linewidths=0.15, **kwargs
-    )
+def _hexbin(ax, lon, lat, grid: Grid = COARSE, **kwargs):
+    """``hexbin`` on ``grid``; outlines thin with the hexagons so that small ones keep their colour."""
+    width = 0.15 * min(1, 4 * grid.degrees / HEX_DEGREES)
+    return ax.hexbin(lon, lat, gridsize=grid.size, extent=HEX_EXTENT, linewidths=width, **kwargs)
 
 
 def _colour(hexes) -> list[int]:
@@ -69,11 +69,17 @@ def _colour(hexes) -> list[int]:
 
 
 def _colorbar(fig, ax, hexes, edges: list[int], label: str) -> None:
-    bar = fig.colorbar(hexes, ax=ax, orientation="horizontal", fraction=0.04, pad=0.02, aspect=40)
+    bar = _bar(fig, ax, hexes, label)
     bar.set_ticks([(lo + hi) / 2 for lo, hi in itertools.pairwise(edges)], labels=edge_labels(edges))
+
+
+def _bar(fig, ax, hexes, label: str, **kwargs):
+    """A horizontal colour bar under the map, in the card's quiet style."""
+    bar = fig.colorbar(hexes, ax=ax, orientation="horizontal", fraction=0.04, pad=0.02, aspect=40, **kwargs)
     bar.ax.tick_params(colors=TEXT_SECONDARY, labelsize=8, length=0)
     bar.outline.set_visible(False)
     bar.set_label(label, color=TEXT_SECONDARY, fontsize=9)
+    return bar
 
 
 def world_map(
@@ -86,10 +92,13 @@ def world_map(
     fig, ax = _figure(12, 6.4)
     label = f"{unit} per H3 cell (resolution {resolution}), mean per {HEX_DEGREES}° hexagon"
     if full is not None:
-        _hexbin(ax, cell_centres(full), mincnt=1, cmap=ListedColormap([EMPTY]), edgecolors=EMPTY)
+        grey = cell_centres(full)
+        _hexbin(ax, grey["lon"], grey["lat"], mincnt=1, cmap=ListedColormap([EMPTY]), edgecolors=EMPTY)
         label += " (grey: the full dataset)"
     centres = cell_centres(counts)
-    hexes = _hexbin(ax, centres, C=centres["n"], reduce_C_function=np.mean, edgecolors="face")
+    hexes = _hexbin(
+        ax, centres["lon"], centres["lat"], C=centres["n"], reduce_C_function=np.mean, edgecolors="face"
+    )
     _world(ax)
     _colorbar(fig, ax, hexes, _colour(hexes), label)
     return _save(fig, path)
@@ -102,23 +111,24 @@ def _world(ax) -> None:
     ax.axis("off")
 
 
-def _hexagons(ax, index: np.ndarray, values: np.ndarray, **kwargs):
-    """One value per hexagon of ``geo.hexagons``, drawn at its centre so that it fills that hexagon."""
-    lon, lat = hexagon_centres(index)
-    centres = pl.DataFrame({"lon": lon, "lat": lat})
-    return _hexbin(ax, centres, C=values, reduce_C_function=np.max, edgecolors="face", **kwargs)
+def _hexagons(ax, index: np.ndarray, values: np.ndarray, grid: Grid = COARSE, **kwargs):
+    """One value per hexagon of ``grid``, drawn at its centre so that it fills that hexagon."""
+    lon, lat = grid.centres(index)
+    return _hexbin(ax, lon, lat, grid, C=values, reduce_C_function=np.max, edgecolors="face", **kwargs)
 
 
-def _land(ax, land: np.ndarray) -> None:
+def _land(ax, land: np.ndarray, grid: Grid = COARSE) -> None:
     """``land`` hexagons in light grey, under the data."""
-    _hexagons(ax, land, np.zeros(len(land)), cmap=ListedColormap([EMPTY]))
+    _hexagons(ax, land, np.zeros(len(land)), grid, cmap=ListedColormap([EMPTY]))
 
 
-def rgb_map(index: np.ndarray, rgb: np.ndarray, path: Path, land: np.ndarray, caption: str) -> Path:
-    """Hexagons coloured by ``rgb`` (one row of three values in [0, 1] per hexagon), over grey ``land``."""
+def rgb_map(
+    index: np.ndarray, rgb: np.ndarray, path: Path, land: np.ndarray, caption: str, grid: Grid = COARSE
+) -> Path:
+    """Hexagons of ``grid`` coloured by ``rgb`` (three values in [0, 1] each), over grey ``land``."""
     fig, ax = _figure(12, 6.4)
-    _land(ax, land)
-    hexes = _hexagons(ax, index, np.arange(len(index)))
+    _land(ax, land, grid)
+    hexes = _hexagons(ax, index, np.arange(len(index)), grid)
     drawn = rgb[np.asarray(hexes.get_array(), dtype=int)]
     hexes.set_array(None)
     hexes.set_facecolor(drawn)
@@ -137,12 +147,7 @@ def diverging_map(
     cmap = LinearSegmentedColormap.from_list("diverging", DIVERGING)
     hexes = _hexagons(ax, index, values, cmap=cmap, norm=Normalize(-limit, limit))
     _world(ax)
-    bar = fig.colorbar(
-        hexes, ax=ax, orientation="horizontal", fraction=0.04, pad=0.02, aspect=40, extend="both"
-    )
-    bar.ax.tick_params(colors=TEXT_SECONDARY, labelsize=8, length=0)
-    bar.outline.set_visible(False)
-    bar.set_label(label, color=TEXT_SECONDARY, fontsize=9)
+    _bar(fig, ax, hexes, label, extend="both")
     return _save(fig, path)
 
 

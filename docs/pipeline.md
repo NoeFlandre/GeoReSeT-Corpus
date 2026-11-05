@@ -61,8 +61,9 @@ photos, sorted by scene so the text compresses to one copy per row group.
 
 ## What places talk about
 
-Two PCA maps added to the fused card, one of the relevant sentences (`--corpus landuse`, the default) and one
-of the scene descriptions (`--corpus scenes`):
+Three PCA maps added to the fused card: the relevant sentences (`--corpus landuse`, the default), the same
+sentences in English only (`--corpus english`: same vectors, no language effect), and the scene descriptions
+(`--corpus scenes`):
 
 ```
 georeset themes-sentences --corpus C --sentences S/       distinct texts: 128 shards (landuse), 1 (scenes)
@@ -78,6 +79,7 @@ the Hub are skipped, so jobs can be killed, resubmitted or run on several GPUs a
 `georeset.publish.geo.hexagons` puts each text in the hexagon `Axes.hexbin` would (the grid of the other
 maps); hexagons with fewer than 50 sentences (10 scene descriptions) are dropped and PCA is fitted on the
 hexagon means. The axes' names in `georeset.publish.themes.LANDUSE` and `SCENES` are read from the axes'
-extreme texts: [sentences](pca_axes.md), [scene descriptions](pca_axes_scenes.md). The sentences' axes are
+extreme texts: [sentences](pca_axes.md), [English sentences](pca_axes_english.md),
+[scene descriptions](pca_axes_scenes.md). The sentences' axes are
 also checked against language (R² of each axis on the hexagon's most frequent language); the scene
 descriptions are all English.

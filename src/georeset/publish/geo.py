@@ -1,7 +1,8 @@
 """Numbers behind the maps: H3 binning, cell centres, log-spaced colour bins, the hexagon grid."""
 
 import itertools
-from functools import cache
+from dataclasses import dataclass
+from functools import cache, cached_property
 from importlib.resources import files
 
 import h3
@@ -10,21 +11,11 @@ import polars as pl
 import shapely
 
 HEX_DEGREES = 2
-# Rows of the hexagon grid that make regular hexagons over 180° of latitude.
-HEX_GRID = (360 // HEX_DEGREES, round(180 / (HEX_DEGREES * np.sqrt(3))))
 HEX_EXTENT = (-180, 180, -90, 90)
-_NX, _NY = HEX_GRID
-_FIRST = (_NX + 1) * (_NY + 1)  # hexagons of the first lattice; the second, offset half a cell, follows
-HEXAGONS = _FIRST + _NX * _NY
-# matplotlib pads the x range so that points on its edges stay inside.
-_X0 = HEX_EXTENT[0] - 1e-9 * (HEX_EXTENT[1] - HEX_EXTENT[0])
-_SX = (HEX_EXTENT[1] - HEX_EXTENT[0]) * (1 + 2e-9) / _NX
-_Y0 = HEX_EXTENT[2]
-_SY = (HEX_EXTENT[3] - HEX_EXTENT[2]) / _NY
-# Corners of a hexbin hexagon around its centre, as matplotlib draws them.
+# Corners of a hexbin hexagon around its centre, in steps of its grid, as matplotlib draws them.
 _CORNERS = np.array([[0.5, -0.5], [0.5, 0.5], [0.0, 1.0], [-0.5, 0.5], [-0.5, -0.5], [0.0, -1.0]]) * [
-    _SX,
-    _SY / 3,
+    1,
+    1 / 3,
 ]
 # Natural Earth 1:110m land (public domain, v5.1.2).
 LAND = files("georeset.publish").joinpath("assets/ne_110m_land.geojson")
@@ -67,44 +58,85 @@ def edge_labels(edges: list[int]) -> list[str]:
     ]
 
 
-def hexagons(lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
-    """Index of each point's hexagon in ``Axes.hexbin``'s grid (``HEX_GRID`` over ``HEX_EXTENT``), -1 outside.
+@dataclass(frozen=True)
+class Grid:
+    """``Axes.hexbin``'s grid of ``degrees``-wide hexagons over ``HEX_EXTENT``.
 
-    Same rule as matplotlib: the nearer centre of two interleaved rectangular lattices.
+    Hexagons are numbered as matplotlib counts them: the first lattice, then the second, offset half a cell.
     """
-    ix = (np.asarray(lon, float) - _X0) / _SX
-    iy = (np.asarray(lat, float) - _Y0) / _SY
-    ix1, iy1 = np.round(ix).astype(int), np.round(iy).astype(int)
-    ix2, iy2 = np.floor(ix).astype(int), np.floor(iy).astype(int)
-    first = (ix - ix1) ** 2 + 3 * (iy - iy1) ** 2 < (ix - ix2 - 0.5) ** 2 + 3 * (iy - iy2 - 0.5) ** 2
-    inside1 = (ix1 >= 0) & (ix1 <= _NX) & (iy1 >= 0) & (iy1 <= _NY)
-    inside2 = (ix2 >= 0) & (ix2 < _NX) & (iy2 >= 0) & (iy2 < _NY)
-    return np.where(
-        first,
-        np.where(inside1, ix1 * (_NY + 1) + iy1, -1),
-        np.where(inside2, _FIRST + ix2 * _NY + iy2, -1),
-    )
 
+    degrees: float
 
-def hexagon_centres(index: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """(lon, lat) of each hexagon's centre: drawn with ``hexbin``, a centre fills exactly its hexagon."""
-    index = np.asarray(index)
-    second = index - _FIRST
-    first = second < 0
-    column = np.where(first, index // (_NY + 1), second // _NY + 0.5)
-    row = np.where(first, index % (_NY + 1), second % _NY + 0.5)
-    return _X0 + column * _SX, _Y0 + row * _SY
+    @cached_property
+    def size(self) -> tuple[int, int]:
+        """``gridsize``: columns, and rows that make regular hexagons over 180° of latitude."""
+        return round(360 / self.degrees), round(180 / (self.degrees * np.sqrt(3)))
 
+    @cached_property
+    def count(self) -> int:
+        nx, ny = self.size
+        return (nx + 1) * (ny + 1) + nx * ny
 
-def hexagon_shapes(index: np.ndarray) -> np.ndarray:
-    """Each hexagon as a shapely polygon, the shape ``hexbin`` draws."""
-    lon, lat = hexagon_centres(index)
-    return shapely.polygons(np.stack([lon, lat], axis=1)[:, None, :] + _CORNERS)
+    @cached_property
+    def _frame(self) -> tuple[float, float, float, float]:
+        """x0, x step, y0, y step; matplotlib pads the x range so that points on its edges stay inside."""
+        nx, ny = self.size
+        width = HEX_EXTENT[1] - HEX_EXTENT[0]
+        return (
+            HEX_EXTENT[0] - 1e-9 * width,
+            width * (1 + 2e-9) / nx,
+            HEX_EXTENT[2],
+            (HEX_EXTENT[3] - HEX_EXTENT[2]) / ny,
+        )
+
+    def hexagons(self, lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
+        """Index of each point's hexagon, -1 outside.
+
+        Same rule as matplotlib: the nearer centre of two interleaved rectangular lattices.
+        """
+        nx, ny = self.size
+        x0, sx, y0, sy = self._frame
+        ix = (np.asarray(lon, float) - x0) / sx
+        iy = (np.asarray(lat, float) - y0) / sy
+        ix1, iy1 = np.round(ix).astype(int), np.round(iy).astype(int)
+        ix2, iy2 = np.floor(ix).astype(int), np.floor(iy).astype(int)
+        first = (ix - ix1) ** 2 + 3 * (iy - iy1) ** 2 < (ix - ix2 - 0.5) ** 2 + 3 * (iy - iy2 - 0.5) ** 2
+        inside1 = (ix1 >= 0) & (ix1 <= nx) & (iy1 >= 0) & (iy1 <= ny)
+        inside2 = (ix2 >= 0) & (ix2 < nx) & (iy2 >= 0) & (iy2 < ny)
+        return np.where(
+            first,
+            np.where(inside1, ix1 * (ny + 1) + iy1, -1),
+            np.where(inside2, (nx + 1) * (ny + 1) + ix2 * ny + iy2, -1),
+        )
+
+    def centres(self, index: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """(lon, lat) of each hexagon's centre: drawn with ``hexbin``, a centre fills exactly its hexagon."""
+        nx, ny = self.size
+        x0, sx, y0, sy = self._frame
+        index = np.asarray(index)
+        second = index - (nx + 1) * (ny + 1)
+        first = second < 0
+        column = np.where(first, index // (ny + 1), second // ny + 0.5)
+        row = np.where(first, index % (ny + 1), second % ny + 0.5)
+        return x0 + column * sx, y0 + row * sy
+
+    def shapes(self, index: np.ndarray) -> np.ndarray:
+        """Each hexagon as a shapely polygon, the shape ``hexbin`` draws."""
+        _, sx, _, sy = self._frame
+        lon, lat = self.centres(index)
+        return shapely.polygons(np.stack([lon, lat], axis=1)[:, None, :] + _CORNERS * [sx, sy])
+
+    def land(self) -> np.ndarray:
+        """Indices of the hexagons that touch land."""
+        return _land(self)
 
 
 @cache
-def land_hexagons() -> np.ndarray:
-    """Indices of the hexagons that touch land."""
+def _land(grid: Grid) -> np.ndarray:
     land = shapely.from_geojson(LAND.read_text())
     shapely.prepare(land)
-    return np.flatnonzero(shapely.intersects(land, hexagon_shapes(np.arange(HEXAGONS))))
+    return np.flatnonzero(shapely.intersects(land, grid.shapes(np.arange(grid.count))))
+
+
+COARSE = Grid(HEX_DEGREES)  # the grid of the card's maps
+FINE = Grid(0.25)  # the grid of the fine RGB maps
