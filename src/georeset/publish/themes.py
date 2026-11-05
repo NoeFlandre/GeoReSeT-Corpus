@@ -35,7 +35,11 @@ LANDUSE = card.Corpus(
     selection="distinct sentences with `landuse` true (the first `id` keeps a repeated text)",
     shards=128,
     min_texts=50,
-    axes={1: ("", ""), 2: ("", ""), 3: ("", "")},
+    axes={
+        1: ("tropical beaches and leisure", "Russian village histories"),
+        2: ("buildings and transport hubs", "islands and rocky coasts"),
+        3: ("remote airports", "church ornament and architecture"),
+    },
     languages=True,
     placement="at its location",
 )
