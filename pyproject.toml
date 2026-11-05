@@ -1,6 +1,6 @@
 [project]
 name = "georeset"
-version = "0.1.0"
+version = "1.0.0"
 description = "Build and publish the GeoReSeT corpus: land-use labelled sentences tied to OpenStreetMap polygons."
 readme = "README.md"
 authors = [
