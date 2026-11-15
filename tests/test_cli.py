@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import polars as pl
 from typer.testing import CliRunner
 
@@ -213,3 +215,39 @@ def test_space_builds_from_the_current_revision_then_uploads(tmp_path, monkeypat
     assert seen["app"] == out and result.output.strip() == f"uploaded {out} to me/s"
     built = runner.invoke(cli.app, [*args[:-2], "--target", ""])
     assert built.output.strip() == str(out)
+
+
+def test_translate_commands_call_their_jobs(tmp_path, monkeypatch, capsys):
+    from typer.testing import CliRunner
+
+    calls = []
+    monkeypatch.setattr(cli, "Bucket", lambda: "bucket")
+    monkeypatch.setattr(
+        cli.translation, "plan_all", lambda scratch, workers: calls.append(("plan", scratch, workers))
+    )
+    monkeypatch.setattr(cli.translation, "pending", lambda bucket: f"pending {bucket}")
+    monkeypatch.setattr(cli.translation, "translate", lambda s, o, b: calls.append(("work", s, o, b)) or 3)
+    monkeypatch.setattr(cli.translation, "assemble_all", lambda o, w, s: calls.append(("assemble", o, w, s)))
+    monkeypatch.setattr(
+        report, "build_card", lambda layout, repo, url: calls.append(("card", repo)) or "README.md"
+    )
+    monkeypatch.setattr(cli.translation, "upload_model", lambda f, b: calls.append(("model", f, b)))
+    monkeypatch.setattr(cli.translation, "publish", lambda o, b: f"published {o} {b}")
+    runner = CliRunner()
+    assert runner.invoke(cli.app, ["translate-plan", "--scratch", "s", "--workers", "2"]).exit_code == 0
+    assert runner.invoke(cli.app, ["translate-pending"]).output == "pending bucket\n"
+    work = runner.invoke(cli.app, ["translate-work", "--scratch", "s", "--offset", "7", "--minutes", "2"])
+    assert work.output == "3 shards translated\n"
+    assert (
+        runner.invoke(cli.app, ["translate-assemble", "--work", "w", "--out", "o", "--scratch", "s"]).output
+        == "README.md\n"
+    )
+    assert runner.invoke(cli.app, ["translate-upload-model", "m"]).exit_code == 0
+    assert runner.invoke(cli.app, ["translate-publish", "--out", "o"]).output == "published o bucket\n"
+    assert calls == [
+        ("plan", Path("s"), 2),
+        ("work", Path("s"), 7, 120.0),
+        ("assemble", Path("o"), Path("w"), Path("s")),
+        ("card", cli.REPO_ID),
+        ("model", Path("m"), "bucket"),
+    ]

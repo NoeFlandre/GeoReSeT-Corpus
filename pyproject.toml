@@ -17,7 +17,23 @@ dependencies = [
     "pyarrow>=26.0.0",
     "shapely>=2.2.0",
     "typer>=0.27.3",
+    "llms-xx-to-en-translation",
 ]
+
+[project.optional-dependencies]
+# Grid'5000 job environments only: NLLB on CTranslate2 and GlotLID.
+translate = [
+    "ctranslate2>=4.6",
+    "transformers>=5.20",
+    "sentencepiece>=0.2",
+    "fasttext-turbo==0.1.1",
+    "nvidia-cublas-cu12; sys_platform == 'linux'",
+    "nvidia-cudnn-cu12>=9,<10; sys_platform == 'linux'",
+]
+
+[tool.uv.sources]
+# The benchmark that chose the model: its generation budget and failure checks are reused as they are.
+llms-xx-to-en-translation = { git = "https://github.com/NoeFlandre/llms-xx-to-en-translation", rev = "d0458863b6d3ab8eb3950d4d7b6b917f68dba30b" }
 
 [project.scripts]
 georeset = "georeset.cli:app"

@@ -196,3 +196,23 @@ def test_folder_commits_keeps_the_asked_folders(monkeypatch):
         "scenes": "c2",
     }
     assert seen == {"repo": "me/d", "repo_type": "dataset", "revision": "rev", "expand": True}
+
+
+def test_revision_of_and_tag(monkeypatch):
+    seen = []
+
+    class Info:
+        sha = "def"
+
+    class Api:
+        def dataset_info(self, repo, revision):
+            seen.append(("info", repo, revision))
+            return Info()
+
+        def create_tag(self, repo, tag, repo_type):
+            seen.append(("tag", repo, tag, repo_type))
+
+    monkeypatch.setattr(hub, "HfApi", Api)
+    assert hub.revision_of("me/d", "v1.0") == "def"
+    hub.tag("me/d", "v1.1")
+    assert seen == [("info", "me/d", "v1.0"), ("tag", "me/d", "v1.1", "dataset")]

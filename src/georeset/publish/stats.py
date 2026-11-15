@@ -260,3 +260,23 @@ def language_mix(rows: pl.DataFrame) -> pl.DataFrame:
     """Share of each language among ``rows``, largest first."""
     counts = rows.group_by("language").agg(share=pl.len() / rows.height)
     return counts.sort("share", "language", descending=[True, False])
+
+
+def translation_kinds(rows: pl.LazyFrame) -> pl.DataFrame:
+    """Rows per ``translation`` kind, largest first."""
+    counts = _collect(rows.group_by("translation").agg(sentences=pl.len().cast(pl.Int64)))
+    return counts.sort("sentences", "translation", descending=[True, False])
+
+
+def translation_flags(rows: pl.LazyFrame) -> pl.DataFrame:
+    """Translated rows per failed check, and their share of all translated rows."""
+    translated = rows.filter(pl.col("translation") == "nllb")
+    total = _collect(translated.select(pl.len().cast(pl.Int64))).item()
+    flags = translated.select(flag=pl.col("translation_flags")).explode("flag").drop_nulls()
+    counts = _collect(flags.group_by("flag").agg(sentences=pl.len().cast(pl.Int64)))
+    shares = counts.with_columns(share=pl.col("sentences") / max(total, 1))
+    return shares.sort("sentences", "flag", descending=[True, False])
+
+
+def translation_languages(rows: pl.LazyFrame) -> int:
+    return _collect(rows.select(pl.col("translation_language").drop_nulls().n_unique())).item()

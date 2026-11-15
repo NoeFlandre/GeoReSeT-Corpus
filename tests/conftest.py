@@ -147,3 +147,41 @@ def raw_scenes(tmp_path):
         }
     ).write_parquet(folder / scenes.CLUSTERS_FILE)
     return folder
+
+
+class FakeBucket:
+    """An in-memory bucket: path -> bytes; records every call."""
+
+    def __init__(self, files=None):
+        self.data: dict[str, bytes] = dict(files or {})
+        self.calls: list[tuple] = []
+
+    def create(self):
+        self.calls.append(("create",))
+
+    def files(self, prefix):
+        return sorted(p for p in self.data if p.startswith(prefix))
+
+    def put(self, files):
+        self.calls.append(("put", [remote for _, remote in files]))
+        for local, remote in files:
+            self.data[remote] = local if isinstance(local, bytes) else Path(local).read_bytes()
+
+    def delete(self, paths):
+        self.calls.append(("delete", list(paths)))
+        for path in paths:
+            del self.data[path]
+
+    def get(self, files):
+        for remote, local in files:
+            Path(local).parent.mkdir(parents=True, exist_ok=True)
+            Path(local).write_bytes(self.data[remote])
+
+    def remove(self):
+        self.calls.append(("remove",))
+        self.data.clear()
+
+
+@pytest.fixture
+def bucket():
+    return FakeBucket()

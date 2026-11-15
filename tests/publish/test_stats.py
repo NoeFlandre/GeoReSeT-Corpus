@@ -240,3 +240,22 @@ def test_parent_sums_group_children_under_their_display_cell():
     )
     assert by_parent[parent] == (4.0, 2)
     assert parents[inverse].tolist() == [parent, h3_int.cell_to_parent(other, geo.DISPLAY_RESOLUTION), parent]
+
+
+def test_translation_stats_without_translated_rows():
+    rows = pl.LazyFrame(
+        {"translation": ["original"], "translation_language": [None], "translation_flags": [[]]},
+        schema={
+            "translation": pl.String,
+            "translation_language": pl.String,
+            "translation_flags": pl.List(pl.String),
+        },
+    )
+    assert stats.translation_kinds(rows).rows() == [("original", 1)]
+    assert stats.translation_flags(rows).height == 0
+    assert stats.translation_languages(rows) == 0
+
+
+def test_translation_kinds_break_ties_by_name():
+    rows = pl.LazyFrame({"translation": ["nllb", "original", "unsplit", "unsplit"]})
+    assert stats.translation_kinds(rows).rows() == [("unsplit", 2), ("nllb", 1), ("original", 1)]

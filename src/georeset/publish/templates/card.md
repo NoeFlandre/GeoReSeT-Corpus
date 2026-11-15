@@ -6,7 +6,7 @@ $front_matter
 
 # $title
 
-**$sentences sentences in $languages languages, tied to $polygons OpenStreetMap polygons in $regions regions, each labelled for land-use / land-cover relevance by an LLM.**$scenes_headline
+**$sentences sentences in $languages languages, tied to $polygons OpenStreetMap polygons in $regions regions, each labelled for land-use / land-cover relevance by an LLM.**$translation_headline$scenes_headline
 
 Sentences come from the websites, `description` tags and Wikipedia / Wikivoyage articles linked to OpenStreetMap polygons. Every row is one sentence with a boolean `landuse` label, the language, and the location of the polygon it describes. Polygon shapes are in a separate `polygons` table.$scenes_intro$scenes_explore
 
@@ -35,7 +35,7 @@ FROM 'hf://datasets/$repo_id/data/wikipedia/*/*.parquet' s
 JOIN 'hf://datasets/$repo_id/polygons/*.parquet' p ON p.polygon_id = s.polygon_ids[1]
 WHERE s.region = 'afghanistan' AND s.landuse;
 ```
-$scenes_quickstart
+$scenes_quickstart$translation_quickstart
 ## Sentences
 
 **Sentences per source**: `website`, `osm_description`, then `wikipedia` and `wikivoyage` together:
@@ -79,7 +79,7 @@ $areas
 | `osm_tag` | string | Primary OSM tag of the first polygon (`landuse=forest`) |
 | `area_m2` | float | Area of the first polygon, m² |
 | `url` | string | Website, OSM object, or Wikipedia / Wikivoyage revision permalink |
-| `license` | string | License of the text: `ODbL-1.0`, `CC-BY-SA-4.0` or `other` |
+| `license` | string | License of the text: `ODbL-1.0`, `CC-BY-SA-4.0` or `other` |$translation_fields
 
 The `polygons` config holds one row per polygon: `polygon_id`, `osm_type`, `osm_id`, `name`, `osm_tag`, `region`, `continent`, `lat`, `lon`, `area_m2` and `geometry` (WKB, [GeoParquet](https://geoparquet.org) 1.1, WGS 84).
 
@@ -103,7 +103,7 @@ The `unlabelled` config holds sentences without a usable label, kept to be label
 * `unsplit`: text the upstream splitter could not segment (unsupported language); `text` is a whole page, description or paragraph.
 
 $unlabelled
-$scenes_section
+$scenes_section$translation_section
 ## Files
 
 ```
@@ -112,7 +112,7 @@ unlabelled/train-*.parquet                 sentences without a label (see above)
 polygons/train-*.parquet                   polygon shapes (GeoParquet)$scenes_files$themes_files
 ```
 
-Configs: `all` (default), one per source, one per language, `unlabelled`, `polygons`$scenes_configs$themes_configs.
+Configs: `all` (default), one per source, one per language, `unlabelled`, `polygons`$scenes_configs$themes_configs.$translation_files
 
 ## Methodology
 
@@ -126,10 +126,10 @@ Configs: `all` (default), one per source, one per language, `unlabelled`, `polyg
 5. **Labels.** Each sentence is classified by [`LiquidAI/LFM2.5-2.6B`](https://huggingface.co/LiquidAI/LFM2.5-2.6B): does it describe land use, land cover or a geographic environment observable by remote sensing? Greedy decoding with reasoning, up to 4,096 tokens, served with SGLang and the [DSpark](https://huggingface.co/LiquidAI/LFM2.5-2.6B-DSpark) draft model, on about 4,500 GPU-hours of [Grid'5000](https://www.grid5000.fr). The model and prompt were chosen on [`benchmark-llms-landuse-relevance`](https://huggingface.co/datasets/NoeFlandre/benchmark-llms-landuse-relevance) (53 models, 25,500 labelled sentences in 85 languages), where this setup reaches macro F1 0.81 and balanced accuracy 0.77. Labels and raw model outputs, with reasoning ([code](https://github.com/NoeFlandre/filter-osm-datasets-llms-landuse)):
 $sources
 6. **This dataset.** One row per sentence of each document (a document linked to several polygons appears once); overlapping extracts resolved to the most specific one; language codes normalized; sentences with fewer than two letters dropped, and Wikipedia / Wikivoyage rows made only of bracketed edit links or citations (`[ edit | edit source ]`, `[Smith 1998]`) removed. Join the raw outputs on `sha256(text)` = `text_sha256`. Code: $code_url
-$scenes_method$themes_method
+$scenes_method$themes_method$translation_method
 ## License
 
 * OpenStreetMap data (`osm_description` text, polygons, names, tags): [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/), © OpenStreetMap contributors.
 * Wikipedia and Wikivoyage text: [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); `url` points to the exact revision for attribution.
 * Website text (`license = other`): © the respective site owners, included for research. To have content removed, open a discussion on this repository.
-$scenes_license
+$scenes_license$translation_license

@@ -368,3 +368,51 @@ def test_legend_names_the_local_axes():
         "* **Hue** (turned back ↔ forward than the surroundings, 10.0% of how cells differ from them): "
         "farms ↔ towns.",
     ]
+
+
+def _translation():
+    return card.Translation(
+        kinds=pl.DataFrame({"translation": ["nllb", "original"], "sentences": [7, 3]}),
+        flags=pl.DataFrame({"flag": ["truncated"], "sentences": [1], "share": [1 / 7]}),
+        distinct=6,
+        languages=2,
+        model="facebook/nllb-200-3.3B",
+        revision="1a07f7d195896b2114afcb79b7b57ab512e7b43e",
+        threshold=0.9,
+    )
+
+
+TRANSLATED_SNAPSHOT = Path(__file__).parents[1] / "data" / "card_translated_snapshot.md"
+
+
+def test_translated_card_matches_snapshot():
+    """The plain card plus the translation columns. Regenerate with ``UPDATE_SNAPSHOTS=1``."""
+    text = card.render(card.Context(**{**_context().__dict__, "translation": _translation()}))
+    if os.environ.get("UPDATE_SNAPSHOTS"):
+        TRANSLATED_SNAPSHOT.write_text(text)
+    assert text == TRANSLATED_SNAPSHOT.read_text()
+    assert DatasetCard(text).data.pretty_name == "GeoReSeT Corpus"
+    assert "$" not in text.replace("$ ", "")
+
+
+def test_translated_card_states_what_was_translated():
+    text = card.render(card.Context(**{**_context().__dict__, "translation": _translation()}))
+    assert "Every sentence also has an English version: 7 sentences machine-translated with NLLB-200" in text
+    assert "(6 distinct texts from 2 source languages, each translated once)" in text
+    assert "| `nllb` | 7 |" in text
+    assert "| truncated | 1 | 14.3% |" in text
+    assert "probability ≥ 0.9" in text
+    assert "[revision `1a07f7d`](https://huggingface.co/facebook/nllb-200-3.3B/tree/1a07f7d" in text
+    assert "| `translation_flags` | list[string] |" in text
+    assert text.index("## English translations") < text.index("## Files")
+    assert text.index("6. **This dataset.**") < text.index("7. **English translations.**")
+
+
+def test_untranslated_card_has_no_translation_text():
+    text = card.render(_context())
+    assert "text_en" not in text
+    assert card.translation_parts(_context()) == dict.fromkeys(card.TRANSLATION_PARTS, "")
+
+
+def test_translation_template_has_every_part():
+    assert tuple(card.parts(card.TRANSLATION_TEMPLATE.read_text())) == card.TRANSLATION_PARTS
