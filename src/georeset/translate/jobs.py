@@ -74,9 +74,13 @@ def plan_all(scratch: Path, workers: int, only: list[str] | None = None) -> None
 
 
 def pending(bucket: Bucket) -> str:
-    """The dispatcher's work items (``g5k-dispatch``): one, the work shards left."""
+    """The dispatcher's work items (``g5k-dispatch``): one, the work shards left and the shards done.
+
+    Planning may still add work shards; the result shards only grow, so they measure progress.
+    """
     remaining = len(bucket.files("work/"))
-    item = {"key": "nllb", "memory_gb": MEMORY_GB, "remaining": remaining, "fp16_ok": True}
+    done = len(bucket.files("results/"))
+    item = {"key": "nllb", "memory_gb": MEMORY_GB, "remaining": remaining, "fp16_ok": True, "done": done}
     return json.dumps([item])
 
 
