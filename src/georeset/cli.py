@@ -234,9 +234,10 @@ def translate_assemble(
     out: Out = Path("/tmp/georeset-out"),
     scratch: Scratch = Path("/tmp/georeset-assemble"),
 ) -> None:
-    """Copy the release, add the translation columns, write the card (CPU job); publish separately."""
+    """Copy the release, add the translation columns, write the card, open a pull request (CPU job)."""
     translation.assemble_all(out, work, scratch)
     typer.echo(report.build_card(pipeline.Layout(work, out), REPO_ID, CODE_URL))
+    typer.echo(translation.propose(out))
 
 
 @app.command("translate-upload-model")
@@ -245,7 +246,7 @@ def translate_upload_model(folder: Path) -> None:
     translation.upload_model(folder, Bucket())
 
 
-@app.command("translate-publish")
-def translate_publish(out: Out = Path("/tmp/georeset-release/out")) -> None:
-    """Publish the assembled release as v1.1 (polygons left as they are), then delete the bucket."""
-    typer.echo(translation.publish(out, Bucket()))
+@app.command("translate-finalize")
+def translate_finalize(pr: Annotated[int, typer.Option(help="Number of the reviewed pull request.")]) -> None:
+    """Merge the translations' pull request, tag v1.1, delete the bucket."""
+    translation.finalize(pr, Bucket())

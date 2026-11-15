@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 from georeset import hub
 
@@ -18,6 +19,13 @@ class _FakeApi:
 
     def upload_file(self, *args, **kwargs):
         self.calls.append(("upload_file", args, kwargs))
+
+    def create_pull_request(self, *args, **kwargs):
+        self.calls.append(("create_pull_request", args, kwargs))
+        return SimpleNamespace(git_reference="refs/pr/3", url="https://hf.co/datasets/me/d/discussions/3")
+
+    def merge_pull_request(self, *args, **kwargs):
+        self.calls.append(("merge_pull_request", args, kwargs))
 
 
 def _out(tmp_path):
@@ -70,6 +78,7 @@ def test_publish_creates_public_repo_uploads_units_then_card(tmp_path, monkeypat
             "path_in_repo": "data/website",
             "delete_patterns": "*",
             "commit_message": "Upload data/website",
+            "revision": None,
         },
     )
     assert [c[2]["path_in_repo"] for c in folders] == hub.upload_units(out)
@@ -82,6 +91,7 @@ def test_publish_creates_public_repo_uploads_units_then_card(tmp_path, monkeypat
             "path_or_fileobj": out / "README.md",
             "path_in_repo": "README.md",
             "commit_message": "Update dataset card",
+            "revision": None,
         },
     )
     assert len(api.calls) == 7
@@ -216,3 +226,26 @@ def test_revision_of_and_tag(monkeypatch):
     assert hub.revision_of("me/d", "v1.0") == "def"
     hub.tag("me/d", "v1.1")
     assert seen == [("info", "me/d", "v1.0"), ("tag", "me/d", "v1.1", "dataset")]
+
+
+def test_propose_uploads_to_a_new_pull_request(tmp_path, monkeypatch):
+    api = _FakeApi()
+    monkeypatch.setattr(hub, "HfApi", lambda: api)
+    out = _out(tmp_path)
+    assert hub.propose(out, "me/d", "Add translations") == "https://hf.co/datasets/me/d/discussions/3"
+    assert api.calls[0] == (
+        "create_pull_request",
+        ("me/d",),
+        {"title": "Add translations", "repo_type": "dataset"},
+    )
+    uploads = api.calls[1:]
+    assert len(uploads) == len(hub.upload_units(out)) + 1
+    assert all(call[2]["revision"] == "refs/pr/3" for call in uploads)
+    assert uploads[-1][2]["path_in_repo"] == "README.md"
+
+
+def test_merge(monkeypatch):
+    api = _FakeApi()
+    monkeypatch.setattr(hub, "HfApi", lambda: api)
+    hub.merge("me/d", 3)
+    assert api.calls == [("merge_pull_request", ("me/d", 3), {"repo_type": "dataset"})]
