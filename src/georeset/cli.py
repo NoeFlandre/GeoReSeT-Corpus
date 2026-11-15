@@ -203,9 +203,13 @@ Scratch = Annotated[Path, typer.Option(help="Node-local scratch directory.")]
 
 
 @app.command("translate-plan")
-def translate_plan(scratch: Scratch = Path("/tmp/georeset-plan"), workers: Workers = 8) -> None:
+def translate_plan(
+    scratch: Scratch = Path("/tmp/georeset-plan"),
+    workers: Workers = 8,
+    unit: Annotated[list[str] | None, typer.Option(help="Plan only this unit (repeatable).")] = None,
+) -> None:
     """Route every row of the release and upload the texts to translate to the bucket (CPU job)."""
-    translation.plan_all(scratch, workers)
+    translation.plan_all(scratch, workers, unit)
 
 
 @app.command("translate-pending")

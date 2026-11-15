@@ -4,4 +4,4 @@
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 "$UV" sync --project "$SRC" --frozen --no-dev --extra translate --quiet
-"$UV" run --project "$SRC" --frozen --no-sync georeset translate-plan --scratch "$WORK/scratch" --workers "${WORKERS:-$(( $(nproc) / 4 ))}"
+"$UV" run --project "$SRC" --frozen --no-sync georeset translate-plan --scratch "$WORK/scratch" --workers "${WORKERS:-$(( $(nproc) / 4 ))}" ${UNITS:+$(printf -- '--unit %s ' $UNITS)}

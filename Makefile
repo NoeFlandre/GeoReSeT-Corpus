@@ -16,7 +16,7 @@ crap: test
 	uv run python -m tools.crap coverage.json 6
 
 mutate:
-	uv run mutmut run --max-children 4
+	OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES uv run mutmut run --max-children 4  # macOS: forked children may touch Objective-C
 	uv run mutmut results
 
 docs:

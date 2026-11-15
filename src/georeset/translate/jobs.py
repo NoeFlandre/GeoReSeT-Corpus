@@ -62,13 +62,13 @@ def _plan_in_process(unit: str, rev: str, scratch: Path) -> None:  # pragma: no 
     plan_unit(unit, rev, Bucket(), scratch, _IDENTIFY)
 
 
-def plan_all(scratch: Path, workers: int) -> None:  # pragma: no cover (Grid'5000 CPU job)
-    """Plan every unit of the release, ``workers`` at a time, largest first."""
+def plan_all(scratch: Path, workers: int, only: list[str] | None = None) -> None:  # pragma: no cover
+    """Plan every unit of the release (or ``only`` those), ``workers`` at a time (Grid'5000 CPU job)."""
     rev = release()
     bucket = Bucket()
     bucket.create()
-    paths = hub.list_files(REPO, rev)
-    todo = [u for u in plan.units(paths) if u not in planned(bucket)]
+    units = only or plan.units(hub.list_files(REPO, rev))
+    todo = [u for u in units if u not in planned(bucket)]
     with ProcessPoolExecutor(workers, initializer=_init_identify) as pool:
         list(pool.map(_plan_in_process, todo, [rev] * len(todo), [scratch] * len(todo)))
 
