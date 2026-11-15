@@ -109,3 +109,43 @@ georeset space                   data from the dataset's current revision, app f
 parent, loaded as the map zooms in) and `manifest.json`, which names the dataset revision it was built from.
 The app (`georeset/publish/space_app`, a static page: MapLibre, deck.gl, h3-js, hyparquet) shows that
 revision and says when the dataset has changed since: rebuild with the two steps above after each release.
+
+## English translations
+
+`georeset.translate` adds four columns to every row of `data/` and `unlabelled/` of a release
+(`text_en`, `translation`, `translation_language`, `translation_flags`) without changing any other column,
+with [`facebook/nllb-200-3.3B`](https://huggingface.co/facebook/nllb-200-3.3B) and the settings of the benchmark
+that chose it ([`llms-xx-to-en-translation`](https://github.com/NoeFlandre/llms-xx-to-en-translation): greedy,
+float16, output budget 3× the source tokens in [32, 2048], its failure checks, GlotLID v4). Everything runs on
+Grid'5000; working files live in the private bucket `NoeFlandre/georeset-translation`, deleted at the end.
+
+```
+release v1.0 ──translate-plan──▶ bucket work/<unit>/<n>.parquet   distinct (language, text) to translate
+   (CPU job)                     bucket routes/<unit>.parquet       website rows GlotLID reassigns
+                                 bucket plan/<unit>.json            counts
+             ──translate-work──▶ bucket results/<unit>/<n>.parquet  one GPU job per free GPU (g5k-dispatch);
+   (GPU jobs)                                                       work shards deleted once translated
+             ──translate-assemble──▶ out/ (release + 4 columns, original columns checked equal), card
+   (CPU job)
+             ──translate-publish──▶ the dataset repo (not polygons), tag v1.1, bucket deleted
+```
+
+A unit is one language folder (all sources) or `unlabelled`. Routing (`translate.route`): English rows keep
+their text; `website` sentences take GlotLID's label when it is another language with probability ≥ 0.9
+(pages are labelled as a whole); Chinese is split into Simplified and Traditional by distinctive characters;
+`fas_Arab`, `ekk_Latn`, `yue_Hani` map to NLLB's codes; Serbian Latin is transliterated to Cyrillic;
+languages NLLB lacks are `unsupported`, unsplit texts `unsplit`. Each distinct text is translated once, keyed
+by `sha256(code, text)[:16]`; the assembly routes rows again with the same code and the recorded overrides.
+
+```bash
+# on a Nancy frontend, once
+oarsub -n georeset-convert -p "gpu_count=0 AND memnode>=98304" -l nodes=1,walltime=1:30 \
+  "bash ~/src/GeoReSeT-Corpus/scripts/g5k/convert_model.sh"
+oarsub -n georeset-plan -p "gpu_count=0" -l nodes=1,walltime=6:00 "bash ~/src/GeoReSeT-Corpus/scripts/g5k/plan_job.sh"
+# GPU jobs on every site until no work shard is left
+oarsub -n dispatch -p "gpu_count=0" -l nodes=1,walltime=1:00 \
+  "bash ~/src/g5k-dispatch/scripts/dispatch_job.sh ~/src/GeoReSeT-Corpus/configs/translate.yaml"
+# then
+OUT=/tmp/georeset-release oarsub ... "bash ~/src/GeoReSeT-Corpus/scripts/g5k/assemble_job.sh"
+georeset translate-publish --out /tmp/georeset-release/out   # on that node, after review
+```
