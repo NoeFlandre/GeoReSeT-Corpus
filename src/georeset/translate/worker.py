@@ -24,6 +24,9 @@ from georeset.translate.store import Bucket
 CLAIM_S = 75 * 60  # longer than a one-hour job
 CHUNK = 1024  # sentences per call to the model, so that each call's budget fits its sentences
 MAX_INPUT_TOKENS = 1024  # NLLB's positions; longer inputs are cut and flagged
+# CTranslate2 has no decoder position past 1023 (transformers extends its sinusoids): the benchmark's
+# budget (up to 2,048) is capped here; an output that reaches the cap is flagged ``truncated``.
+MAX_OUTPUT_TOKENS = 1020
 
 
 @dataclass(frozen=True)
@@ -61,7 +64,7 @@ def translate_group(
 ) -> tuple[list[Output], list[int], list[int]]:
     """Outputs, budgets and source token counts for texts of one language, chunk by chunk."""
     counts = engine.count(texts, language)
-    budgets = [max_new_tokens(n) for n in counts]
+    budgets = [min(max_new_tokens(n), MAX_OUTPUT_TOKENS) for n in counts]
     outputs: list[Output] = []
     for start in range(0, len(texts), CHUNK):
         chunk = slice(start, start + CHUNK)
@@ -146,7 +149,7 @@ class Worker:
         self.bucket.get([(f"work/{shard}.parquet", local)])
         result = self.scratch / "result.parquet"
         translated = translate_shard(self.engine, self.identify, pl.read_parquet(local))
-        translated.write_parquet(result, compression="zstd")
+        translated.write_parquet(result, compression="zstd")  # pragma: no mutate (zstd is the default)
         self.bucket.put([(result, f"results/{shard}.parquet")])
         self.bucket.delete([f"work/{shard}.parquet", claim])
         print(f"{shard}: {translated.height} texts in {self.clock() - started:.0f} s", flush=True)

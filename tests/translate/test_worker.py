@@ -12,8 +12,10 @@ class FakeEngine:
 
     def __init__(self):
         self.calls = []
+        self.counted = []
 
     def count(self, texts, language):
+        self.counted.append(language)
         return [len(t.split()) for t in texts]
 
     def translate(self, texts, language, budgets):
@@ -53,12 +55,14 @@ def test_flags_name_the_failed_checks():
 def test_translate_group_gives_each_chunk_its_own_budgets(monkeypatch):
     monkeypatch.setattr(worker, "CHUNK", 2)
     engine = FakeEngine()
-    texts = ["a", "b c", " ".join(["w"] * 20)]
+    texts = ["a", "b c", " ".join(["w"] * 20), " ".join(["v"] * 340), " ".join(["u"] * 341)]
     outputs, budgets, counts = worker.translate_group(engine, texts, "fra_Latn")
-    assert counts == [1, 2, 20]
-    assert budgets == [32, 32, 60]
-    assert engine.calls == [("fra_Latn", [32, 32]), ("fra_Latn", [60])]
-    assert [o.text for o in outputs] == ["en a", "en b c", "en " + " ".join(["w"] * 20)]
+    assert counts == [1, 2, 20, 340, 341]
+    assert budgets == [32, 32, 60, 1020, worker.MAX_OUTPUT_TOKENS]
+    assert worker.MAX_OUTPUT_TOKENS == 1020
+    assert engine.calls == [("fra_Latn", [32, 32]), ("fra_Latn", [60, 1020]), ("fra_Latn", [1020])]
+    assert engine.counted == ["fra_Latn"]
+    assert [o.text for o in outputs][:3] == ["en a", "en b c", "en " + " ".join(["w"] * 20)]
 
 
 def test_translate_shard_groups_by_language_and_keeps_keys():
@@ -155,3 +159,57 @@ def test_worker_with_no_time_does_nothing(bucket, tmp_path, budget):
         worker.Worker(bucket, FakeEngine(), _english, tmp_path, 0, budget_s=budget, clock=Clock(0.0)).run()
         == 0
     )
+
+
+def test_translate_shard_refuses_a_language_label_per_output_mismatch():
+    work = _work([(b"k1", "deu_Latn", "hallo"), (b"k2", "deu_Latn", "welt")])
+    with pytest.raises(ValueError, match="zip"):
+        worker.translate_shard(FakeEngine(), lambda texts: ["eng_Latn"], work)
+
+
+class RecordingBucket:
+    """Wraps the shared fake bucket and keeps the bytes of every upload."""
+
+    def __init__(self, bucket):
+        self.inner, self.uploads = bucket, []
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    def put(self, files):
+        self.uploads += [(remote, local if isinstance(local, bytes) else None) for local, remote in files]
+        self.inner.put(files)
+
+
+def test_process_claims_with_an_empty_file_keeps_two_scratch_files_and_reports(bucket, tmp_path, monkeypatch):
+    import pyarrow.parquet as pq
+
+    _bucket_with(bucket, {"fra/00000": [(b"k", "fra_Latn", "salut"), (b"j", "fra_Latn", "oui")]})
+    printed = []
+    monkeypatch.setattr(worker, "print", lambda *a, **k: printed.append((a, k)), raising=False)
+    recording = RecordingBucket(bucket)
+    run = worker.Worker(recording, FakeEngine(), _english, tmp_path, 0, budget_s=1e6, clock=Clock(1.0))
+    run.process("fra/00000", 1000)
+    assert recording.uploads == [("claims/fra/00000.1000", b""), ("results/fra/00000.parquet", None)]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["result.parquet", "work.parquet"]
+    meta = pq.ParquetFile(tmp_path / "result.parquet").metadata
+    assert meta.row_group(0).column(0).compression == "ZSTD"
+    assert printed == [(("fra/00000: 2 texts in 1 s",), {"flush": True})]
+
+
+def test_results_paths_map_back_to_their_work_shard_only_once(bucket):
+    bucket.data.update({"work/x/results/0.parquet": b"", "results/x/results/0.parquet": b""})
+    run = worker.Worker(bucket, FakeEngine(), _english, None, 0, budget_s=1e6, clock=Clock(0.0))
+    assert run.next_shard() is None
+
+
+def test_run_reserves_no_time_before_the_first_shard(bucket, tmp_path):
+    _bucket_with(bucket, {"a/00000": [(b"k", "fra_Latn", "x")], "a/00001": [(b"j", "fra_Latn", "y")]})
+    run = worker.Worker(bucket, FakeEngine(), _english, tmp_path, 0, budget_s=1.5, clock=Clock(1.0))
+    assert run.run() == 1
+
+
+def test_run_measures_each_shard_by_its_own_duration(bucket, tmp_path):
+    _bucket_with(bucket, {"a/00000": [(b"k", "fra_Latn", "x")], "a/00001": [(b"j", "fra_Latn", "y")]})
+    run = worker.Worker(bucket, FakeEngine(), _english, tmp_path, 0, budget_s=100, clock=Clock(1.0))
+    assert run.run() == 2

@@ -116,7 +116,7 @@ revision and says when the dataset has changed since: rebuild with the two steps
 (`text_en`, `translation`, `translation_language`, `translation_flags`) without changing any other column,
 with [`facebook/nllb-200-3.3B`](https://huggingface.co/facebook/nllb-200-3.3B) and the settings of the benchmark
 that chose it ([`llms-xx-to-en-translation`](https://github.com/NoeFlandre/llms-xx-to-en-translation): greedy,
-float16, output budget 3× the source tokens in [32, 2048], its failure checks, GlotLID v4). Everything runs on
+float16, output budget 3× the source tokens in [32, 2048] capped at 1,020 decoder positions, its failure checks, GlotLID v4). Everything runs on
 Grid'5000; working files live in the private bucket `NoeFlandre/georeset-translation`, deleted at the end.
 
 ```
