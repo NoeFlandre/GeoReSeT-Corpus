@@ -12,6 +12,8 @@ from georeset.build import fuse as fusion
 from georeset.build import pipeline, stage
 from georeset.publish import report, space, themes
 from georeset.sources import description, website, wiki
+from georeset.translate import jobs as translation
+from georeset.translate.store import Bucket
 
 SOURCES = (website.SOURCE, description.SOURCE, wiki.SOURCE)
 REPO_ID = "NoeFlandre/GeoReSeT-Corpus"
@@ -195,3 +197,51 @@ def run(
     card_cmd(work, out)
     if publish_:
         publish(out)
+
+
+Scratch = Annotated[Path, typer.Option(help="Node-local scratch directory.")]
+
+
+@app.command("translate-plan")
+def translate_plan(scratch: Scratch = Path("/tmp/georeset-plan"), workers: Workers = 8) -> None:
+    """Route every row of the release and upload the texts to translate to the bucket (CPU job)."""
+    translation.plan_all(scratch, workers)
+
+
+@app.command("translate-pending")
+def translate_pending() -> None:
+    """Work items for g5k-dispatch: the work shards left in the bucket."""
+    typer.echo(translation.pending(Bucket()))
+
+
+@app.command("translate-work")
+def translate_work(
+    scratch: Scratch = Path("/tmp/georeset-translate"),
+    offset: Annotated[int, typer.Option(help="Where in the shard list this job starts.")] = 0,
+    minutes: Annotated[float, typer.Option(help="Time budget: no shard starts that may not end in it.")] = 50,
+) -> None:
+    """Translate work shards on this node's GPU until the time budget runs out (GPU job)."""
+    typer.echo(f"{translation.translate(scratch, offset, minutes * 60)} shards translated")
+
+
+@app.command("translate-assemble")
+def translate_assemble(
+    work: Work = Path("/tmp/georeset-work"),
+    out: Out = Path("/tmp/georeset-out"),
+    scratch: Scratch = Path("/tmp/georeset-assemble"),
+) -> None:
+    """Copy the release, add the translation columns, write the card (CPU job); publish separately."""
+    translation.assemble_all(out, work, scratch)
+    typer.echo(report.build_card(pipeline.Layout(work, out), REPO_ID, CODE_URL))
+
+
+@app.command("translate-upload-model")
+def translate_upload_model(folder: Path) -> None:
+    """Upload NLLB converted for CTranslate2 to the bucket (``scripts/g5k/convert_model.sh``)."""
+    translation.upload_model(folder, Bucket())
+
+
+@app.command("translate-publish")
+def translate_publish(out: Out = Path("/tmp/georeset-release/out")) -> None:
+    """Publish the assembled release as v1.1 (polygons left as they are), then delete the bucket."""
+    typer.echo(translation.publish(out, Bucket()))

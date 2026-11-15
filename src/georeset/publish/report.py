@@ -79,6 +79,28 @@ def theme_context(work: Path, assets: Path) -> tuple[card.Themes, ...]:
     )
 
 
+TRANSLATION_COLUMNS = ["translation", "translation_language", "translation_flags"]
+
+
+def translation_context(out: Path, work: Path) -> card.Translation | None:
+    """Stats of the English translations (``work/translation.json`` and the shards), if they were added."""
+    summary = work / "translation.json"
+    if not summary.is_file():
+        return None
+    folders = (out / "data" / "*" / "*" / "*.parquet", out / "unlabelled" / "*.parquet")
+    rows = pl.concat([pl.scan_parquet(f).select(TRANSLATION_COLUMNS) for f in folders])
+    meta = json.loads(summary.read_text())
+    return card.Translation(
+        kinds=stats.translation_kinds(rows),
+        flags=stats.translation_flags(rows),
+        distinct=meta["distinct"],
+        languages=stats.translation_languages(rows),
+        model=meta["model"],
+        revision=meta["revision"],
+        threshold=meta["threshold"],
+    )
+
+
 def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
     data = pl.scan_parquet(layout.out / "data" / "*" / "*" / "*.parquet")
     draw_maps(data, layout.out)
@@ -96,6 +118,7 @@ def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
         code_url=code_url,
         scenes=scene_context(layout.out, layout.work),
         themes=theme_context(layout.work, layout.out / "assets"),
+        translation=translation_context(layout.out, layout.work),
     )
     hero = HERO if context.scenes is None else FUSED_HERO
     shutil.copyfile(str(hero), layout.out / "assets" / "hero.png")

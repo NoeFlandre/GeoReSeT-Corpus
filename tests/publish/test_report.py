@@ -62,3 +62,42 @@ def test_theme_context_renders_each_computed_pca(tmp_path, monkeypatch):
     (tmp_path / "themes" / "scenes" / "summary.json").write_text("{}")
     monkeypatch.setattr(report.themes, "render", lambda work, assets, corpus: (work, assets, corpus.name))
     assert report.theme_context(tmp_path, tmp_path / "assets") == ((tmp_path, tmp_path / "assets", "scenes"),)
+
+
+def _translated(out, folder, rows):
+    import polars as pl
+
+    path = out / folder / "train-00000-of-00001.parquet"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pl.DataFrame(
+        rows,
+        schema={
+            "translation": pl.String,
+            "translation_language": pl.String,
+            "translation_flags": pl.List(pl.String),
+        },
+        orient="row",
+    ).write_parquet(path)
+
+
+def test_translation_context_reads_the_summary_and_the_shards(tmp_path):
+    out, work = tmp_path / "out", tmp_path / "work"
+    assert report.translation_context(out, work) is None
+    _translated(
+        out, "data/wikipedia/fra_Latn", [("nllb", "fra_Latn", ["truncated"]), ("nllb", "fra_Latn", [])]
+    )
+    _translated(out, "unlabelled", [("original", None, []), ("nllb", "deu_Latn", ["empty", "truncated"])])
+    work.mkdir()
+    meta = {"distinct": 2, "model": "m/x", "revision": "r", "threshold": 0.9, "release": "s"}
+    (work / "translation.json").write_text(json.dumps(meta))
+    context = report.translation_context(out, work)
+    assert context is not None
+    assert context.kinds.rows() == [("nllb", 3), ("original", 1)]
+    assert context.flags.rows() == [("truncated", 2, 2 / 3), ("empty", 1, 1 / 3)]
+    assert (context.distinct, context.languages, context.model, context.revision, context.threshold) == (
+        2,
+        2,
+        "m/x",
+        "r",
+        0.9,
+    )

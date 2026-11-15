@@ -10,6 +10,16 @@ def revision(repo: str) -> str:
     return str(HfApi().dataset_info(repo).sha)
 
 
+def revision_of(repo: str, ref: str) -> str:
+    """The commit a tag or branch of a dataset repo points to."""
+    return str(HfApi().dataset_info(repo, revision=ref).sha)
+
+
+def tag(repo: str, name: str) -> None:
+    """Tag the current commit of a dataset repo (a release)."""
+    HfApi().create_tag(repo, tag=name, repo_type="dataset")
+
+
 def list_files(repo: str, rev: str) -> frozenset[str]:
     return frozenset(HfApi().list_repo_files(repo, repo_type="dataset", revision=rev))
 

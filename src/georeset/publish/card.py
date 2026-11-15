@@ -15,6 +15,8 @@ from georeset.sources import scenes as scenes_source
 
 TEMPLATE = files("georeset.publish").joinpath("templates/card.md")
 SCENES_TEMPLATE = files("georeset.publish").joinpath("templates/scenes.md")
+TRANSLATION_TEMPLATE = files("georeset.publish").joinpath("templates/translation.md")
+TRANSLATION_PARTS = ("headline", "quickstart", "fields", "section", "files", "method", "license")
 THEMES_TEMPLATE = files("georeset.publish").joinpath("templates/themes.md")
 THEME_PARTS = ("section", "files", "configs", "method")
 # Each corpus' section goes where its template asks for ``themes_section_<corpus>``.
@@ -180,6 +182,19 @@ class Themes:
 
 
 @dataclass(frozen=True)
+class Translation:
+    """The English translations: rows per ``translation`` kind and per failed check, and the model."""
+
+    kinds: pl.DataFrame  # translation, sentences
+    flags: pl.DataFrame  # flag, sentences, share (of the translated sentences)
+    distinct: int  # texts sent to the model
+    languages: int  # NLLB source languages
+    model: str
+    revision: str
+    threshold: float
+
+
+@dataclass(frozen=True)
 class Context:
     repo_id: str
     by_source: pl.DataFrame
@@ -192,6 +207,7 @@ class Context:
     code_url: str
     scenes: Scenes | None = None
     themes: tuple[Themes, ...] = ()
+    translation: Translation | None = None
 
 
 def _bold_total(df: pl.DataFrame, column: str) -> pl.DataFrame:
@@ -395,10 +411,48 @@ def _shared_parts(rendered: list[dict[str, str]]) -> dict[str, str]:
     }
 
 
+def _code(text: str) -> str:
+    return f"`{text}`"
+
+
+def _translation_values(ctx: Context, translation: Translation) -> dict[str, str]:
+    translated = int(translation.kinds.filter(pl.col("translation") == "nllb")["sentences"].sum())
+    return {
+        "repo_id": ctx.repo_id,
+        "code_url": ctx.code_url,
+        "translated": fmt(translated),
+        "distinct": fmt(translation.distinct),
+        "languages": fmt(translation.languages),
+        "threshold": f"{translation.threshold:g}",
+        "model_url": f"https://huggingface.co/{translation.model}",
+        "model_tree": f"https://huggingface.co/{translation.model}/tree/{translation.revision}",
+        "model_short": translation.revision[:7],
+        "kinds": table(
+            translation.kinds, {"translation": ("`translation`", _code), "sentences": ("Sentences", fmt)}
+        ),
+        "flags": table(
+            translation.flags,
+            {"flag": ("Check", str), "sentences": ("Sentences", fmt), "share": ("Share of translated", pct)},
+        ),
+    }
+
+
+def translation_parts(ctx: Context) -> dict[str, str]:
+    """The translation columns' text, or empty strings for a card without them."""
+    if ctx.translation is None:
+        return dict.fromkeys(TRANSLATION_PARTS, "")
+    values = _translation_values(ctx, ctx.translation)
+    return {
+        name: Template(body).substitute(values)
+        for name, body in parts(TRANSLATION_TEMPLATE.read_text()).items()
+    }
+
+
 def _optional_parts(ctx: Context) -> dict[str, str]:
-    """``scenes_*`` and ``themes_*`` template values."""
+    """``scenes_*``, ``themes_*`` and ``translation_*`` template values."""
     scenes = {f"scenes_{name}": text for name, text in scene_parts(ctx).items()}
-    return scenes | {f"themes_{name}": text for name, text in theme_parts(ctx).items()}
+    translation = {f"translation_{name}": text for name, text in translation_parts(ctx).items()}
+    return scenes | translation | {f"themes_{name}": text for name, text in theme_parts(ctx).items()}
 
 
 def render(ctx: Context) -> str:
