@@ -71,6 +71,12 @@ def publish(folder: Path, repo_id: str, private: bool = False) -> str:
     """
     api = HfApi()
     url = api.create_repo(repo_id, repo_type="dataset", private=private, exist_ok=True)
+    _upload(api, folder, repo_id, None)
+    return str(url)
+
+
+def _upload(api: HfApi, folder: Path, repo_id: str, revision: str | None) -> None:
+    """One commit per unit of ``folder``, then the card, on ``revision`` (default: main)."""
     for unit in upload_units(folder):
         api.upload_folder(
             repo_id=repo_id,
@@ -79,6 +85,7 @@ def publish(folder: Path, repo_id: str, private: bool = False) -> str:
             path_in_repo=unit,
             delete_patterns="*",
             commit_message=f"Upload {unit}",
+            revision=revision,
         )
     api.upload_file(
         repo_id=repo_id,
@@ -86,5 +93,17 @@ def publish(folder: Path, repo_id: str, private: bool = False) -> str:
         path_or_fileobj=folder / "README.md",
         path_in_repo="README.md",
         commit_message="Update dataset card",
+        revision=revision,
     )
-    return str(url)
+
+
+def propose(folder: Path, repo_id: str, title: str) -> str:
+    """Upload ``folder`` to a new pull request of the dataset repo, for review; returns its URL."""
+    api = HfApi()
+    pr = api.create_pull_request(repo_id, title=title, repo_type="dataset")
+    _upload(api, folder, repo_id, pr.git_reference)
+    return str(pr.url)
+
+
+def merge(repo_id: str, number: int) -> None:
+    HfApi().merge_pull_request(repo_id, number, repo_type="dataset")

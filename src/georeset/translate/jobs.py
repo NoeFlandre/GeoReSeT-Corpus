@@ -142,12 +142,19 @@ def upload_model(folder: Path, bucket: Bucket) -> None:
 
 
 NEXT_RELEASE = "v1.1"
+PR_TITLE = (
+    "Add English translations (NLLB-200 3.3B): text_en, translation, translation_language, translation_flags"
+)
 
 
-def publish(out: Path, bucket: Bucket) -> str:  # pragma: no cover (writes to the public dataset)
-    """Upload the translated release (not ``polygons``, unchanged), tag it, then delete the bucket."""
+def propose(out: Path) -> str:
+    """Open a pull request with the translated release, for review; ``polygons`` (unchanged) is left out."""
     shutil.rmtree(out / "polygons", ignore_errors=True)
-    url = hub.publish(out, REPO)
+    return hub.propose(out, REPO, PR_TITLE)
+
+
+def finalize(number: int, bucket: Bucket) -> None:
+    """Merge the reviewed pull request, tag the release, delete the bucket."""
+    hub.merge(REPO, number)
     hub.tag(REPO, NEXT_RELEASE)
     bucket.remove()
-    return url

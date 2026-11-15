@@ -127,7 +127,7 @@ release v1.0 ──translate-plan──▶ bucket work/<unit>/<n>.parquet   dist
    (GPU jobs)                                                       work shards deleted once translated
              ──translate-assemble──▶ out/ (release + 4 columns, original columns checked equal), card
    (CPU job)
-             ──translate-publish──▶ the dataset repo (not polygons), tag v1.1, bucket deleted
+             ──translate-assemble─▶ a pull request on the dataset (not polygons); translate-finalize: merge, tag v1.1, delete the bucket
 ```
 
 A unit is one language folder (all sources) or `unlabelled`. Routing (`translate.route`): English rows keep
@@ -146,6 +146,6 @@ oarsub -n georeset-plan -p "gpu_count=0" -l nodes=1,walltime=6:00 "bash ~/src/Ge
 oarsub -n dispatch -p "gpu_count=0" -l nodes=1,walltime=1:00 \
   "bash ~/src/g5k-dispatch/scripts/dispatch_job.sh ~/src/GeoReSeT-Corpus/configs/translate.yaml"
 # then
-OUT=/tmp/georeset-release oarsub ... "bash ~/src/GeoReSeT-Corpus/scripts/g5k/assemble_job.sh"
-georeset translate-publish --out /tmp/georeset-release/out   # on that node, after review
+oarsub -n georeset-assemble -p "gpu_count=0 AND memnode>=98304" -l nodes=1,walltime=4:00 "bash ~/src/GeoReSeT-Corpus/scripts/g5k/assemble_job.sh"
+georeset translate-finalize --pr <number>   # after reviewing the pull request the assembly opened
 ```
