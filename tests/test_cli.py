@@ -223,7 +223,9 @@ def test_translate_commands_call_their_jobs(tmp_path, monkeypatch, capsys):
     calls = []
     monkeypatch.setattr(cli, "Bucket", lambda: "bucket")
     monkeypatch.setattr(
-        cli.translation, "plan_all", lambda scratch, workers: calls.append(("plan", scratch, workers))
+        cli.translation,
+        "plan_all",
+        lambda scratch, workers, unit: calls.append(("plan", scratch, workers, unit)),
     )
     monkeypatch.setattr(cli.translation, "pending", lambda bucket: f"pending {bucket}")
     monkeypatch.setattr(cli.translation, "translate", lambda s, o, b: calls.append(("work", s, o, b)) or 3)
@@ -234,7 +236,12 @@ def test_translate_commands_call_their_jobs(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli.translation, "upload_model", lambda f, b: calls.append(("model", f, b)))
     monkeypatch.setattr(cli.translation, "publish", lambda o, b: f"published {o} {b}")
     runner = CliRunner()
-    assert runner.invoke(cli.app, ["translate-plan", "--scratch", "s", "--workers", "2"]).exit_code == 0
+    assert (
+        runner.invoke(
+            cli.app, ["translate-plan", "--scratch", "s", "--workers", "2", "--unit", "a"]
+        ).exit_code
+        == 0
+    )
     assert runner.invoke(cli.app, ["translate-pending"]).output == "pending bucket\n"
     work = runner.invoke(cli.app, ["translate-work", "--scratch", "s", "--offset", "7", "--minutes", "2"])
     assert work.output == "3 shards translated\n"
@@ -245,7 +252,7 @@ def test_translate_commands_call_their_jobs(tmp_path, monkeypatch, capsys):
     assert runner.invoke(cli.app, ["translate-upload-model", "m"]).exit_code == 0
     assert runner.invoke(cli.app, ["translate-publish", "--out", "o"]).output == "published o bucket\n"
     assert calls == [
-        ("plan", Path("s"), 2),
+        ("plan", Path("s"), 2, ["a"]),
         ("work", Path("s"), 7, 120.0),
         ("assemble", Path("o"), Path("w"), Path("s")),
         ("card", cli.REPO_ID),
