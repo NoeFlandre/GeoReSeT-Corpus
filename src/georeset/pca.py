@@ -70,6 +70,7 @@ def pools(
 
 
 def compute(scratch: Path, work: Path, bucket: Bucket) -> None:  # pragma: no cover (Grid'5000 CPU job)
+    bucket.create()
     landuse, translated = sentence_shards(scratch)
     rev = hub.revision_of(REPO, RELEASE)
     hub.snapshot(REPO, rev, scratch / "vectors", ["embeddings/*", "embeddings_en/*"])
