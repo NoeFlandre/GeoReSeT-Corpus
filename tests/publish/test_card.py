@@ -397,7 +397,10 @@ def test_translated_card_matches_snapshot():
 
 def test_translated_card_states_what_was_translated():
     text = card.render(card.Context(**{**_context().__dict__, "translation": _translation()}))
-    assert "Every sentence also has an English version: 7 sentences machine-translated with NLLB-200" in text
+    assert (
+        "English text comes with them: 7 sentences machine-translated with NLLB-200 and 3 already in English"
+        in text
+    )
     assert "(6 distinct texts from 2 source languages, each translated once)" in text
     assert "| `nllb` | 7 |" in text
     assert "| truncated | 1 | 14.3% |" in text

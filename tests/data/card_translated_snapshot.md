@@ -12,7 +12,7 @@ configs: [{"config_name": "all", "data_files": [{"split": "train", "path": "data
 
 # GeoReSeT Corpus
 
-**10 sentences in 1 languages, tied to 7 OpenStreetMap polygons in 2 regions, each labelled for land-use / land-cover relevance by an LLM.** Every sentence also has an English version: 7 sentences machine-translated with NLLB-200, the rest already in English.
+**10 sentences in 1 languages, tied to 7 OpenStreetMap polygons in 2 regions, each labelled for land-use / land-cover relevance by an LLM.** English text comes with them: 7 sentences machine-translated with NLLB-200 and 3 already in English (see [English translations](#english-translations)).
 
 Sentences come from the websites, `description` tags and Wikipedia / Wikivoyage articles linked to OpenStreetMap polygons. Every row is one sentence with a boolean `landuse` label, the language, and the location of the polygon it describes. Polygon shapes are in a separate `polygons` table.
 

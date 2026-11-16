@@ -1,5 +1,5 @@
 <!-- headline -->
- Every sentence also has an English version: $translated sentences machine-translated with NLLB-200, the rest already in English.
+ English text comes with them: $translated sentences machine-translated with NLLB-200 and $original already in English (see [English translations](#english-translations)).
 <!-- quickstart -->
 
 English only, whatever the original language:
