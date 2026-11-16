@@ -71,6 +71,7 @@ def test_plan_done_once_reads_its_summary(bucket, tmp_path, monkeypatch):
     bucket.data["plan.json"] = json.dumps({"texts": 9, "release": "r"}).encode()
     monkeypatch.setattr(embedding.hub, "snapshot", lambda *a: pytest.fail("planned again"))
     assert embedding.plan(tmp_path, bucket) == 9
+    assert bucket.calls == [("create",)]
 
 
 def test_pending_counts_the_work_left_and_done(bucket):
