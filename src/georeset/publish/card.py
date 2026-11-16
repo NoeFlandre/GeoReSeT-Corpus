@@ -415,12 +415,16 @@ def _code(text: str) -> str:
     return f"`{text}`"
 
 
+def _kind(translation: Translation, kind: str) -> int:
+    return int(translation.kinds.filter(pl.col("translation") == kind)["sentences"].sum())
+
+
 def _translation_values(ctx: Context, translation: Translation) -> dict[str, str]:
-    translated = int(translation.kinds.filter(pl.col("translation") == "nllb")["sentences"].sum())
     return {
         "repo_id": ctx.repo_id,
         "code_url": ctx.code_url,
-        "translated": fmt(translated),
+        "translated": fmt(_kind(translation, "nllb")),
+        "original": fmt(_kind(translation, "original")),
         "distinct": fmt(translation.distinct),
         "languages": fmt(translation.languages),
         "threshold": f"{translation.threshold:g}",
