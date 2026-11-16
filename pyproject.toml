@@ -30,6 +30,8 @@ translate = [
     "nvidia-cublas-cu12; sys_platform == 'linux'",
     "nvidia-cudnn-cu12>=9,<10; sys_platform == 'linux'",
 ]
+# Grid'5000 job environments only: the sentence embedder (as in scripts/embed.py).
+embed = ["sentence-transformers>=5.1", "torch>=2.8"]
 
 [tool.uv.sources]
 # The benchmark that chose the model: its generation budget and failure checks are reused as they are.

@@ -41,11 +41,42 @@ def test_fetch_pins_the_release_and_the_fused_folders(tmp_path, monkeypatch):
         ("corpus", extras.REPO, f"{extras.REPO}@v1.1", out, work),
         ("snapshot", extras.FUSED_REPO, "f" * 40, out, ["embeddings/*", "polygons_labels_shares/*"]),
     ]
-    assert sorted(p.name for p in work.iterdir()) == ["corpus", "fused.json", "translation.json"]
+    assert sorted(p.name for p in work.iterdir()) == [
+        "corpus",
+        "fused.json",
+        "revisions.json",
+        "translation.json",
+    ]
     fused = {"NoeFlandre/GeoReSeT-Corpus-Fused": "f" * 40}
     assert (work / "fused.json").read_text() == json.dumps(fused, indent=2)
     summary = extras.translation_summary(CARD)
     assert (work / "translation.json").read_text() == json.dumps(summary, indent=2)
+
+
+SHA = "a" * 40
+PINNED_CARD = (
+    f"{CARD}\n* [`me/up` @ `aaaaaaa`](https://huggingface.co/datasets/me/up/tree/{SHA})\n"
+    f"Copied from [x](https://huggingface.co/datasets/NoeFlandre/GeoReSeT-Corpus-Fused/tree/{'b' * 40})"
+)
+
+
+def test_restore_context_splits_the_fused_pin_from_the_label_pins(tmp_path):
+    (tmp_path / "corpus").mkdir()
+    (tmp_path / "corpus" / "README.md").write_text(PINNED_CARD)
+    extras.restore_context(tmp_path)
+    assert (tmp_path / "revisions.json").read_text() == json.dumps({"me/up": SHA}, indent=2)
+    fused = {extras.FUSED_REPO: "b" * 40}
+    assert (tmp_path / "fused.json").read_text() == json.dumps(fused, indent=2)
+    summary = extras.translation_summary(CARD)
+    assert (tmp_path / "translation.json").read_text() == json.dumps(summary, indent=2)
+
+
+def test_restore_context_without_a_fused_pin_writes_none(tmp_path):
+    (tmp_path / "corpus").mkdir()
+    (tmp_path / "corpus" / "README.md").write_text(CARD)
+    extras.restore_context(tmp_path)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["corpus", "revisions.json", "translation.json"]
+    assert json.loads((tmp_path / "revisions.json").read_text()) == {}
 
 
 def test_fetch_reads_the_release_card_by_its_exact_name(tmp_path, monkeypatch):

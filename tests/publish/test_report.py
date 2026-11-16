@@ -175,3 +175,29 @@ def test_build_card_adds_the_copied_folders(layout):
     text = report.build_card(layout, "me/data", "https://github.com/me/code").read_text()
     assert "## EUNIS labels" in text
     assert "1 of the 3 polygons have one" in text
+
+
+def test_english_context_counts_the_vectors(tmp_path, monkeypatch):
+    import polars as pl
+
+    out = tmp_path / "out"
+    assert report.english_context(out) is None
+    (out / "embeddings_en").mkdir(parents=True)
+    pl.DataFrame({"id": ["a", "b"]}).write_parquet(out / "embeddings_en" / "train-0.parquet")
+    scanned, scan = [], pl.scan_parquet
+    monkeypatch.setattr(pl, "scan_parquet", lambda path: scanned.append(path) or scan(path))
+    assert report.english_context(out) == report.card.English(
+        embedded=2, model=report.themes.MODEL, prompt=report.themes.PROMPT, tokens=512
+    )
+    assert [str(p.relative_to(out)) for p in scanned] == ["embeddings_en/*.parquet"]
+
+
+def test_build_card_adds_the_english_vectors(layout):
+    import polars as pl
+
+    build_all(layout)
+    (layout.work / "revisions.json").write_text(json.dumps({"me/up": "abcdef123"}))
+    (layout.out / "embeddings_en").mkdir()
+    pl.DataFrame({"id": ["a"]}).write_parquet(layout.out / "embeddings_en" / "train-0.parquet")
+    text = report.build_card(layout, "me/data", "https://github.com/me/code").read_text()
+    assert "7. **Embeddings of the English translations.** The 1 distinct" in text

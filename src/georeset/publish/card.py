@@ -20,6 +20,8 @@ TRANSLATION_PARTS = ("headline", "quickstart", "fields", "section", "files", "me
 EXTRAS_TEMPLATE = files("georeset.publish").joinpath("templates/extras.md")
 EXTRAS_PARTS = ("files", "configs", "section", "method")
 EXTRAS_FOLDERS = ("embeddings", "polygons_labels_shares")
+ENGLISH_TEMPLATE = files("georeset.publish").joinpath("templates/english.md")
+ENGLISH_PARTS = ("files", "configs", "method")
 THEMES_TEMPLATE = files("georeset.publish").joinpath("templates/themes.md")
 THEME_PARTS = ("section", "files", "configs", "method")
 # Each corpus' section goes where its template asks for ``themes_section_<corpus>``.
@@ -210,6 +212,16 @@ class Extras:
 
 
 @dataclass(frozen=True)
+class English:
+    """The vectors of the English translations (``embeddings_en``)."""
+
+    embedded: int  # distinct translations with a vector
+    model: str
+    prompt: str
+    tokens: int  # longest input, in tokens
+
+
+@dataclass(frozen=True)
 class Context:
     repo_id: str
     by_source: pl.DataFrame
@@ -224,6 +236,7 @@ class Context:
     themes: tuple[Themes, ...] = ()
     translation: Translation | None = None
     extras: Extras | None = None
+    english: English | None = None
 
 
 def _bold_total(df: pl.DataFrame, column: str) -> pl.DataFrame:
@@ -262,6 +275,14 @@ def flavor(ctx: Context) -> Flavor:
     return PLAIN if ctx.scenes is None else FUSED
 
 
+def _folders(ctx: Context) -> tuple[str, ...]:
+    """Folders beyond the corpus' own: scenes, each PCA's vectors, copied folders, English vectors."""
+    themes = dict.fromkeys(themes.corpus.folder for themes in ctx.themes)
+    copied = EXTRAS_FOLDERS if ctx.extras else ()
+    english = ("embeddings_en",) if ctx.english else ()
+    return (*flavor(ctx).folders, *themes, *copied, *english)
+
+
 def _front_matter(ctx: Context) -> str:
     kind = flavor(ctx)
     meta = {
@@ -271,10 +292,7 @@ def _front_matter(ctx: Context) -> str:
         "task_categories": ["text-classification"],
         "tags": list(kind.tags),
         "size_categories": [size_category(_total(ctx)["sentences"])],
-        "configs": configs(ctx.partitions)
-        + folder_configs(kind.folders)
-        + folder_configs(tuple(dict.fromkeys(themes.corpus.folder for themes in ctx.themes)))
-        + folder_configs(EXTRAS_FOLDERS if ctx.extras else ()),
+        "configs": configs(ctx.partitions) + folder_configs(_folders(ctx)),
     }
     # JSON is valid YAML: no YAML dependency, no quoting surprises.
     return "\n".join(f"{key}: {json.dumps(value)}" for key, value in meta.items())
@@ -496,12 +514,38 @@ def extras_parts(ctx: Context) -> dict[str, str]:
     }
 
 
+def english_parts(ctx: Context) -> dict[str, str]:
+    """The English vectors' text, or empty strings for a card without them."""
+    if ctx.english is None:
+        return dict.fromkeys(ENGLISH_PARTS, "")
+    english = ctx.english
+    values = {
+        "embedded": fmt(english.embedded),
+        "model": english.model,
+        "prompt": english.prompt.replace("\n", "\\n"),
+        "tokens": fmt(english.tokens),
+        "code_url": ctx.code_url,
+        "step": str(extras_step(ctx) + bool(ctx.extras)),
+    }
+    return {
+        name: Template(body).substitute(values) for name, body in parts(ENGLISH_TEMPLATE.read_text()).items()
+    }
+
+
+_OPTIONAL = {
+    "scenes": scene_parts,
+    "translation": translation_parts,
+    "extras": extras_parts,
+    "english": english_parts,
+    "themes": theme_parts,
+}
+
+
 def _optional_parts(ctx: Context) -> dict[str, str]:
-    """``scenes_*``, ``themes_*``, ``translation_*`` and ``extras_*`` template values."""
-    scenes = {f"scenes_{name}": text for name, text in scene_parts(ctx).items()}
-    translation = {f"translation_{name}": text for name, text in translation_parts(ctx).items()}
-    extras = {f"extras_{name}": text for name, text in extras_parts(ctx).items()}
-    return scenes | translation | extras | {f"themes_{name}": text for name, text in theme_parts(ctx).items()}
+    """``<section>_<part>`` template values of each optional section (empty strings when absent)."""
+    return {
+        f"{section}_{name}": text for section, made in _OPTIONAL.items() for name, text in made(ctx).items()
+    }
 
 
 def render(ctx: Context) -> str:

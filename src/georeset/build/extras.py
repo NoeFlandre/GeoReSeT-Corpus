@@ -35,14 +35,29 @@ def translation_summary(card: str) -> dict:
     }
 
 
+def _write(path: Path, value: dict) -> None:
+    path.write_text(json.dumps(value, indent=2))
+
+
+def restore_context(work: Path) -> None:
+    """What the card needs that only the release's card keeps (``work/corpus/README.md``): the labels'
+    upstream pins, the fused dataset's pin if any, and the translation summary.
+    """
+    card = (work / "corpus" / "README.md").read_text()
+    pins = fuse.card_revisions(card)
+    if FUSED_REPO in pins:
+        _write(work / "fused.json", {FUSED_REPO: pins.pop(FUSED_REPO)})
+    _write(work / "revisions.json", pins)
+    _write(work / "translation.json", translation_summary(card))
+
+
 def fetch(out: Path, work: Path) -> None:
     """The release and fused folders into ``out``; their pins and the translation summary into ``work``."""
     fuse.fetch_corpus(REPO, hub.revision_of(REPO, RELEASE), out, work)
+    restore_context(work)
     fused = hub.revision(FUSED_REPO)
     hub.snapshot(FUSED_REPO, fused, out, [f"{folder}/*" for folder in EXTRAS_FOLDERS])
-    (work / "fused.json").write_text(json.dumps({FUSED_REPO: fused}, indent=2))
-    summary = translation_summary((work / "corpus" / "README.md").read_text())
-    (work / "translation.json").write_text(json.dumps(summary, indent=2))
+    _write(work / "fused.json", {FUSED_REPO: fused})
 
 
 def _scan(out: Path, folder: str) -> pl.LazyFrame:

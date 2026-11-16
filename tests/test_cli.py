@@ -295,3 +295,60 @@ def test_extras_propose_defaults_to_node_local_folders(monkeypatch):
     monkeypatch.setattr(cli.extras, "propose", lambda o: "pr")
     assert CliRunner().invoke(cli.app, ["extras-propose"]).exit_code == 0
     assert seen == [(Path("/tmp/georeset-out"), Path("/tmp/georeset-work"))]
+
+
+def test_embed_commands_call_their_jobs(monkeypatch):
+    from typer.testing import CliRunner
+
+    calls = []
+    monkeypatch.setattr(cli, "Bucket", lambda bucket_id: f"bucket {bucket_id}")
+    monkeypatch.setattr(
+        cli.embedding, "plan", lambda scratch, bucket: calls.append(("plan", scratch, bucket)) or 5
+    )
+    monkeypatch.setattr(cli.embedding, "pending", lambda bucket: f"pending {bucket}")
+    monkeypatch.setattr(cli.embedding, "work", lambda s, o, b: calls.append(("work", s, o, b)) or 3)
+    monkeypatch.setattr(cli.embedding, "assemble", lambda o, w, b: calls.append(("assemble", o, w, b)))
+    monkeypatch.setattr(
+        report,
+        "build_card",
+        lambda layout, repo, url: calls.append(("card", layout, repo, url)) or "README.md",
+    )
+    monkeypatch.setattr(cli.embedding, "propose", lambda o: f"pr {o}")
+    monkeypatch.setattr(cli.embedding, "finalize", lambda n, b: calls.append(("finalize", n, b)))
+    runner = CliRunner()
+    bucket = f"bucket {cli.embedding.BUCKET}"
+    assert runner.invoke(cli.app, ["embed-plan", "--scratch", "s"]).output == "5 texts to embed\n"
+    assert runner.invoke(cli.app, ["embed-pending"]).output == f"pending {bucket}\n"
+    work = runner.invoke(cli.app, ["embed-work", "--scratch", "s", "--offset", "7", "--minutes", "2"])
+    assert work.output == "3 shards embedded\n"
+    assert (
+        runner.invoke(cli.app, ["embed-assemble", "--work", "w", "--out", "o"]).output == "README.md\npr o\n"
+    )
+    assert runner.invoke(cli.app, ["embed-finalize", "--pr", "4"]).exit_code == 0
+    assert calls == [
+        ("plan", Path("s"), bucket),
+        ("work", Path("s"), 7, 120.0),
+        ("assemble", Path("o"), Path("w"), bucket),
+        ("card", cli.pipeline.Layout(Path("w"), Path("o")), cli.REPO_ID, cli.CODE_URL),
+        ("finalize", 4, bucket),
+    ]
+
+
+def test_embed_commands_default_to_node_local_folders(monkeypatch):
+    from typer.testing import CliRunner
+
+    seen = []
+    monkeypatch.setattr(cli, "Bucket", lambda bucket_id: "bucket")
+    monkeypatch.setattr(cli.embedding, "plan", lambda scratch, bucket: seen.append(scratch) or 0)
+    monkeypatch.setattr(cli.embedding, "work", lambda s, o, b: seen.append((s, o, b)) or 0)
+    monkeypatch.setattr(cli.embedding, "assemble", lambda o, w, b: seen.append((o, w)))
+    monkeypatch.setattr(report, "build_card", lambda layout, repo, url: "README.md")
+    monkeypatch.setattr(cli.embedding, "propose", lambda o: "pr")
+    runner = CliRunner()
+    for command in ("embed-plan", "embed-work", "embed-assemble"):
+        assert runner.invoke(cli.app, [command]).exit_code == 0
+    assert seen == [
+        Path("/tmp/georeset-embed-plan"),
+        (Path("/tmp/georeset-embed"), 0, 3000.0),
+        (Path("/tmp/georeset-out"), Path("/tmp/georeset-work")),
+    ]

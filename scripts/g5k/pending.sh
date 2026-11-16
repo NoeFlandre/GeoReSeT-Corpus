@@ -7,4 +7,4 @@ ROOT="${DISPATCH_SCRATCH:?run by g5k-dispatch}/georeset"
 export UV_CACHE_DIR="$ROOT/uv-cache" UV_PROJECT_ENVIRONMENT="$ROOT/venv" HF_HOME="$ROOT/hf"
 export HF_TOKEN="$(cat "$HOME/.cache/huggingface/token")"
 UV="${DISPATCH_UV:?run by g5k-dispatch}"
-"$UV" run --project "$SRC" --frozen --no-dev --quiet georeset translate-pending
+"$UV" run --project "$SRC" --frozen --no-dev --quiet georeset "${1:-translate-pending}"

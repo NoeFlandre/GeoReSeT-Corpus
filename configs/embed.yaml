@@ -1,0 +1,31 @@
+# g5k-dispatch configuration for the English embedding GPU jobs.
+#   bash ~/src/g5k-dispatch/scripts/dispatch_job.sh ~/src/GeoReSeT-Corpus/configs/embed.yaml
+name: georeset-embed
+pending: bash $HOME/src/GeoReSeT-Corpus/scripts/g5k/pending.sh embed-pending
+job: bash $HOME/src/GeoReSeT-Corpus/scripts/g5k/embed_job.sh
+ready: test -f $HOME/src/GeoReSeT-Corpus/scripts/g5k/embed_job.sh -a -f $HOME/.cache/huggingface/token
+# Caps count every job of the user (the benchmark's too): the benchmark's values.
+limits: {per_site: 24, total: 60, besteffort: 4, per_item: 60, items_per_job: 1}
+# GPUs with 16 GB or more that accept this account (from llms-xx-to-en-translation's probes).
+sites:
+  - {site: nancy, cluster: granite, gpu_model: "RTX PRO 6000 Blackwell Server Edition", memory_gb: 96}
+  - {site: nancy, cluster: gres, gpu_model: "L40S", memory_gb: 48}
+  - {site: nancy, cluster: gruss, gpu_model: "A40", memory_gb: 48}
+  - {site: nancy, cluster: graffiti, gpu_model: "Quadro RTX 6000", memory_gb: 24, bf16: false}
+  - {site: nancy, cluster: grue, gpu_model: "Tesla T4", memory_gb: 16, bf16: false}
+  - {site: sophia, cluster: musa, gpu_model: "H100 NVL", memory_gb: 96}
+  - {site: rennes, cluster: abacus28, gpu_model: "Tesla V100-SXM2-32GB", memory_gb: 32, bf16: false}
+  - {site: rennes, cluster: abacus30, gpu_model: "Tesla V100-PCIE-32GB", memory_gb: 32, bf16: false}
+  - {site: sophia, cluster: esterel45, gpu_model: "RTX PRO 6000 Blackwell Server Edition", memory_gb: 96, queue: besteffort}
+  - {site: sophia, cluster: esterel36, gpu_model: "A100-PCIE-40GB", memory_gb: 40, queue: besteffort}
+  - {site: sophia, cluster: esterel33, gpu_model: "A40", memory_gb: 48, queue: besteffort}
+  - {site: sophia, cluster: esterel34, gpu_model: "A40", memory_gb: 48, queue: besteffort}
+  - {site: sophia, cluster: esterel17, gpu_model: "RTX A6000", memory_gb: 48, queue: besteffort}
+  - {site: sophia, cluster: esterel32, gpu_model: "Quadro RTX 8000", memory_gb: 48, bf16: false, queue: besteffort}
+  - {site: sophia, cluster: esterel23, gpu_model: "Quadro RTX 6000", memory_gb: 24, bf16: false, queue: besteffort}
+  - {site: rennes, cluster: abacus27, gpu_model: "H100 NVL", memory_gb: 96, queue: besteffort}
+  - {site: rennes, cluster: abacus21, gpu_model: "A100-PCIE-40GB", memory_gb: 40, queue: besteffort}
+  - {site: rennes, cluster: abacus19, gpu_model: "Quadro RTX 8000", memory_gb: 48, bf16: false, queue: besteffort}
+  - {site: grenoble, cluster: vercors9, gpu_model: "RTX A5000", memory_gb: 24, queue: besteffort}
+  - {site: grenoble, cluster: vercors8, gpu_model: "Quadro RTX 8000", memory_gb: 48, bf16: false, queue: besteffort}
+  - {site: grenoble, cluster: vercors7, gpu_model: "TITAN RTX", memory_gb: 24, bf16: false, queue: besteffort}
