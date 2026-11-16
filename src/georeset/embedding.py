@@ -44,7 +44,9 @@ def selection(data: pl.LazyFrame) -> pl.LazyFrame:
     """Relevant translated sentences, one per distinct English text (the smallest ``id`` keeps it)."""
     rows = data.filter(pl.col("landuse") & (pl.col("translation") == "nllb"))
     english = rows.select("id", pl.col("text_en").alias("text"), "lat", "lon")
-    return english.sort("id").unique("text", keep="first", maintain_order=True)
+    return english.sort("id").unique(
+        "text", keep="first", maintain_order=True
+    )  # pragma: no mutate (any: arbitrary)
 
 
 def work_shards(rows: pl.DataFrame, folder: Path, size: int = ROWS_PER_SHARD) -> list[tuple[Path, str]]:
@@ -99,7 +101,7 @@ def torch_dtype(dtype: str | None) -> str:
 
 def vectors_table(work: pl.DataFrame, vectors: np.ndarray) -> pa.Table:
     """``id``, ``lat``, ``lon`` and ``vector`` (fixed-size list of float16), as in ``embeddings``."""
-    flat = pa.array(vectors.astype(np.float16).reshape(-1), type=pa.float16())
+    flat = pa.array(vectors.astype(np.float16).reshape(-1), type=pa.float16())  # pragma: no mutate (same)
     table = work.select("id", "lat", "lon").to_arrow()
     return table.append_column("vector", pa.FixedSizeListArray.from_arrays(flat, vectors.shape[1]))
 
@@ -108,7 +110,7 @@ def embed_shard(encode: Encode, work: pl.DataFrame) -> pa.Table:
     return vectors_table(work, encode(work["text"].to_list()))
 
 
-def encoder(dtype: str) -> Encode:  # pragma: no cover (GPU job)
+def encoder(dtype: str) -> Encode:
     from sentence_transformers import SentenceTransformer  # ty: ignore[unresolved-import]
 
     model = SentenceTransformer(themes.MODEL, device="cuda", model_kwargs={"dtype": dtype})
@@ -122,7 +124,7 @@ def encoder(dtype: str) -> Encode:  # pragma: no cover (GPU job)
     return encode
 
 
-def work(scratch: Path, offset: int, budget_s: float) -> int:  # pragma: no cover (GPU job)
+def work(scratch: Path, offset: int, budget_s: float) -> int:
     encode = encoder(torch_dtype(os.environ.get("DTYPE")))
     return workqueue.Worker(Bucket(BUCKET), partial(embed_shard, encode), scratch, offset, budget_s).run()
 

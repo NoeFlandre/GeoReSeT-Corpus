@@ -145,3 +145,14 @@ def test_run_measures_each_shard_by_its_own_duration(bucket, tmp_path):
     _bucket_with(bucket, {"a/00000": [(b"k", "fra_Latn", "x")], "a/00001": [(b"j", "fra_Latn", "y")]})
     run = workqueue.Worker(bucket, _upper, tmp_path, 0, budget_s=100, clock=Clock(1.0))
     assert run.run() == 2
+
+
+def test_worker_writes_arrow_tables_as_they_are(bucket, tmp_path):
+    import pyarrow as pa
+
+    _bucket_with(bucket, {"a/00000": [(b"k", "fra_Latn", "x")]})
+    run = workqueue.Worker(
+        bucket, lambda work: pa.table({"n": [work.height]}), tmp_path, 0, budget_s=1e6, clock=Clock(1.0)
+    )
+    assert run.run() == 1
+    assert pl.read_parquet(io.BytesIO(bucket.data["results/a/00000.parquet"])).rows() == [(1,)]
