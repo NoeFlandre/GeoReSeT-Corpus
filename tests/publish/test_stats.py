@@ -184,11 +184,6 @@ def test_unit_scale_clips_at_percentiles():
     assert (out[:, 1] == 0).all()
 
 
-def test_symmetric_limit():
-    assert stats.symmetric_limit(np.arange(-10.0, 91.0)) == pytest.approx(88.0)
-    assert stats.symmetric_limit(np.arange(-90.0, 11.0)) == pytest.approx(88.0)
-
-
 def test_dominant_language_breaks_ties_by_name():
     counts = pl.DataFrame(
         {"hexagon": [1, 1, 2, 2, 2], "language": ["b", "a", "z", "y", "x"], "n": [5, 5, 1, 3, 2]}
@@ -277,3 +272,8 @@ def test_translation_kinds_sort_tied_kinds_by_name():
     assert [
         kind for kind, _ in stats.translation_kinds(pl.LazyFrame({"translation": names})).rows()
     ] == sorted(names)
+
+
+def test_symmetric_limit():
+    assert stats.symmetric_limit(np.arange(-10.0, 91.0)) == pytest.approx(88.0)
+    assert stats.symmetric_limit(np.arange(-90.0, 11.0)) == pytest.approx(88.0)

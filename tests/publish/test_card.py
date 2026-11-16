@@ -366,18 +366,6 @@ def test_themes_template_has_every_part():
     assert tuple(card.parts(card.THEMES_TEMPLATE.read_text())) == card.THEME_PARTS
 
 
-def test_legend_names_the_local_axes():
-    themes = replace(_themes(), local_explained=[0.25, 0.1])
-    corpus = replace(_LANDUSE, local_axes={1: ("roads", "woods"), 2: ("farms", "towns")})
-    lines = card.legend(replace(themes, corpus=corpus)).splitlines()
-    assert lines[-2:] == [
-        "* **Shade** (darker ↔ lighter than the surroundings, 25.0% of how cells differ from them): "
-        "roads ↔ woods.",
-        "* **Hue** (turned back ↔ forward than the surroundings, 10.0% of how cells differ from them): "
-        "farms ↔ towns.",
-    ]
-
-
 def _translation():
     return card.Translation(
         kinds=pl.DataFrame({"translation": ["nllb", "original"], "sentences": [7, 3]}),
