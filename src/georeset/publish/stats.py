@@ -218,21 +218,6 @@ def unit_scale(scores: np.ndarray, limits: np.ndarray | None = None) -> np.ndarr
     return np.clip((scores - lo) / np.where(hi > lo, hi - lo, 1), 0, 1)
 
 
-def signed_scale(scores: np.ndarray, limits: np.ndarray) -> np.ndarray:
-    """Each column divided by its limit (a positive half-width), clipped to [-1, 1]."""
-    return np.clip(scores / np.where(limits > 0, limits, 1), -1, 1)
-
-
-def symmetric_limits(scores: np.ndarray) -> np.ndarray:
-    """Each column's half-width of a scale centred on 0, covering ``CLIP`` percentiles."""
-    return np.abs(np.percentile(scores, CLIP, axis=0)).max(axis=0)
-
-
-def symmetric_limit(scores: np.ndarray) -> float:
-    """Half-width of a two-sided scale centred on 0, covering ``CLIP`` percentiles."""
-    return float(np.abs(np.percentile(scores, CLIP)).max())
-
-
 def dominant_language(counts: pl.DataFrame) -> pl.DataFrame:
     """Most frequent ``language`` per ``hexagon`` from (hexagon, language, n) counts; ties by name."""
     ranked = counts.sort(["hexagon", "n", "language"], descending=[False, True, False])
@@ -280,3 +265,8 @@ def translation_flags(rows: pl.LazyFrame) -> pl.DataFrame:
 
 def translation_languages(rows: pl.LazyFrame) -> int:
     return _collect(rows.select(pl.col("translation_language").drop_nulls().n_unique())).item()
+
+
+def symmetric_limit(scores: np.ndarray) -> float:
+    """Half-width of a two-sided scale centred on 0, covering ``CLIP`` percentiles."""
+    return float(np.abs(np.percentile(scores, CLIP)).max())

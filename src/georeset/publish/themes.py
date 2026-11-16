@@ -20,7 +20,7 @@ import polars as pl
 import pyarrow.parquet as pq
 
 from georeset.normalize.languages import display_name
-from georeset.publish import card, colour, figures, geo, stats
+from georeset.publish import card, figures, geo, stats
 
 COMPONENTS = 3
 EXTREMES = 10  # texts listed per end of an axis
@@ -31,11 +31,6 @@ MODEL = "microsoft/harrier-oss-v1-0.6b"  # as in scripts/embed.py
 PROMPT = "Instruct: Identify the land use or land cover described\nQuery: "
 MAX_TOKENS = 512  # longest input, as in scripts/embed.py
 PCS = [f"pc{i}" for i in range(1, COMPONENTS + 1)]
-# Local axes: a PCA of how each cell differs from its region (its parent at ``REGION_RESOLUTION``).
-LOCAL_COMPONENTS = 2
-REGION_RESOLUTION = 3  # about 12,000 km²
-LOCAL = [f"l{j}" for j in range(1, LOCAL_COMPONENTS + 1)]
-AXES = PCS + LOCAL  # every scored axis: global, then local; numbered 1.. in the axis ends
 AHEAD = 4  # shards loading in the background while one is processed
 LANDUSE = card.Corpus(
     name="landuse",
@@ -53,10 +48,6 @@ LANDUSE = card.Corpus(
     },
     mixed_languages=True,
     placement="in the H3 cell of its location",
-    local_axes={
-        1: ("airport buildings", "lakes and nature reserves"),
-        2: ("airports", "village churches and heritage"),
-    },
 )
 SCENES = card.Corpus(
     name="scenes",
@@ -76,10 +67,6 @@ SCENES = card.Corpus(
     placement="once in every H3 cell where its scene has photos",
     photos="scene_photos/*.parquet",
     suffix="_scenes",
-    local_axes={
-        1: ("major paved roads", "greenery and wetlands"),
-        2: ("dirt roads in open country", "dense historic built-up areas"),
-    },
 )
 # The relevant sentences' vectors, English only: what is left of the map without language.
 ENGLISH = replace(
@@ -94,10 +81,6 @@ ENGLISH = replace(
     },
     mixed_languages=False,
     only_language="eng_Latn",
-    local_axes={
-        1: ("campus and city buildings", "lakes and wilderness"),
-        2: ("airports and transport", "old stone churches"),
-    },
     suffix="_english",
 )
 # The relevant sentences in English, original and translated, pooled. Original English vectors are LANDUSE's
@@ -108,9 +91,12 @@ ENGLISH_POOL = replace(
     name="english_pool",
     what="relevant sentences in English, original and translated",
     selection="relevant sentences in English: those labelled so, and the English translations of the rest",
-    axes={1: ("?", "?"), 2: ("?", "?"), 3: ("?", "?")},
+    axes={
+        1: ("historic city buildings", "lakes and lagoons"),
+        2: ("airports and airline hubs", "rural village churches"),
+        3: ("Russian village stubs", "parks and recreation"),
+    },
     only_language="",
-    local_axes={1: ("?", "?"), 2: ("?", "?")},
     suffix="_english_pool",
 )
 CORPORA = {corpus.name: corpus for corpus in (LANDUSE, ENGLISH, ENGLISH_POOL, SCENES)}
@@ -249,9 +235,9 @@ def _display(cells: _Cells, values: np.ndarray, minimum: int) -> tuple[np.ndarra
 
 
 def ends(scored: pl.DataFrame, n: int) -> pl.DataFrame:
-    """The ``n`` highest and lowest rows on each of ``AXES``: ``pc``, ``end``, ``rank``, row, ``score``."""
+    """The ``n`` highest and lowest rows on each of ``PCS``: ``pc``, ``end``, ``rank``, row, ``score``."""
     parts = []
-    for i, pc in enumerate(AXES, 1):
+    for i, pc in enumerate(PCS, 1):
         for end, rows in zip(
             ("high", "low"), stats.extremes(scored.rename({pc: "score"}), "score", n), strict=True
         ):
@@ -264,30 +250,18 @@ def ends(scored: pl.DataFrame, n: int) -> pl.DataFrame:
 
 
 def _with_scores(rows: pl.DataFrame, scores: np.ndarray) -> pl.DataFrame:
-    """``rows`` with one column per axis: ``AXES`` if ``scores`` has their width, else ``PCS``."""
-    names = AXES if scores.shape[1] == len(AXES) else PCS
+    """``rows`` with one column per axis of ``PCS``."""
+    names = PCS
     return rows.with_columns([pl.Series(name, scores[:, i]) for i, name in enumerate(names)])
 
 
-def _ends(pairs, fit: stats.Pca, local: stats.Pca) -> tuple[int, pl.DataFrame]:
-    """Third pass: the number of texts and each axis' most extreme texts (global and local)."""
+def _ends(pairs, fit: stats.Pca) -> tuple[int, pl.DataFrame]:
+    """Third pass: the number of texts and each axis' most extreme texts."""
     texts, best = 0, []
     for rows, vectors in pairs:
         texts += rows.height
-        best.append(ends(_with_scores(rows, np.hstack([fit.scores(vectors), local.scores(vectors)])), MIX))
+        best.append(ends(_with_scores(rows, fit.scores(vectors)), MIX))
     return texts, _final_ends(pl.concat(best))
-
-
-def _local(cells: _Cells, means: np.ndarray, minimum: int) -> tuple[stats.Pca, np.ndarray]:
-    """The local axes: a PCA of each cell's difference from its region's mean (each cell counting once).
-
-    Only cells with ``minimum`` texts or more fit it (a few texts make a noisy difference); every cell gets
-    its scores.
-    """
-    _, sums, sizes, inverse = stats.parent_sums(cells.ids, means, REGION_RESOLUTION)
-    differences = means - (sums / sizes[:, None])[inverse]
-    fit = stats.pca(differences[cells.texts >= minimum], LOCAL_COMPONENTS)
-    return fit, fit.scores(differences)
 
 
 def _final_ends(candidates: pl.DataFrame) -> pl.DataFrame:
@@ -298,7 +272,7 @@ def _final_ends(candidates: pl.DataFrame) -> pl.DataFrame:
             .sort("score", "id", descending=[end == "high", False])
             .head(MIX)
             .with_columns(rank=pl.int_range(1, pl.len() + 1, dtype=pl.UInt32))
-            for i in range(1, len(AXES) + 1)
+            for i in range(1, len(PCS) + 1)
             for end in ("high", "low")
         ]
     )
@@ -326,14 +300,11 @@ def compute(
     languages = languages or [corpus.only_language] * len(sentences)
     cells = _locate(sentences, languages, photos)
     means = _cell_means(_pairs(sentences, embeddings, filesystem, languages), cells)
-    local, local_scores = _local(cells, means, corpus.min_texts)
     kept, display_means, texts, parents = _display(cells, means, corpus.min_texts)
-    _, display_local, _, _ = _display(cells, local_scores, corpus.min_texts)
     fit = stats.pca(display_means, COMPONENTS)
-    scores = np.hstack([fit.scores(display_means), display_local])
-    hexagons = _with_scores(pl.DataFrame({"hexagon": kept, "n": texts}), scores)
+    hexagons = _with_scores(pl.DataFrame({"hexagon": kept, "n": texts}), fit.scores(display_means))
     mix = cells.languages.with_columns(hexagon=pl.Series(parents).gather(cells.languages["cell"]))
-    total, best = _ends(_pairs(sentences, embeddings, filesystem, languages), fit, local)
+    total, best = _ends(_pairs(sentences, embeddings, filesystem, languages), fit)
     out = work / "themes" / corpus.name
     out.mkdir(parents=True, exist_ok=True)
     dominant = stats.dominant_language(mix.group_by("hexagon", "language").agg(pl.col("n").sum()))
@@ -342,14 +313,11 @@ def compute(
     cell_scores = pl.DataFrame(
         {"cell": cells.ids, "n": cells.texts}, schema={"cell": pl.UInt64, "n": pl.Int64}
     )
-    _with_scores(cell_scores, np.hstack([fit.scores(means), local_scores])).write_parquet(
-        out / "cells.parquet"
-    )
+    _with_scores(cell_scores, fit.scores(means)).write_parquet(out / "cells.parquet")
     summary = {
         "sentences": total,
         "cells": len(cells.ids),
         "explained": fit.explained.tolist(),
-        "local_explained": local.explained.tolist(),
     }
     (out / "summary.json").write_text(json.dumps(summary))
     return out
@@ -431,32 +399,7 @@ def axes_markdown(ranked: pl.DataFrame, axes: card.Themes) -> str:
     ]
     for i in range(1, COMPONENTS + 1):
         lines += _axis(ranked.filter(pc=i), axes, i)
-    lines += [
-        "# Local axes",
-        "",
-        f"How a cell differs from its region (its parent of resolution {REGION_RESOLUTION}, about 12,000 "
-        "km²): a PCA of each cell's mean minus its region's. On the maps they make a cell darker or lighter, "
-        "then turn its hue. Scores below are the texts' projections on each axis.",
-        "",
-    ]
-    for j in range(1, LOCAL_COMPONENTS + 1):
-        lines += _local_axis(ranked.filter(pc=COMPONENTS + j), axes, j)
     return "\n".join(lines)
-
-
-def _local_axis(ranked: pl.DataFrame, axes: card.Themes, j: int) -> list[str]:
-    """Local axis ``j``: its name, its share of the local differences, then the texts at each end."""
-    languages = axes.corpus.mixed_languages
-    low, high = axes.corpus.local_axes[j]
-    name = f": {low} ↔ {high}" if low else ""
-    return [
-        f"## Local axis {j}{name}",
-        "",
-        f"{_share(axes.local_explained[j - 1])} of how cells differ from their region.",
-        "",
-        *_end(ranked.filter(end="high"), f"Highest ({high})" if high else "Highest", languages),
-        *_end(ranked.filter(end="low"), f"Lowest ({low})" if low else "Lowest", languages),
-    ]
 
 
 def _layers(corpus: card.Corpus) -> str:
@@ -486,15 +429,12 @@ def render(work: Path, assets: Path, corpus: card.Corpus = LANDUSE) -> card.Them
         explained=summary["explained"],
         language_r2=stats.r_squared(scores, hexagons["language"].to_list()).tolist(),
         warning=LANGUAGE_WARNING,
-        local_explained=summary["local_explained"],
     )
-    local = hexagons.select(LOCAL).to_numpy()
-    rgb = colour.nudge(stats.unit_scale(scores), stats.signed_scale(local, stats.symmetric_limits(local)))
+    rgb = stats.unit_scale(scores)
     land = geo.land_cells()
     grey = _grey(corpus.min_texts, corpus)
     caption = (
-        f"{_layers(corpus)}. Red, green, blue: principal components 1, 2, 3 (2nd to 98th percentile); "
-        f"shade and hue: how the cell differs from its surroundings\n{grey}"
+        f"{_layers(corpus)}. Red, green, blue: principal components 1, 2, 3 (2nd to 98th percentile)\n{grey}"
     )
     figures.rgb_map(index, rgb, assets / f"map_pca{corpus.suffix}.png", land, caption)
     for i in range(COMPONENTS):
