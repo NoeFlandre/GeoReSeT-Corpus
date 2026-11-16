@@ -60,13 +60,13 @@ def work_shards(rows: pl.DataFrame, folder: Path, size: int = ROWS_PER_SHARD) ->
 
 def plan(scratch: Path, bucket: Bucket) -> int:
     """Upload the work shards and ``plan.json`` (the mark that planning is done); returns the texts."""
+    bucket.create()
     if bucket.files("plan.json"):
         return json.loads(_get(bucket, "plan.json", scratch).read_text())["texts"]
     rev = hub.revision_of(REPO, RELEASE)
     hub.snapshot(REPO, rev, scratch / "release", ["data/*"])
     rows = selection(pl.scan_parquet(scratch / "release" / "data" / "*" / "*" / "*.parquet"))
     texts = rows.collect(engine="streaming")
-    bucket.create()
     bucket.put(work_shards(texts, scratch / "work"))
     summary = {"texts": texts.height, "release": rev}
     bucket.put([(json.dumps(summary).encode(), "plan.json")])
