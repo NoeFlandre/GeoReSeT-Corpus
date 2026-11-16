@@ -43,7 +43,7 @@ Encode = Callable[[list[str]], np.ndarray]
 def selection(data: pl.LazyFrame) -> pl.LazyFrame:
     """Relevant translated sentences, one per distinct English text (the smallest ``id`` keeps it)."""
     rows = data.filter(pl.col("landuse") & (pl.col("translation") == "nllb"))
-    english = rows.select("id", pl.col("text_en").alias("text"), "lat", "lon")
+    english = rows.select("id", pl.col("text_en").alias("text"), "language", "lat", "lon")
     return english.sort("id").unique(
         "text", keep="first", maintain_order=True
     )  # pragma: no mutate (any: arbitrary)

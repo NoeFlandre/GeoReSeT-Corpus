@@ -348,7 +348,15 @@ def test_card_with_both_pcas():
 
 
 def test_card_without_themes_has_no_embeddings():
-    names = ("section_landuse", "section_english", "section_scenes", "files", "configs", "method")
+    names = (
+        "section_landuse",
+        "section_english",
+        "section_english_pool",
+        "section_scenes",
+        "files",
+        "configs",
+        "method",
+    )
     assert card.theme_parts(_fused()) == dict.fromkeys(names, "")
     text = card.render(_fused())
     assert "embeddings" not in text and "map_pca" not in text

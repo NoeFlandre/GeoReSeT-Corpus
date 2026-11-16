@@ -226,14 +226,14 @@ def test_pairs_keep_only_one_language_with_its_vectors(tmp_path):
     themes.write_sentences(_data(4), tmp_path / "s", shards=2)
     sentences = sorted((tmp_path / "s").glob("*.parquet"))
     embeddings = _embed(sentences, tmp_path / "e")
-    pairs = list(themes._pairs(sentences, embeddings, None, "eng_Latn"))
+    pairs = list(themes._pairs(sentences, embeddings, None, ["eng_Latn"] * len(sentences)))
     rows = pl.concat([rows for rows, _ in pairs])
     assert rows["language"].unique().to_list() == ["eng_Latn"] and rows.height == 4
     for rows, vectors in pairs:
         assert len(vectors) == rows.height
         # Place 3 (English) has the longest vectors, 4 times the unit one plus noise.
         assert np.all(np.linalg.norm(vectors, axis=1) > 3.5)
-    assert sum(len(v) for _, v in themes._pairs(sentences, embeddings, None)) == 20
+    assert sum(len(v) for _, v in themes._pairs(sentences, embeddings, None, [""] * len(sentences))) == 20
 
 
 def test_prefetched_keeps_order_whatever_the_lookahead():
@@ -261,7 +261,7 @@ def test_cell_means_average_each_cell_then_hexagons_average_cells(tmp_path):
     )
     (tmp_path / "s").mkdir()
     rows.write_parquet(tmp_path / "s" / "x.parquet")
-    cells = themes._locate([tmp_path / "s" / "x.parquet"], "", None)
+    cells = themes._locate([tmp_path / "s" / "x.parquet"], [""], None)
     assert dict(zip(cells.ids.tolist(), cells.texts.tolist(), strict=True)) == {
         int(near[0]): 3,
         int(near[1]): 1,

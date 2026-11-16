@@ -7,7 +7,7 @@ from typing import Annotated
 import polars as pl
 import typer
 
-from georeset import embedding, hub
+from georeset import embedding, hub, pca
 from georeset.build import extras, pipeline, stage
 from georeset.build import fuse as fusion
 from georeset.publish import report, space, themes
@@ -78,6 +78,7 @@ class CorpusName(StrEnum):
 
     landuse = "landuse"
     english = "english"
+    english_pool = "english_pool"
     scenes = "scenes"
 
 
@@ -311,3 +312,31 @@ def embed_assemble(
 def embed_finalize(pr: Annotated[int, typer.Option(help="Number of the reviewed pull request.")]) -> None:
     """Merge the English vectors' pull request, tag v1.3, delete the bucket."""
     embedding.finalize(pr, Bucket(EMBED_BUCKET))
+
+
+PCA_BUCKET = pca.BUCKET
+
+
+@app.command("pca-compute")
+def pca_compute(
+    scratch: Scratch = Path("/tmp/georeset-pca"),
+    work: Work = Path("/tmp/georeset-pca-work"),
+) -> None:
+    """PCA of the multilingual and the English (original and translated) relevant sentences; the outputs
+    go to the bucket (CPU job)."""
+    pca.compute(scratch, work, Bucket(PCA_BUCKET))
+
+
+@app.command("pca-propose")
+def pca_propose(
+    out: Out = Path("/tmp/georeset-pca-out"),
+    work: Work = Path("/tmp/georeset-pca-work"),
+) -> None:
+    """The card with the two maps, and a pull request with only the figures and the card (CPU job)."""
+    typer.echo(pca.propose(out, work, Bucket(PCA_BUCKET)))
+
+
+@app.command("pca-finalize")
+def pca_finalize(pr: Annotated[int, typer.Option(help="Number of the reviewed pull request.")]) -> None:
+    """Merge the PCA pull request, tag v1.4, delete the bucket."""
+    pca.finalize(pr, Bucket(PCA_BUCKET))
