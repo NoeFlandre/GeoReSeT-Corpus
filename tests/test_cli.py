@@ -260,3 +260,38 @@ def test_translate_commands_call_their_jobs(tmp_path, monkeypatch, capsys):
         ("model", Path("m"), "bucket"),
         ("finalize", 3, "bucket"),
     ]
+
+
+def test_extras_commands_call_their_jobs(monkeypatch):
+    from typer.testing import CliRunner
+
+    calls = []
+    monkeypatch.setattr(cli.extras, "assemble", lambda o, w: calls.append(("assemble", o, w)))
+    monkeypatch.setattr(
+        report,
+        "build_card",
+        lambda layout, repo, url: calls.append(("card", layout, repo, url)) or "README.md",
+    )
+    monkeypatch.setattr(cli.extras, "propose", lambda o: f"pr {o}")
+    monkeypatch.setattr(cli.extras, "finalize", lambda n: calls.append(("finalize", n)))
+    runner = CliRunner()
+    assert (
+        runner.invoke(cli.app, ["extras-propose", "--work", "w", "--out", "o"]).output == "README.md\npr o\n"
+    )
+    assert runner.invoke(cli.app, ["extras-finalize", "--pr", "4"]).exit_code == 0
+    assert calls == [
+        ("assemble", Path("o"), Path("w")),
+        ("card", cli.pipeline.Layout(Path("w"), Path("o")), cli.REPO_ID, cli.CODE_URL),
+        ("finalize", 4),
+    ]
+
+
+def test_extras_propose_defaults_to_node_local_folders(monkeypatch):
+    from typer.testing import CliRunner
+
+    seen = []
+    monkeypatch.setattr(cli.extras, "assemble", lambda o, w: seen.append((o, w)))
+    monkeypatch.setattr(report, "build_card", lambda layout, repo, url: "README.md")
+    monkeypatch.setattr(cli.extras, "propose", lambda o: "pr")
+    assert CliRunner().invoke(cli.app, ["extras-propose"]).exit_code == 0
+    assert seen == [(Path("/tmp/georeset-out"), Path("/tmp/georeset-work"))]

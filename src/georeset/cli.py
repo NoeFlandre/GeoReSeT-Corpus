@@ -8,8 +8,8 @@ import polars as pl
 import typer
 
 from georeset import hub
+from georeset.build import extras, pipeline, stage
 from georeset.build import fuse as fusion
-from georeset.build import pipeline, stage
 from georeset.publish import report, space, themes
 from georeset.sources import description, website, wiki
 from georeset.translate import jobs as translation
@@ -250,3 +250,21 @@ def translate_upload_model(folder: Path) -> None:
 def translate_finalize(pr: Annotated[int, typer.Option(help="Number of the reviewed pull request.")]) -> None:
     """Merge the translations' pull request, tag v1.1, delete the bucket."""
     translation.finalize(pr, Bucket())
+
+
+@app.command("extras-propose")
+def extras_propose(
+    work: Work = Path("/tmp/georeset-work"),
+    out: Out = Path("/tmp/georeset-out"),
+) -> None:
+    """Copy the fused dataset's embeddings and EUNIS label shares into the release, check them, write the
+    card, open a pull request (CPU job)."""
+    extras.assemble(out, work)
+    typer.echo(report.build_card(pipeline.Layout(work, out), REPO_ID, CODE_URL))
+    typer.echo(extras.propose(out))
+
+
+@app.command("extras-finalize")
+def extras_finalize(pr: Annotated[int, typer.Option(help="Number of the reviewed pull request.")]) -> None:
+    """Merge the embeddings and EUNIS labels' pull request, tag v1.2."""
+    extras.finalize(pr)

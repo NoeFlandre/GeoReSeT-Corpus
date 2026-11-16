@@ -55,6 +55,13 @@ def test_upload_units_add_scenes_before_assets(tmp_path):
     assert hub.upload_units(out)[-4:] == ["polygons", "scenes", "scene_photos", "assets"]
 
 
+def test_upload_units_add_the_fused_extras_before_assets(tmp_path):
+    out = _out(tmp_path)
+    for d in ["polygons_labels_shares", "embeddings"]:
+        (out / d).mkdir()
+    assert hub.upload_units(out)[-4:] == ["polygons", "embeddings", "polygons_labels_shares", "assets"]
+
+
 def test_upload_units_skip_missing_folders(tmp_path):
     (tmp_path / "data" / "website").mkdir(parents=True)
     assert hub.upload_units(tmp_path) == ["data/website"]

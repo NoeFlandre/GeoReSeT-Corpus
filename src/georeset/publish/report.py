@@ -101,6 +101,26 @@ def translation_context(out: Path, work: Path) -> card.Translation | None:
     )
 
 
+def _rows(lazy: pl.LazyFrame) -> int:
+    return lazy.select(pl.len()).collect().item()
+
+
+def extras_context(out: Path, work: Path) -> card.Extras | None:
+    """Counts of the folders copied from the fused dataset (pinned in ``work/fused.json``), if they were."""
+    pins = work / "fused.json"
+    if not pins.is_file():
+        return None
+    shares = pl.scan_parquet(out / "polygons_labels_shares" / "*.parquet")
+    return card.Extras(
+        embedded=_rows(pl.scan_parquet(out / "embeddings" / "*.parquet")),
+        labelled=_rows(shares.filter(pl.col("max_eunis_share_code").is_not_null())),
+        model=themes.MODEL,
+        prompt=themes.PROMPT,
+        selection=themes.LANDUSE.selection,
+        fused=json.loads(pins.read_text()),
+    )
+
+
 def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
     data = pl.scan_parquet(layout.out / "data" / "*" / "*" / "*.parquet")
     draw_maps(data, layout.out)
@@ -119,6 +139,7 @@ def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
         scenes=scene_context(layout.out, layout.work),
         themes=theme_context(layout.work, layout.out / "assets"),
         translation=translation_context(layout.out, layout.work),
+        extras=extras_context(layout.out, layout.work),
     )
     hero = HERO if context.scenes is None else FUSED_HERO
     shutil.copyfile(str(hero), layout.out / "assets" / "hero.png")

@@ -17,6 +17,9 @@ TEMPLATE = files("georeset.publish").joinpath("templates/card.md")
 SCENES_TEMPLATE = files("georeset.publish").joinpath("templates/scenes.md")
 TRANSLATION_TEMPLATE = files("georeset.publish").joinpath("templates/translation.md")
 TRANSLATION_PARTS = ("headline", "quickstart", "fields", "section", "files", "method", "license")
+EXTRAS_TEMPLATE = files("georeset.publish").joinpath("templates/extras.md")
+EXTRAS_PARTS = ("files", "configs", "section", "method")
+EXTRAS_FOLDERS = ("embeddings", "polygons_labels_shares")
 THEMES_TEMPLATE = files("georeset.publish").joinpath("templates/themes.md")
 THEME_PARTS = ("section", "files", "configs", "method")
 # Each corpus' section goes where its template asks for ``themes_section_<corpus>``.
@@ -195,6 +198,18 @@ class Translation:
 
 
 @dataclass(frozen=True)
+class Extras:
+    """Folders copied from the fused dataset: relevant sentences' embeddings, polygons' EUNIS labels."""
+
+    embedded: int  # sentences with a vector
+    labelled: int  # polygons with a EUNIS label
+    model: str
+    prompt: str
+    selection: str  # which sentences were embedded
+    fused: dict[str, str]  # the fused repo and its commit
+
+
+@dataclass(frozen=True)
 class Context:
     repo_id: str
     by_source: pl.DataFrame
@@ -208,6 +223,7 @@ class Context:
     scenes: Scenes | None = None
     themes: tuple[Themes, ...] = ()
     translation: Translation | None = None
+    extras: Extras | None = None
 
 
 def _bold_total(df: pl.DataFrame, column: str) -> pl.DataFrame:
@@ -257,7 +273,8 @@ def _front_matter(ctx: Context) -> str:
         "size_categories": [size_category(_total(ctx)["sentences"])],
         "configs": configs(ctx.partitions)
         + folder_configs(kind.folders)
-        + folder_configs(tuple(dict.fromkeys(themes.corpus.folder for themes in ctx.themes))),
+        + folder_configs(tuple(dict.fromkeys(themes.corpus.folder for themes in ctx.themes)))
+        + folder_configs(EXTRAS_FOLDERS if ctx.extras else ()),
     }
     # JSON is valid YAML: no YAML dependency, no quoting surprises.
     return "\n".join(f"{key}: {json.dumps(value)}" for key, value in meta.items())
@@ -452,11 +469,39 @@ def translation_parts(ctx: Context) -> dict[str, str]:
     }
 
 
+def extras_step(ctx: Context) -> int:
+    """The embeddings' method step: after the six common steps, the scenes, PCAs and translations."""
+    pcas = len({themes.corpus.folder for themes in ctx.themes})
+    return 7 + bool(ctx.scenes) + pcas + bool(ctx.translation)
+
+
+def extras_parts(ctx: Context) -> dict[str, str]:
+    """The copied folders' text, or empty strings for a card without them."""
+    if ctx.extras is None:
+        return dict.fromkeys(EXTRAS_PARTS, "")
+    extras = ctx.extras
+    ((repo, rev),) = extras.fused.items()
+    values = {
+        "embedded": fmt(extras.embedded),
+        "labelled": fmt(extras.labelled),
+        "polygons": fmt(ctx.polygons),
+        "model": extras.model,
+        "prompt": extras.prompt.replace("\n", "\\n"),
+        "selection": extras.selection,
+        "fused": pinned(repo, rev),
+        "step": str(extras_step(ctx)),
+    }
+    return {
+        name: Template(body).substitute(values) for name, body in parts(EXTRAS_TEMPLATE.read_text()).items()
+    }
+
+
 def _optional_parts(ctx: Context) -> dict[str, str]:
-    """``scenes_*``, ``themes_*`` and ``translation_*`` template values."""
+    """``scenes_*``, ``themes_*``, ``translation_*`` and ``extras_*`` template values."""
     scenes = {f"scenes_{name}": text for name, text in scene_parts(ctx).items()}
     translation = {f"translation_{name}": text for name, text in translation_parts(ctx).items()}
-    return scenes | translation | {f"themes_{name}": text for name, text in theme_parts(ctx).items()}
+    extras = {f"extras_{name}": text for name, text in extras_parts(ctx).items()}
+    return scenes | translation | extras | {f"themes_{name}": text for name, text in theme_parts(ctx).items()}
 
 
 def render(ctx: Context) -> str:
