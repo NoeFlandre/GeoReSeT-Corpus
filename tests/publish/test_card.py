@@ -418,14 +418,7 @@ def test_translation_template_has_every_part():
 
 
 def _extras():
-    return card.Extras(
-        embedded=5,
-        labelled=6,
-        model="me/embedder",
-        prompt="Instruct: what\nQuery: ",
-        selection="distinct relevant sentences",
-        fused={"me/fused": "f" * 40},
-    )
+    return card.Extras(labelled=6, fused={"me/fused": "f" * 40})
 
 
 EXTRAS_SNAPSHOT = Path(__file__).parents[1] / "data" / "card_extras_snapshot.md"
@@ -447,17 +440,10 @@ def test_card_with_extras_matches_snapshot():
 def test_card_with_extras_lists_and_describes_the_copied_folders():
     text = card.render(_with_extras(translation=_translation()))
     configs = [c["config_name"] for c in DatasetCard(text).data.configs]
-    assert configs[-2:] == ["embeddings", "polygons_labels_shares"]
+    assert configs.count("polygons_labels_shares") == 1
     assert "6 of the 7 polygons have one. Copied from [`me/fused` @ `fffffff`]" in text
-    assert (
-        "8. **Embeddings of the relevant sentences.** The 5 distinct relevant sentences embedded with" in text
-    )
-    assert "instruction `Instruct: what\\nQuery: `" in text
-    assert "[`me/embedder`](https://huggingface.co/me/embedder)" in text
-    assert "`polygons_labels_shares`." in text
-    assert "\nembeddings/train-*.parquet " in text
+    assert "\npolygons_labels_shares/train-*.parquet " in text
     assert text.index("## English translations") < text.index("## EUNIS labels") < text.index("## Files")
-    assert text.index("7. **English translations.**") < text.index("8. **Embeddings")
 
 
 def test_card_without_extras_has_no_extras_text():
@@ -482,14 +468,19 @@ def _themes_on(folder):
         ({"translation": _translation()}, 8),
         ({"scenes": _scenes()}, 8),
         ({"themes": (_themes_on("a"), _themes_on("a"), _themes_on("b"))}, 9),
+        ({"translation": _translation(), "themes": (_themes_on("a"),)}, 9),
     ],
 )
-def test_extras_step_follows_every_earlier_step(more, step):
-    assert card.extras_step(_with_extras(**more)) == step
+def test_english_step_follows_every_earlier_step(more, step):
+    assert card.english_step(_with_english(**more)) == step
 
 
 def _english():
     return card.English(embedded=4, model="me/embedder", prompt="Instruct: what\nQuery: ", tokens=512)
+
+
+def _with_english(**more):
+    return card.Context(**{**_context().__dict__, "english": _english(), **more})
 
 
 ENGLISH_SNAPSHOT = Path(__file__).parents[1] / "data" / "card_english_snapshot.md"
@@ -497,7 +488,7 @@ ENGLISH_SNAPSHOT = Path(__file__).parents[1] / "data" / "card_english_snapshot.m
 
 def test_card_with_english_vectors_matches_snapshot():
     """The card of v1.3: translations, copied folders and the English vectors. ``UPDATE_SNAPSHOTS=1``."""
-    text = card.render(_with_extras(translation=_translation(), english=_english()))
+    text = card.render(_with_english(translation=_translation(), extras=_extras()))
     if os.environ.get("UPDATE_SNAPSHOTS"):
         ENGLISH_SNAPSHOT.write_text(text)
     assert text == ENGLISH_SNAPSHOT.read_text()
@@ -505,20 +496,12 @@ def test_card_with_english_vectors_matches_snapshot():
 
 
 def test_card_with_english_vectors_lists_and_describes_them():
-    text = card.render(_with_extras(translation=_translation(), english=_english()))
+    text = card.render(_with_english(translation=_translation(), extras=_extras()))
     assert [c["config_name"] for c in DatasetCard(text).data.configs][-1] == "embeddings_en"
-    assert "9. **Embeddings of the English translations.** The 4 distinct `text_en`" in text
+    assert "8. **Embeddings of the English translations.** The 4 distinct `text_en`" in text
     assert "instruction `Instruct: what\\nQuery: `, last-token pooling, at most 512 tokens" in text
     assert "[`me/embedder`](https://huggingface.co/me/embedder)" in text
-    assert "Code: https://github.com/me/code" in text.split("9. **Embeddings of the English")[1]
-    assert "`polygons_labels_shares`, `embeddings_en`." in text
     assert "\nembeddings_en/train-*.parquet " in text
-    assert text.index("8. **Embeddings of the relevant") < text.index("9. **Embeddings of the English")
-
-
-def test_english_step_follows_the_translations_without_copied_folders():
-    ctx = card.Context(**{**_context().__dict__, "translation": _translation(), "english": _english()})
-    assert "8. **Embeddings of the English translations.**" in card.render(ctx)
 
 
 def test_card_without_english_vectors_has_none_of_their_text():

@@ -18,7 +18,7 @@ SCENES_TEMPLATE = files("georeset.publish").joinpath("templates/scenes.md")
 TRANSLATION_TEMPLATE = files("georeset.publish").joinpath("templates/translation.md")
 TRANSLATION_PARTS = ("headline", "quickstart", "fields", "section", "files", "method", "license")
 EXTRAS_TEMPLATE = files("georeset.publish").joinpath("templates/extras.md")
-EXTRAS_PARTS = ("files", "configs", "section", "method")
+EXTRAS_PARTS = ("files", "configs", "section")
 EXTRAS_FOLDERS = ("embeddings", "polygons_labels_shares")
 ENGLISH_TEMPLATE = files("georeset.publish").joinpath("templates/english.md")
 ENGLISH_PARTS = ("files", "configs", "method")
@@ -196,13 +196,9 @@ class Translation:
 
 @dataclass(frozen=True)
 class Extras:
-    """Folders copied from the fused dataset: relevant sentences' embeddings, polygons' EUNIS labels."""
+    """Folders copied from the fused dataset: the polygons' EUNIS labels, the sentences' vectors."""
 
-    embedded: int  # sentences with a vector
     labelled: int  # polygons with a EUNIS label
-    model: str
-    prompt: str
-    selection: str  # which sentences were embedded
     fused: dict[str, str]  # the fused repo and its commit
 
 
@@ -396,7 +392,7 @@ def _rendered_themes(ctx: Context) -> list[tuple[Themes, dict[str, str], bool]]:
 
     A PCA on vectors an earlier one already uses (a subset of them) gets no file, config or method step.
     """
-    first = 7 + bool(ctx.scenes)  # after the six common steps and, if fused, the scenes step
+    first = _themes_first(ctx)
     template = parts(THEMES_TEMPLATE.read_text())
     folders: dict[str, int] = {}  # each vectors folder and its method step, in order
     rendered = []
@@ -466,12 +462,6 @@ def translation_parts(ctx: Context) -> dict[str, str]:
     }
 
 
-def extras_step(ctx: Context) -> int:
-    """The embeddings' method step: after the six common steps, the scenes, PCAs and translations."""
-    pcas = len({themes.corpus.folder for themes in ctx.themes})
-    return 7 + bool(ctx.scenes) + pcas + bool(ctx.translation)
-
-
 def extras_parts(ctx: Context) -> dict[str, str]:
     """The copied folders' text, or empty strings for a card without them."""
     if ctx.extras is None:
@@ -479,18 +469,23 @@ def extras_parts(ctx: Context) -> dict[str, str]:
     extras = ctx.extras
     ((repo, rev),) = extras.fused.items()
     values = {
-        "embedded": fmt(extras.embedded),
         "labelled": fmt(extras.labelled),
         "polygons": fmt(ctx.polygons),
-        "model": extras.model,
-        "prompt": extras.prompt.replace("\n", "\\n"),
-        "selection": extras.selection,
         "fused": pinned(repo, rev),
-        "step": str(extras_step(ctx)),
     }
     return {
         name: Template(body).substitute(values) for name, body in parts(EXTRAS_TEMPLATE.read_text()).items()
     }
+
+
+def _themes_first(ctx: Context) -> int:
+    """The step of the first PCA's method: after the six common steps, the scenes and the translations."""
+    return 7 + bool(ctx.scenes) + bool(ctx.translation)
+
+
+def english_step(ctx: Context) -> int:
+    """The English vectors' method step: after the PCAs' (one per folder of vectors)."""
+    return _themes_first(ctx) + len({themes.corpus.folder for themes in ctx.themes})
 
 
 def english_parts(ctx: Context) -> dict[str, str]:
@@ -504,7 +499,7 @@ def english_parts(ctx: Context) -> dict[str, str]:
         "prompt": english.prompt.replace("\n", "\\n"),
         "tokens": fmt(english.tokens),
         "code_url": ctx.code_url,
-        "step": str(extras_step(ctx) + bool(ctx.extras)),
+        "step": str(english_step(ctx)),
     }
     return {
         name: Template(body).substitute(values) for name, body in parts(ENGLISH_TEMPLATE.read_text()).items()

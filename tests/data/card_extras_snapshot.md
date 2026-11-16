@@ -151,18 +151,18 @@ The model was chosen on [`llms-xx-to-en-translation`](https://huggingface.co/dat
 
 ## EUNIS labels
 
-`polygons_labels_shares` gives each polygon the share of each [EUNIS](https://zenodo.org/records/16985100) habitat class over the pixels of the EUNIS wall-to-wall map whose centre lies inside it (`eunis_code`, `eunis_shares`, `max_eunis_share_code`, `max_eunis_share_label`), with the polygon's fields; join on `polygon_id`. If no pixel centre lies inside, the pixel under the polygon's centroid is used (`label_method` = `centroid`; otherwise `polygon`), with shares `[1.0]`. `unlabelled_reason` gives why a polygon has no label. Labels are null outside the map's coverage and on nodata pixels: 6 of the 7 polygons have one. Copied from [`me/fused` @ `fffffff`](https://huggingface.co/datasets/me/fused/tree/ffffffffffffffffffffffffffffffffffffffff).
+`polygons_labels_shares` gives each polygon the share of each [EUNIS](https://zenodo.org/records/16985100) habitat class over the pixels of the EUNIS wall-to-wall map whose centre lies inside it (`eunis_code`, `eunis_shares`, `max_eunis_share_code`, `max_eunis_share_label`), with the polygon's fields; join on `polygon_id`. If no pixel centre lies inside, the pixel under the polygon's centroid is used (`label_method` = `centroid`; otherwise `polygon`), with shares `[1.0]`. `unlabelled_reason` gives why a polygon has no label. Labels are null outside the map's coverage and on nodata pixels: 6 of the 7 polygons have one. Copied from [`me/fused` @ `fffffff`](https://huggingface.co/datasets/me/fused/tree/ffffffffffffffffffffffffffffffffffffffff), as are the relevant sentences' vectors in `embeddings` (see [Methodology](#methodology)).
+
 ## Files
 
 ```
 data/<source>/<language>/train-*.parquet   labelled sentences, sorted by region
 unlabelled/train-*.parquet                 sentences without a label (see above)
 polygons/train-*.parquet                   polygon shapes (GeoParquet)
-embeddings/train-*.parquet                 relevant sentences, one vector each (see [Methodology](#methodology))
 polygons_labels_shares/train-*.parquet     one row per polygon, with its EUNIS label and class shares (see [EUNIS labels](#eunis-labels))
 ```
 
-Configs: `all` (default), one per source, one per language, `unlabelled`, `polygons`, `embeddings`, `polygons_labels_shares`.
+Configs: `all` (default), one per source, one per language, `unlabelled`, `polygons`, `polygons_labels_shares`.
 
 Every row of `data/` and `unlabelled/` has the four translation columns (see [English translations](#english-translations)).
 
@@ -180,7 +180,6 @@ Every row of `data/` and `unlabelled/` has the four translation columns (see [En
 6. **This dataset.** One row per sentence of each document (a document linked to several polygons appears once); overlapping extracts resolved to the most specific one; language codes normalized; sentences with fewer than two letters dropped, and Wikipedia / Wikivoyage rows made only of bracketed edit links or citations (`[ edit | edit source ]`, `[Smith 1998]`) removed. Join the raw outputs on `sha256(text)` = `text_sha256`. Code: https://github.com/me/code
 
 7. **English translations.** NLLB-200 3.3B ([revision `1a07f7d`](https://huggingface.co/facebook/nllb-200-3.3B/tree/1a07f7d195896b2114afcb79b7b57ab512e7b43e)) through CTranslate2 on [Grid'5000](https://www.grid5000.fr) GPUs, with the settings of [`llms-xx-to-en-translation`](https://github.com/NoeFlandre/llms-xx-to-en-translation) (see [English translations](#english-translations)). Code: https://github.com/me/code
-8. **Embeddings of the relevant sentences.** The 5 distinct relevant sentences embedded with [`me/embedder`](https://huggingface.co/me/embedder) (sentence-transformers, bf16, instruction `Instruct: what\nQuery: `, last-token pooling, L2-normalised), stored as float16 in `embeddings` with their `id`, `lat` and `lon`; join on `id` for the rest. Copied from [`me/fused` @ `fffffff`](https://huggingface.co/datasets/me/fused/tree/ffffffffffffffffffffffffffffffffffffffff).
 ## License
 
 * OpenStreetMap data (`osm_description` text, polygons, names, tags): [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/), © OpenStreetMap contributors.

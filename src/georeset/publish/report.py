@@ -112,11 +112,7 @@ def extras_context(out: Path, work: Path) -> card.Extras | None:
         return None
     shares = pl.scan_parquet(out / "polygons_labels_shares" / "*.parquet")
     return card.Extras(
-        embedded=_rows(pl.scan_parquet(out / "embeddings" / "*.parquet")),
         labelled=_rows(shares.filter(pl.col("max_eunis_share_code").is_not_null())),
-        model=themes.MODEL,
-        prompt=themes.PROMPT,
-        selection=themes.LANDUSE.selection,
         fused=json.loads(pins.read_text()),
     )
 
