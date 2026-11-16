@@ -8,11 +8,12 @@ import json
 import shutil
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 from pathlib import Path
 
 import polars as pl
 
-from georeset import hub
+from georeset import hub, workqueue
 from georeset.build import fuse
 from georeset.translate import assemble, models, plan, route, worker
 from georeset.translate.store import Bucket
@@ -96,7 +97,8 @@ def translate(scratch: Path, offset: int, budget_s: float) -> int:  # pragma: no
     bucket = Bucket()
     engine = models.Nllb(fetch_model(bucket, scratch))
     lid = models.GlotLid()
-    return worker.Worker(bucket, engine, lid.labels, scratch, offset, budget_s).run()
+    transform = partial(worker.translate_shard, engine, lid.labels)
+    return workqueue.Worker(bucket, transform, scratch, offset, budget_s).run()
 
 
 def assemble_unit(unit: str, out: Path, bucket: Bucket, scratch: Path) -> int:

@@ -7,7 +7,7 @@ from typing import Annotated
 import polars as pl
 import typer
 
-from georeset import hub
+from georeset import embedding, hub
 from georeset.build import extras, pipeline, stage
 from georeset.build import fuse as fusion
 from georeset.publish import report, space, themes
@@ -268,3 +268,46 @@ def extras_propose(
 def extras_finalize(pr: Annotated[int, typer.Option(help="Number of the reviewed pull request.")]) -> None:
     """Merge the embeddings and EUNIS labels' pull request, tag v1.2."""
     extras.finalize(pr)
+
+
+EMBED_BUCKET = embedding.BUCKET
+
+
+@app.command("embed-plan")
+def embed_plan(scratch: Scratch = Path("/tmp/georeset-embed-plan")) -> None:
+    """Upload the English texts to embed to the bucket as work shards (CPU job)."""
+    typer.echo(f"{embedding.plan(scratch, Bucket(EMBED_BUCKET))} texts to embed")
+
+
+@app.command("embed-pending")
+def embed_pending() -> None:
+    """Work items for g5k-dispatch: the work shards left in the bucket."""
+    typer.echo(embedding.pending(Bucket(EMBED_BUCKET)))
+
+
+@app.command("embed-work")
+def embed_work(
+    scratch: Scratch = Path("/tmp/georeset-embed"),
+    offset: Annotated[int, typer.Option(help="Where in the shard list this job starts.")] = 0,
+    minutes: Annotated[float, typer.Option(help="Time budget: no shard starts that may not end in it.")] = 50,
+) -> None:
+    """Embed work shards on this node's GPU until the time budget runs out (GPU job)."""
+    typer.echo(f"{embedding.work(scratch, offset, minutes * 60)} shards embedded")
+
+
+@app.command("embed-assemble")
+def embed_assemble(
+    work: Work = Path("/tmp/georeset-work"),
+    out: Out = Path("/tmp/georeset-out"),
+) -> None:
+    """Add the vectors to the release as embeddings_en, check them, write the card, open a pull request
+    (CPU job)."""
+    embedding.assemble(out, work, Bucket(EMBED_BUCKET))
+    typer.echo(report.build_card(pipeline.Layout(work, out), REPO_ID, CODE_URL))
+    typer.echo(embedding.propose(out))
+
+
+@app.command("embed-finalize")
+def embed_finalize(pr: Annotated[int, typer.Option(help="Number of the reviewed pull request.")]) -> None:
+    """Merge the English vectors' pull request, tag v1.3, delete the bucket."""
+    embedding.finalize(pr, Bucket(EMBED_BUCKET))

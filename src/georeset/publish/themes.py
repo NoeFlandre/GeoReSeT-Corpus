@@ -29,6 +29,7 @@ MIX_TOP = 5
 LANGUAGE_WARNING = 0.5
 MODEL = "microsoft/harrier-oss-v1-0.6b"  # as in scripts/embed.py
 PROMPT = "Instruct: Identify the land use or land cover described\nQuery: "
+MAX_TOKENS = 512  # longest input, as in scripts/embed.py
 PCS = [f"pc{i}" for i in range(1, COMPONENTS + 1)]
 # Local axes: a PCA of how each cell differs from its region (its parent at ``REGION_RESOLUTION``).
 LOCAL_COMPONENTS = 2

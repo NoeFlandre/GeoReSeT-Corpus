@@ -121,6 +121,19 @@ def extras_context(out: Path, work: Path) -> card.Extras | None:
     )
 
 
+def english_context(out: Path) -> card.English | None:
+    """Counts of the English translations' vectors (``embeddings_en``), if they were added."""
+    folder = out / "embeddings_en"
+    if not folder.is_dir():
+        return None
+    return card.English(
+        embedded=_rows(pl.scan_parquet(folder / "*.parquet")),
+        model=themes.MODEL,
+        prompt=themes.PROMPT,
+        tokens=themes.MAX_TOKENS,
+    )
+
+
 def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
     data = pl.scan_parquet(layout.out / "data" / "*" / "*" / "*.parquet")
     draw_maps(data, layout.out)
@@ -140,6 +153,7 @@ def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
         themes=theme_context(layout.work, layout.out / "assets"),
         translation=translation_context(layout.out, layout.work),
         extras=extras_context(layout.out, layout.work),
+        english=english_context(layout.out),
     )
     hero = HERO if context.scenes is None else FUSED_HERO
     shutil.copyfile(str(hero), layout.out / "assets" / "hero.png")

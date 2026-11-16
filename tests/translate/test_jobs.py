@@ -252,9 +252,12 @@ def test_translate_runs_a_worker_with_the_downloaded_model(tmp_path, monkeypatch
     monkeypatch.setattr(jobs, "fetch_model", lambda bucket, scratch: (bucket, scratch, "model"))
     monkeypatch.setattr(jobs.models, "Nllb", lambda folder: ("nllb", folder))
     monkeypatch.setattr(jobs.models, "GlotLid", lambda: lid)
-    monkeypatch.setattr(jobs.worker, "Worker", Worker)
+    monkeypatch.setattr(jobs.workqueue, "Worker", Worker)
     assert jobs.translate(tmp_path, 2, 60.0) == 7
-    assert made == [("bucket", ("nllb", ("bucket", tmp_path, "model")), "labels", tmp_path, 2, 60.0)]
+    ((bucket, transform, *rest),) = made
+    assert (bucket, rest) == ("bucket", [tmp_path, 2, 60.0])
+    assert transform.func is jobs.worker.translate_shard
+    assert transform.args == (("nllb", ("bucket", tmp_path, "model")), "labels")
 
 
 def test_assemble_all_needs_every_shard_translated(bucket, tmp_path, monkeypatch):

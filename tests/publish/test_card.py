@@ -490,3 +490,45 @@ def _themes_on(folder):
 )
 def test_extras_step_follows_every_earlier_step(more, step):
     assert card.extras_step(_with_extras(**more)) == step
+
+
+def _english():
+    return card.English(embedded=4, model="me/embedder", prompt="Instruct: what\nQuery: ", tokens=512)
+
+
+ENGLISH_SNAPSHOT = Path(__file__).parents[1] / "data" / "card_english_snapshot.md"
+
+
+def test_card_with_english_vectors_matches_snapshot():
+    """The card of v1.3: translations, copied folders and the English vectors. ``UPDATE_SNAPSHOTS=1``."""
+    text = card.render(_with_extras(translation=_translation(), english=_english()))
+    if os.environ.get("UPDATE_SNAPSHOTS"):
+        ENGLISH_SNAPSHOT.write_text(text)
+    assert text == ENGLISH_SNAPSHOT.read_text()
+    assert "$" not in text.replace("$ ", "")
+
+
+def test_card_with_english_vectors_lists_and_describes_them():
+    text = card.render(_with_extras(translation=_translation(), english=_english()))
+    assert [c["config_name"] for c in DatasetCard(text).data.configs][-1] == "embeddings_en"
+    assert "9. **Embeddings of the English translations.** The 4 distinct `text_en`" in text
+    assert "instruction `Instruct: what\\nQuery: `, last-token pooling, at most 512 tokens" in text
+    assert "[`me/embedder`](https://huggingface.co/me/embedder)" in text
+    assert "Code: https://github.com/me/code" in text.split("9. **Embeddings of the English")[1]
+    assert "`polygons_labels_shares`, `embeddings_en`." in text
+    assert "\nembeddings_en/train-*.parquet " in text
+    assert text.index("8. **Embeddings of the relevant") < text.index("9. **Embeddings of the English")
+
+
+def test_english_step_follows_the_translations_without_copied_folders():
+    ctx = card.Context(**{**_context().__dict__, "translation": _translation(), "english": _english()})
+    assert "8. **Embeddings of the English translations.**" in card.render(ctx)
+
+
+def test_card_without_english_vectors_has_none_of_their_text():
+    assert "embeddings_en" not in card.render(_with_extras())
+    assert card.english_parts(_context()) == dict.fromkeys(card.ENGLISH_PARTS, "")
+
+
+def test_english_template_has_every_part():
+    assert tuple(card.parts(card.ENGLISH_TEMPLATE.read_text())) == card.ENGLISH_PARTS

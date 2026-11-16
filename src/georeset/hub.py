@@ -36,7 +36,8 @@ def snapshot(repo: str, rev: str, dest: Path, patterns: list[str]) -> Path:
 
 
 EXTRA_UNITS = (
-    "unlabelled", "polygons", "scenes", "scene_photos", "embeddings", "polygons_labels_shares", "assets"
+    "unlabelled", "polygons", "scenes", "scene_photos", "embeddings", "polygons_labels_shares",
+    "embeddings_en", "assets",
 )  # fmt: skip
 
 
