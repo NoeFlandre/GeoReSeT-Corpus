@@ -1,5 +1,6 @@
 import io
 import json
+import typing
 from pathlib import Path
 
 import numpy as np
@@ -242,3 +243,85 @@ def test_the_vectors_read_back_as_themes_reads_embeddings(tmp_path):
     assert ids.to_list() == ["a"]
     assert vectors.tolist() == [[1.0] * 4]
     assert Path(tmp_path / "v.parquet").exists()
+
+
+class FakeModel:
+    """Records how it was built and called; returns one 2-d vector per text."""
+
+    made: typing.ClassVar[list] = []
+
+    def __init__(self, name, device, model_kwargs):
+        self.made.append((name, device, model_kwargs))
+        self.calls = []
+
+    def encode(self, texts, **kwargs):
+        self.calls.append((texts, kwargs))
+        return np.ones((len(texts), 2), dtype=np.float32)
+
+
+def test_encoder_loads_the_model_on_the_gpu_with_the_settings_of_embeddings(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    FakeModel.made = []
+    monkeypatch.setitem(sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=FakeModel))
+    encode = embedding.encoder("bfloat16")
+    assert FakeModel.made == [(embedding.themes.MODEL, "cuda", {"dtype": "bfloat16"})]
+    model = encode.__closure__[0].cell_contents
+    assert model.max_seq_length == 512
+    assert encode(["a", "b"]).shape == (2, 2)
+    assert model.calls == [
+        (
+            ["a", "b"],
+            {
+                "prompt": embedding.themes.PROMPT,
+                "batch_size": 256,
+                "normalize_embeddings": True,
+                "convert_to_numpy": True,
+            },
+        )
+    ]
+
+
+def test_work_runs_a_queue_worker_with_the_dispatchers_dtype(tmp_path, monkeypatch):
+    made = []
+
+    class Worker:
+        def __init__(self, *args):
+            made.append(args)
+
+        def run(self):
+            return 4
+
+    monkeypatch.setenv("DTYPE", "float16")
+    monkeypatch.setattr(embedding, "encoder", lambda dtype: f"encode in {dtype}")
+    monkeypatch.setattr(embedding, "Bucket", lambda bucket_id: f"bucket {bucket_id}")
+    monkeypatch.setattr(embedding.workqueue, "Worker", Worker)
+    assert embedding.work(tmp_path, 3, 60.0) == 4
+    ((bucket, transform, *rest),) = made
+    assert (bucket, rest) == (f"bucket {embedding.BUCKET}", [tmp_path, 3, 60.0])
+    assert (transform.func, transform.args) == (embedding.embed_shard, ("encode in float32",))
+
+
+def test_work_shards_make_their_folder_and_reuse_it(tmp_path):
+    rows = pl.DataFrame({"id": ["a"]})
+    folder = tmp_path / "a" / "b"
+    embedding.work_shards(rows, folder)
+    assert [p for _, p in embedding.work_shards(rows, folder)] == ["work/00000.parquet"]
+
+
+def test_plan_writes_where_it_reads_by_exact_names(bucket, tmp_path, monkeypatch):
+    scratch = tmp_path / "scratch"
+    monkeypatch.setattr(embedding.hub, "revision_of", lambda repo, ref: "r")
+    monkeypatch.setattr(embedding.hub, "snapshot", lambda *a: _release_data(scratch))
+    scanned, scan = [], pl.scan_parquet
+    monkeypatch.setattr(embedding.pl, "scan_parquet", lambda path: scanned.append(path) or scan(path))
+    shards, write_shards = [], embedding.work_shards
+    monkeypatch.setattr(
+        embedding, "work_shards", lambda rows, folder: shards.append(folder) or write_shards(rows, folder)
+    )
+    embedding.plan(scratch, bucket)
+    assert [str(p.relative_to(scratch)) for p in [*scanned, *shards]] == [
+        "release/data/*/*/*.parquet",
+        "work",
+    ]

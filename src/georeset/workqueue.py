@@ -79,7 +79,7 @@ class Worker:
         result = self.scratch / "result.parquet"
         made = self.transform(pl.read_parquet(local))
         table = made.to_arrow() if isinstance(made, pl.DataFrame) else made
-        pq.write_table(table, result, compression="zstd")
+        pq.write_table(table, result, compression="zstd")  # pragma: no mutate (ZSTD is the same codec)
         self.bucket.put([(result, f"results/{shard}.parquet")])
         self.bucket.delete([f"work/{shard}.parquet", claim])
         print(f"{shard}: {table.num_rows} texts in {self.clock() - started:.0f} s", flush=True)
