@@ -24,6 +24,9 @@ class _FakeApi:
         self.calls.append(("create_pull_request", args, kwargs))
         return SimpleNamespace(git_reference="refs/pr/3", url="https://hf.co/datasets/me/d/discussions/3")
 
+    def change_discussion_status(self, *args, **kwargs):
+        self.calls.append(("change_discussion_status", args, kwargs))
+
     def merge_pull_request(self, *args, **kwargs):
         self.calls.append(("merge_pull_request", args, kwargs))
 
@@ -269,4 +272,7 @@ def test_merge(monkeypatch):
     api = _FakeApi()
     monkeypatch.setattr(hub, "HfApi", lambda: api)
     hub.merge("me/d", 3)
-    assert api.calls == [("merge_pull_request", ("me/d", 3), {"repo_type": "dataset"})]
+    assert api.calls == [
+        ("change_discussion_status", ("me/d", 3, "open"), {"repo_type": "dataset"}),
+        ("merge_pull_request", ("me/d", 3), {"repo_type": "dataset"}),
+    ]

@@ -106,4 +106,7 @@ def propose(folder: Path, repo_id: str, title: str) -> str:
 
 
 def merge(repo_id: str, number: int) -> None:
-    HfApi().merge_pull_request(repo_id, number, repo_type="dataset")
+    """Merge pull request ``number``; the Hub opens pull requests as drafts, which cannot be merged."""
+    api = HfApi()
+    api.change_discussion_status(repo_id, number, "open", repo_type="dataset")
+    api.merge_pull_request(repo_id, number, repo_type="dataset")
