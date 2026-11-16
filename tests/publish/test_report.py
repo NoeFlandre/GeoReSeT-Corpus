@@ -126,38 +126,18 @@ def test_translation_context_reads_its_files_by_their_exact_names(tmp_path, monk
     assert scanned == [out / "data" / "*" / "*" / "*.parquet", out / "unlabelled" / "*.parquet"]
 
 
-def test_extras_context_counts_the_copied_folders(tmp_path, monkeypatch):
+def test_extras_context_counts_the_eunis_labels(tmp_path, monkeypatch):
     import polars as pl
 
     out, work = tmp_path / "out", tmp_path / "work"
     assert report.extras_context(out, work) is None
-    for folder in ("embeddings", "polygons_labels_shares"):
-        (out / folder).mkdir(parents=True)
-    pl.DataFrame({"id": ["a", "b", "c"]}).write_parquet(out / "embeddings" / "train-0.parquet")
-    pl.DataFrame({"id": ["d"]}).write_parquet(out / "embeddings" / "train-1.parquet")
+    (out / "polygons_labels_shares").mkdir(parents=True)
     pl.DataFrame(
         {"polygon_id": ["way/1", "way/2", "way/3"], "max_eunis_share_code": ["T1", None, "C1"]}
     ).write_parquet(out / "polygons_labels_shares" / "train-0.parquet")
     work.mkdir()
     (work / "fused.json").write_text(json.dumps({"me/fused": "f" * 40}))
-    scanned, scan = [], pl.scan_parquet
-    monkeypatch.setattr(pl, "scan_parquet", lambda path: scanned.append(path) or scan(path))
-    read, read_text = [], type(work).read_text
-    monkeypatch.setattr(type(work), "read_text", lambda self: read.append(self) or read_text(self))
-    context = report.extras_context(out, work)
-    assert [str(p.relative_to(tmp_path)) for p in [*scanned, *read]] == [
-        "out/polygons_labels_shares/*.parquet",
-        "out/embeddings/*.parquet",
-        "work/fused.json",
-    ]
-    assert context == report.card.Extras(
-        embedded=4,
-        labelled=2,
-        model=report.themes.MODEL,
-        prompt=report.themes.PROMPT,
-        selection=report.themes.LANDUSE.selection,
-        fused={"me/fused": "f" * 40},
-    )
+    assert report.extras_context(out, work) == report.card.Extras(labelled=2, fused={"me/fused": "f" * 40})
 
 
 def test_build_card_adds_the_copied_folders(layout):
