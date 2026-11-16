@@ -419,3 +419,74 @@ def test_untranslated_card_has_no_translation_text():
 
 def test_translation_template_has_every_part():
     assert tuple(card.parts(card.TRANSLATION_TEMPLATE.read_text())) == card.TRANSLATION_PARTS
+
+
+def _extras():
+    return card.Extras(
+        embedded=5,
+        labelled=6,
+        model="me/embedder",
+        prompt="Instruct: what\nQuery: ",
+        selection="distinct relevant sentences",
+        fused={"me/fused": "f" * 40},
+    )
+
+
+EXTRAS_SNAPSHOT = Path(__file__).parents[1] / "data" / "card_extras_snapshot.md"
+
+
+def _with_extras(**more):
+    return card.Context(**{**_context().__dict__, "extras": _extras(), **more})
+
+
+def test_card_with_extras_matches_snapshot():
+    """The translated card plus the copied folders. Regenerate with ``UPDATE_SNAPSHOTS=1``."""
+    text = card.render(_with_extras(translation=_translation()))
+    if os.environ.get("UPDATE_SNAPSHOTS"):
+        EXTRAS_SNAPSHOT.write_text(text)
+    assert text == EXTRAS_SNAPSHOT.read_text()
+    assert "$" not in text.replace("$ ", "")
+
+
+def test_card_with_extras_lists_and_describes_the_copied_folders():
+    text = card.render(_with_extras(translation=_translation()))
+    configs = [c["config_name"] for c in DatasetCard(text).data.configs]
+    assert configs[-2:] == ["embeddings", "polygons_labels_shares"]
+    assert "6 of the 7 polygons have one. Copied from [`me/fused` @ `fffffff`]" in text
+    assert (
+        "8. **Embeddings of the relevant sentences.** The 5 distinct relevant sentences embedded with" in text
+    )
+    assert "instruction `Instruct: what\\nQuery: `" in text
+    assert "[`me/embedder`](https://huggingface.co/me/embedder)" in text
+    assert "`polygons_labels_shares`." in text
+    assert "\nembeddings/train-*.parquet " in text
+    assert text.index("## English translations") < text.index("## EUNIS labels") < text.index("## Files")
+    assert text.index("7. **English translations.**") < text.index("8. **Embeddings")
+
+
+def test_card_without_extras_has_no_extras_text():
+    text = card.render(_context())
+    assert "EUNIS" not in text
+    assert card.extras_parts(_context()) == dict.fromkeys(card.EXTRAS_PARTS, "")
+
+
+def test_extras_template_has_every_part():
+    assert tuple(card.parts(card.EXTRAS_TEMPLATE.read_text())) == card.EXTRAS_PARTS
+
+
+def _themes_on(folder):
+    corpus = card.Corpus("x", "s", folder, "w", "u", "sel", 1, 1, {}, False, "p")
+    return card.Themes(corpus, "m", "p", 1, 1, [], [], 0.5)
+
+
+@pytest.mark.parametrize(
+    ("more", "step"),
+    [
+        ({}, 7),
+        ({"translation": _translation()}, 8),
+        ({"scenes": _scenes()}, 8),
+        ({"themes": (_themes_on("a"), _themes_on("a"), _themes_on("b"))}, 9),
+    ],
+)
+def test_extras_step_follows_every_earlier_step(more, step):
+    assert card.extras_step(_with_extras(**more)) == step

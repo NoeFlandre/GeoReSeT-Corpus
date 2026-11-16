@@ -35,7 +35,9 @@ def snapshot(repo: str, rev: str, dest: Path, patterns: list[str]) -> Path:
     )
 
 
-EXTRA_UNITS = ("unlabelled", "polygons", "scenes", "scene_photos", "assets")
+EXTRA_UNITS = (
+    "unlabelled", "polygons", "scenes", "scene_photos", "embeddings", "polygons_labels_shares", "assets"
+)  # fmt: skip
 
 
 def folder_commits(repo: str, rev: str, folders: tuple[str, ...]) -> dict[str, str]:

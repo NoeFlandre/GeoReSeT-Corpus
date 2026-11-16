@@ -124,3 +124,54 @@ def test_translation_context_reads_its_files_by_their_exact_names(tmp_path, monk
     assert report.translation_context(out, Seen(work)) is not None
     assert names == ["translation.json"]
     assert scanned == [out / "data" / "*" / "*" / "*.parquet", out / "unlabelled" / "*.parquet"]
+
+
+def test_extras_context_counts_the_copied_folders(tmp_path, monkeypatch):
+    import polars as pl
+
+    out, work = tmp_path / "out", tmp_path / "work"
+    assert report.extras_context(out, work) is None
+    for folder in ("embeddings", "polygons_labels_shares"):
+        (out / folder).mkdir(parents=True)
+    pl.DataFrame({"id": ["a", "b", "c"]}).write_parquet(out / "embeddings" / "train-0.parquet")
+    pl.DataFrame({"id": ["d"]}).write_parquet(out / "embeddings" / "train-1.parquet")
+    pl.DataFrame(
+        {"polygon_id": ["way/1", "way/2", "way/3"], "max_eunis_share_code": ["T1", None, "C1"]}
+    ).write_parquet(out / "polygons_labels_shares" / "train-0.parquet")
+    work.mkdir()
+    (work / "fused.json").write_text(json.dumps({"me/fused": "f" * 40}))
+    scanned, scan = [], pl.scan_parquet
+    monkeypatch.setattr(pl, "scan_parquet", lambda path: scanned.append(path) or scan(path))
+    read, read_text = [], type(work).read_text
+    monkeypatch.setattr(type(work), "read_text", lambda self: read.append(self) or read_text(self))
+    context = report.extras_context(out, work)
+    assert [str(p.relative_to(tmp_path)) for p in [*scanned, *read]] == [
+        "out/polygons_labels_shares/*.parquet",
+        "out/embeddings/*.parquet",
+        "work/fused.json",
+    ]
+    assert context == report.card.Extras(
+        embedded=4,
+        labelled=2,
+        model=report.themes.MODEL,
+        prompt=report.themes.PROMPT,
+        selection=report.themes.LANDUSE.selection,
+        fused={"me/fused": "f" * 40},
+    )
+
+
+def test_build_card_adds_the_copied_folders(layout):
+    import polars as pl
+
+    build_all(layout)
+    (layout.work / "revisions.json").write_text(json.dumps({"me/up": "abcdef123"}))
+    (layout.work / "fused.json").write_text(json.dumps({"me/fused": "f" * 40}))
+    for folder in ("embeddings", "polygons_labels_shares"):
+        (layout.out / folder).mkdir()
+    pl.DataFrame({"id": ["a"]}).write_parquet(layout.out / "embeddings" / "train-0.parquet")
+    pl.DataFrame({"polygon_id": ["way/1"], "max_eunis_share_code": ["T1"]}).write_parquet(
+        layout.out / "polygons_labels_shares" / "train-0.parquet"
+    )
+    text = report.build_card(layout, "me/data", "https://github.com/me/code").read_text()
+    assert "## EUNIS labels" in text
+    assert "1 of the 3 polygons have one" in text
