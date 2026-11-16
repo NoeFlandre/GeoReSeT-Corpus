@@ -25,7 +25,7 @@ ENGLISH_PARTS = ("files", "configs", "method")
 THEMES_TEMPLATE = files("georeset.publish").joinpath("templates/themes.md")
 THEME_PARTS = ("section", "files", "configs", "method")
 # Each corpus' section goes where its template asks for ``themes_section_<corpus>``.
-THEME_SECTIONS = ("landuse", "english", "scenes")
+THEME_SECTIONS = ("landuse", "english", "english_pool", "scenes")
 SCENE_PARTS = (
     "headline",
     "intro",
@@ -276,11 +276,11 @@ def flavor(ctx: Context) -> Flavor:
 
 
 def _folders(ctx: Context) -> tuple[str, ...]:
-    """Folders beyond the corpus' own: scenes, each PCA's vectors, copied folders, English vectors."""
-    themes = dict.fromkeys(themes.corpus.folder for themes in ctx.themes)
+    """Folders beyond the corpus' own: scenes, each PCA's vectors, copied and English folders, once each."""
+    pca = (themes.corpus.folder for themes in ctx.themes)
     copied = EXTRAS_FOLDERS if ctx.extras else ()
     english = ("embeddings_en",) if ctx.english else ()
-    return (*flavor(ctx).folders, *themes, *copied, *english)
+    return tuple(dict.fromkeys((*flavor(ctx).folders, *pca, *copied, *english)))
 
 
 def _front_matter(ctx: Context) -> str:

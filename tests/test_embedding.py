@@ -21,6 +21,7 @@ def _rows():
             "text_en": ["same", "same", "other", "Hello", "zz", None],
             "translation": ["nllb", "nllb", "nllb", "original", "nllb", "unsplit"],
             "landuse": [True, True, True, True, False, True],
+            "language": ["fra_Latn", "deu_Latn", "fra_Latn", "eng_Latn", "fra_Latn", "fra_Latn"],
             "lat": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
             "lon": [7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
         }
@@ -29,8 +30,8 @@ def _rows():
 
 def test_selection_keeps_relevant_translations_once_with_the_smallest_id():
     rows = embedding.selection(_rows().lazy()).collect()
-    assert rows.rows() == [("a", "same", 2.0, 8.0), ("c", "other", 3.0, 9.0)]
-    assert rows.columns == ["id", "text", "lat", "lon"]
+    assert rows.rows() == [("a", "same", "deu_Latn", 2.0, 8.0), ("c", "other", "fra_Latn", 3.0, 9.0)]
+    assert rows.columns == ["id", "text", "language", "lat", "lon"]
 
 
 def test_work_shards_split_rows_and_name_them_in_the_bucket(tmp_path):

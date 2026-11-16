@@ -48,7 +48,7 @@ $scenes_quickstart$translation_quickstart
 
 **Sentences the LLM labelled relevant** (`landuse` is true):
 
-![Sentences labelled relevant per H3 cell](assets/map_landuse.png)$themes_section_landuse$themes_section_english
+![Sentences labelled relevant per H3 cell](assets/map_landuse.png)$themes_section_landuse$themes_section_english$themes_section_english_pool
 
 $by_source
 

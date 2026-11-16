@@ -100,7 +100,20 @@ ENGLISH = replace(
     },
     suffix="_english",
 )
-CORPORA = {corpus.name: corpus for corpus in (LANDUSE, ENGLISH, SCENES)}
+# The relevant sentences in English, original and translated, pooled. Original English vectors are LANDUSE's
+# (``embeddings``), translations are ``embeddings_en``. Each keeps its source language, so the language
+# share shows what the English vectors still carry of their source language.
+ENGLISH_POOL = replace(
+    LANDUSE,
+    name="english_pool",
+    what="relevant sentences in English, original and translated",
+    selection="relevant sentences in English: those labelled so, and the English translations of the rest",
+    axes={1: ("?", "?"), 2: ("?", "?"), 3: ("?", "?")},
+    only_language="",
+    local_axes={1: ("?", "?"), 2: ("?", "?")},
+    suffix="_english_pool",
+)
+CORPORA = {corpus.name: corpus for corpus in (LANDUSE, ENGLISH, ENGLISH_POOL, SCENES)}
 _SELECT = {
     LANDUSE.name: stats.landuse_sentences,
     ENGLISH.name: stats.landuse_sentences,
@@ -153,12 +166,12 @@ def _rows(text: Path, language: str) -> pl.DataFrame:
 
 
 def _pairs(
-    sentences: list[Path], embeddings: list, filesystem, language: str = ""
+    sentences: list[Path], embeddings: list, filesystem, languages: list[str]
 ) -> Iterator[tuple[pl.DataFrame, np.ndarray]]:
-    """Each sentence shard and the vectors of its rows; only the rows in ``language`` if given."""
+    """Each sentence shard and the vectors of its rows; only the rows in its ``language`` if given."""
 
-    def load(pair: tuple[Path, object]) -> tuple[pl.DataFrame, np.ndarray]:
-        text, source = pair
+    def load(triple: tuple[Path, object, str]) -> tuple[pl.DataFrame, np.ndarray]:
+        text, source, language = triple
         rows = pl.read_parquet(text)
         ids, vectors = read_vectors(source, filesystem)
         if not rows["id"].equals(ids, check_names=False):
@@ -168,7 +181,7 @@ def _pairs(
             rows, vectors = rows.filter(keep), vectors[keep]
         return rows, vectors
 
-    yield from _prefetched(load, zip(sentences, embeddings, strict=True))
+    yield from _prefetched(load, zip(sentences, embeddings, languages, strict=True))
 
 
 @dataclass(frozen=True)
@@ -197,16 +210,20 @@ def _languages(cells: tuple[np.ndarray, ...], languages: tuple[pl.Series, ...]) 
     return pl.concat(shards).group_by("cell", "language").agg(n=pl.len())
 
 
-def _locate(sentences: list[Path], language: str, photos: pl.DataFrame | None) -> _Cells:
+def _locate(sentences: list[Path], languages: list[str], photos: pl.DataFrame | None) -> _Cells:
     """First pass, without vectors: each text's H3 cell, or each cell where its scene has photos."""
     pairs = None if photos is None else stats.photo_cells(photos)
-    index, cells, languages = zip(
-        *(_placement(_rows(text, language), pairs) for text in sentences), strict=True
+    index, cells, labels = zip(
+        *(
+            _placement(_rows(text, language), pairs)
+            for text, language in zip(sentences, languages, strict=True)
+        ),
+        strict=True,
     )
     ids = np.unique(np.concatenate(cells))
     positions = tuple(np.searchsorted(ids, c) for c in cells)
     texts = np.bincount(np.concatenate(positions), minlength=len(ids))
-    return _Cells(ids, list(zip(index, positions, strict=True)), texts, _languages(positions, languages))
+    return _Cells(ids, list(zip(index, positions, strict=True)), texts, _languages(positions, labels))
 
 
 def _cell_means(pairs, cells: _Cells) -> np.ndarray:
@@ -294,17 +311,21 @@ def compute(
     corpus: card.Corpus = LANDUSE,
     photos: pl.DataFrame | None = None,
     filesystem=None,
+    languages: list[str] | None = None,
 ) -> Path:
     """Two-layer means (H3 cells, then their parents), their PCA and axis ends, in ``work/themes/<corpus>``.
+
+    ``languages``: the language each sentence shard is filtered to (empty: all its rows); by default, the
+    corpus' ``only_language`` for every shard.
 
     ``cells.parquet`` keeps every resolution-5 cell's scores on the axes, for the explorer Space.
 
     ``photos`` (``scene_id``, ``lat``, ``lon``): each text counts once in every cell of its photos,
     instead of in its own location's.
     """
-    language = corpus.only_language
-    cells = _locate(sentences, language, photos)
-    means = _cell_means(_pairs(sentences, embeddings, filesystem, language), cells)
+    languages = languages or [corpus.only_language] * len(sentences)
+    cells = _locate(sentences, languages, photos)
+    means = _cell_means(_pairs(sentences, embeddings, filesystem, languages), cells)
     local, local_scores = _local(cells, means, corpus.min_texts)
     kept, display_means, texts, parents = _display(cells, means, corpus.min_texts)
     _, display_local, _, _ = _display(cells, local_scores, corpus.min_texts)
@@ -312,11 +333,11 @@ def compute(
     scores = np.hstack([fit.scores(display_means), display_local])
     hexagons = _with_scores(pl.DataFrame({"hexagon": kept, "n": texts}), scores)
     mix = cells.languages.with_columns(hexagon=pl.Series(parents).gather(cells.languages["cell"]))
-    total, best = _ends(_pairs(sentences, embeddings, filesystem, language), fit, local)
+    total, best = _ends(_pairs(sentences, embeddings, filesystem, languages), fit, local)
     out = work / "themes" / corpus.name
     out.mkdir(parents=True, exist_ok=True)
-    languages = stats.dominant_language(mix.group_by("hexagon", "language").agg(pl.col("n").sum()))
-    hexagons.join(languages, on="hexagon").write_parquet(out / "hexagons.parquet")
+    dominant = stats.dominant_language(mix.group_by("hexagon", "language").agg(pl.col("n").sum()))
+    hexagons.join(dominant, on="hexagon").write_parquet(out / "hexagons.parquet")
     best.write_parquet(out / "ends.parquet")
     cell_scores = pl.DataFrame(
         {"cell": cells.ids, "n": cells.texts}, schema={"cell": pl.UInt64, "n": pl.Int64}

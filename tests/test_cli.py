@@ -352,3 +352,23 @@ def test_embed_commands_default_to_node_local_folders(monkeypatch):
         (Path("/tmp/georeset-embed"), 0, 3000.0),
         (Path("/tmp/georeset-out"), Path("/tmp/georeset-work")),
     ]
+
+
+def test_pca_commands_call_their_jobs(monkeypatch):
+    from typer.testing import CliRunner
+
+    calls = []
+    monkeypatch.setattr(cli, "Bucket", lambda bucket_id: f"bucket {bucket_id}")
+    monkeypatch.setattr(cli.pca, "compute", lambda s, w, b: calls.append(("compute", s, w, b)))
+    monkeypatch.setattr(cli.pca, "propose", lambda o, w, b: calls.append(("propose", o, w, b)) or "pr")
+    monkeypatch.setattr(cli.pca, "finalize", lambda n, b: calls.append(("finalize", n, b)))
+    runner = CliRunner()
+    bucket = f"bucket {cli.pca.BUCKET}"
+    assert runner.invoke(cli.app, ["pca-compute", "--scratch", "s", "--work", "w"]).exit_code == 0
+    assert runner.invoke(cli.app, ["pca-propose", "--out", "o", "--work", "w"]).output == "pr\n"
+    assert runner.invoke(cli.app, ["pca-finalize", "--pr", "5"]).exit_code == 0
+    assert calls == [
+        ("compute", Path("s"), Path("w"), bucket),
+        ("propose", Path("o"), Path("w"), bucket),
+        ("finalize", 5, bucket),
+    ]
