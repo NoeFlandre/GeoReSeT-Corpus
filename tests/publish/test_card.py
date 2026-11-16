@@ -511,3 +511,43 @@ def test_card_without_english_vectors_has_none_of_their_text():
 
 def test_english_template_has_every_part():
     assert tuple(card.parts(card.ENGLISH_TEMPLATE.read_text())) == card.ENGLISH_PARTS
+
+
+def _pool():
+    return _themes(corpus=replace(_LANDUSE, name="english_pool", suffix="_english_pool", what="pool"))
+
+
+def _plain_with_pca():
+    return card.Context(**{**_context().__dict__, "themes": (_themes(), _pool())})
+
+
+def test_pca_section_has_both_maps_and_a_method():
+    text = card.render(_plain_with_pca())
+    assert text.count("## Principal components") == 1
+    assert (
+        "![Colour map of the relevant sentences: red, green, blue = axes 1, 2, 3](assets/map_pca.png)" in text
+    )
+    assert "(assets/map_pc3_english_pool.png)" in text
+    assert "Principal component analysis (PCA)" in text and "Each sentence is turned into" in text
+    assert "| 2 (green) | 20.0% | " in text
+
+
+def test_pca_table_dashes_the_language_share_when_languages_do_not_vary():
+    theme = replace(_themes(), corpus=replace(_LANDUSE, mixed_languages=False))
+    assert "| 1 (red) | 40.0% | towns ↔ farms | \u2013 |" in card._pca_table(theme)
+    assert "mostly language" not in card._pca_table(_themes(r2=(0.2, 0.1, 0.1)))
+    assert "70% · mostly language" in card._pca_table(_themes(r2=(0.2, 0.7, 0.1)))
+
+
+def test_pca_section_is_empty_without_both_maps_or_on_fused():
+    assert card.pca_parts(_context()) == {"section": ""}
+    assert card.pca_parts(card.Context(**{**_context().__dict__, "themes": (_themes(),)})) == {"section": ""}
+    fused = card.Context(**{**_plain_with_pca().__dict__, "scenes": _scenes()})
+    assert "## Principal components" not in card.render(fused)
+    assert "## Principal components" in card.render(_plain_with_pca())
+
+
+def test_plain_card_has_no_sentence_section_maps():
+    text = card.render(_plain_with_pca())
+    assert "assets/map_pca.png" in text
+    assert text.count("assets/map_pca.png") == 1

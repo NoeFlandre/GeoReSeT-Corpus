@@ -23,7 +23,7 @@ REPO = extras.REPO
 CODE_URL = "https://github.com/NoeFlandre/GeoReSeT-Corpus"
 RELEASE, NEXT_RELEASE = "v1.3", "v1.4"
 ENGLISH_LANGUAGE = "eng_Latn"
-PR_TITLE = "Add PCA maps of the relevant sentences: multilingual, and English (original and translated)"
+PR_TITLE = "Principal components section: maps and method in plain terms"
 CORPORA = (themes.LANDUSE, themes.ENGLISH_POOL)  # the two maps, in the order of the card
 KEPT_ON_PR = ("assets", "README.md")  # the others are the release's, unchanged
 

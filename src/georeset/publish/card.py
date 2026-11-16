@@ -17,6 +17,7 @@ TEMPLATE = files("georeset.publish").joinpath("templates/card.md")
 SCENES_TEMPLATE = files("georeset.publish").joinpath("templates/scenes.md")
 TRANSLATION_TEMPLATE = files("georeset.publish").joinpath("templates/translation.md")
 TRANSLATION_PARTS = ("headline", "quickstart", "fields", "section", "files", "method", "license")
+PCA_TEMPLATE = files("georeset.publish").joinpath("templates/pca.md")
 EXTRAS_TEMPLATE = files("georeset.publish").joinpath("templates/extras.md")
 EXTRAS_PARTS = ("files", "configs", "section")
 EXTRAS_FOLDERS = ("embeddings", "polygons_labels_shares")
@@ -506,7 +507,63 @@ def english_parts(ctx: Context) -> dict[str, str]:
     }
 
 
+def _pca_table(theme: Themes) -> str:
+    """Each axis: its colour, variance, ends and language share (a dash where languages do not vary)."""
+    rows = ["| Axis | Variance | Low end ↔ high end | Language explains |", "|---|---:|---|---:|"]
+    for i, (share, r2) in enumerate(zip(theme.explained, theme.language_r2, strict=True), 1):
+        low, high = theme.corpus.axes[i]
+        language = "\u2013"
+        if theme.corpus.mixed_languages:
+            language = f"{r2:.0%}" + (" · mostly language" if r2 > theme.warning else "")
+        rows.append(f"| {i} ({_COLOURS[i - 1]}) | {pct(share)} | {low} ↔ {high} | {language} |")
+    return "\n".join(rows)
+
+
+def _pca_block(theme: Themes) -> str:
+    """One corpus' colour map, its table, and each axis' own map."""
+    suffix, what = theme.corpus.suffix, theme.corpus.what
+    axes = [
+        f"![Axis {i} ({_COLOURS[i - 1]}): {theme.corpus.axes[i][0]} ↔ {theme.corpus.axes[i][1]}]"
+        f"(assets/map_pc{i}{suffix}.png)"
+        for i in range(1, len(theme.explained) + 1)
+    ]
+    return "\n".join(
+        [
+            f"![Colour map of the {what}: red, green, blue = axes 1, 2, 3](assets/map_pca{suffix}.png)",
+            "",
+            _pca_table(theme),
+            "",
+            "Each axis on its own:",
+            "",
+            *axes,
+        ]
+    )
+
+
+def pca_parts(ctx: Context) -> dict[str, str]:
+    """The Principal components section of the plain corpus card, with both PCA maps; else empty."""
+    by_name = {theme.corpus.name: theme for theme in ctx.themes}
+    if flavor(ctx) is not PLAIN or not {"landuse", "english_pool"} <= by_name.keys():
+        return {"section": ""}
+    landuse, pool = by_name["landuse"], by_name["english_pool"]
+    values = {
+        "model": landuse.model,
+        "model_url": f"https://huggingface.co/{landuse.model}",
+        "texts": fmt(landuse.texts),
+        "pool_texts": fmt(pool.texts),
+        "hexagons": fmt(landuse.hexagons),
+        "pool_hexagons": fmt(pool.hexagons),
+        "min_texts": fmt(landuse.corpus.min_texts),
+        "report_landuse": f"{ctx.code_url}/blob/master/docs/{landuse.corpus.report}",
+        "report_pool": f"{ctx.code_url}/blob/master/docs/{pool.corpus.report}",
+        "landuse_block": _pca_block(landuse),
+        "pool_block": _pca_block(pool),
+    }
+    return {"section": Template(PCA_TEMPLATE.read_text()).substitute(values)}
+
+
 _OPTIONAL = {
+    "pca": pca_parts,
     "scenes": scene_parts,
     "translation": translation_parts,
     "extras": extras_parts,
@@ -516,10 +573,16 @@ _OPTIONAL = {
 
 
 def _optional_parts(ctx: Context) -> dict[str, str]:
-    """``<section>_<part>`` template values of each optional section (empty strings when absent)."""
-    return {
+    """``<section>_<part>`` template values of each optional section (empty strings when absent).
+
+    The plain card's PCA maps have their own section, so the sentence section leaves them out.
+    """
+    values = {
         f"{section}_{name}": text for section, made in _OPTIONAL.items() for name, text in made(ctx).items()
     }
+    if flavor(ctx) is PLAIN:
+        values |= {f"themes_section_{name}": "" for name in THEME_SECTIONS}
+    return values
 
 
 def render(ctx: Context) -> str:
