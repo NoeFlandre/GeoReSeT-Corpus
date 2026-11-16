@@ -1,6 +1,7 @@
 import json
 
 import polars as pl
+import pyarrow.parquet as pq
 
 from georeset.translate import plan, route
 
@@ -102,3 +103,52 @@ def test_an_empty_unit_writes_no_work_and_empty_routes(tmp_path):
     assert [remote for _, remote in files] == ["routes/lat_Latn.parquet", "plan/lat_Latn.json"]
     assert pl.read_parquet(files[0][0]).schema == {"id": pl.String, "detected": pl.String}
     assert json.loads(files[1][0].read_text()) == {"distinct": 0, "characters": 0}
+
+
+def test_rows_add_a_string_status(tmp_path):
+    labelled = plan.rows(_shard(tmp_path / "a.parquet", [("1", "t", "fra_Latn", "wikipedia")]))
+    assert labelled.schema["status"] == pl.String
+
+
+def _routed(rows):
+    names = ("id", "translation", "translation_language", "model_text", "key")
+    return pl.DataFrame([dict(zip(names, row, strict=True)) for row in rows])
+
+
+def test_to_translate_keeps_each_key_once_in_first_seen_order():
+    rows = [(str(i), "nllb", "fra_Latn", f"t{i % 50}", f"k{i % 50}".encode()) for i in range(200)]
+    rows.insert(3, ("x", "original", None, "Hello", None))
+    out = plan.to_translate(_routed(rows))
+    assert out.columns == list(plan.WORK_COLUMNS)
+    assert out["key"].to_list() == [f"k{i}".encode() for i in range(50)]
+    assert out["text"].to_list() == [f"t{i}" for i in range(50)]
+
+
+def test_ordered_breaks_ties_by_key():
+    work = pl.DataFrame(
+        {"key": [b"c", b"b", b"a", b"d"], "translation_language": ["x", "x", "x", "w"], "text": ["ab"] * 4}
+    )
+    assert plan.ordered(work)["key"].to_list() == [b"d", b"a", b"b", b"c"]
+
+
+def test_leading_empty_texts_get_a_shard_of_their_own():
+    work = pl.DataFrame({"key": [b"a", b"b"], "translation_language": ["x"] * 2, "text": ["", "ab"]})
+    assert [p["text"].to_list() for p in plan.shards(work, chars=4)] == [[""], ["ab"]]
+
+
+def test_write_names_its_local_files_and_indents_the_summary(tmp_path):
+    unit = plan.Plan()
+    rows = [("1", "Salut", "fra_Latn", "wikipedia"), ("2", "Home", "fra_Latn", "website")]
+    unit.add(plan.rows(_shard(tmp_path / "a.parquet", rows)), _identify)
+    files = plan.write("fra_Latn", unit, tmp_path / "out")
+    out = tmp_path / "out"
+    assert [local for local, _ in files] == [
+        out / "work-00000.parquet",
+        out / "routes.parquet",
+        out / "plan.json",
+    ]
+    assert (
+        files[2][0].read_text() == '{\n  "nllb": 1,\n  "original": 1,\n  "distinct": 1,\n  "characters": 5\n}'
+    )
+    for local, _ in files[:2]:
+        assert pq.ParquetFile(local).metadata.row_group(0).column(0).compression == "ZSTD"

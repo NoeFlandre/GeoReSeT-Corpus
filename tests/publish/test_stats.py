@@ -259,3 +259,21 @@ def test_translation_stats_without_translated_rows():
 def test_translation_kinds_break_ties_by_name():
     rows = pl.LazyFrame({"translation": ["nllb", "original", "unsplit", "unsplit"]})
     assert stats.translation_kinds(rows).rows() == [("unsplit", 2), ("nllb", 1), ("original", 1)]
+
+
+def test_translation_flags_shares_and_ties():
+    rows = pl.LazyFrame(
+        {
+            "translation": ["nllb", "original"],
+            "translation_language": ["fra_Latn", None],
+            "translation_flags": [["truncated", "empty"], []],
+        }
+    )
+    assert stats.translation_flags(rows).rows() == [("empty", 1, 1.0), ("truncated", 1, 1.0)]
+
+
+def test_translation_kinds_sort_tied_kinds_by_name():
+    names = ["unsupported", "original", "nllb", "unsplit", "zz", "aa", "mm"]
+    assert [
+        kind for kind, _ in stats.translation_kinds(pl.LazyFrame({"translation": names})).rows()
+    ] == sorted(names)

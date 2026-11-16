@@ -31,7 +31,9 @@ def key(code: str, text: str) -> bytes:
 
 
 def _keys(pairs: pl.Series) -> pl.Series:
+    # pragma: no mutate start (bytes give Binary)
     return pl.Series([key(p["code"], p["text"]) for p in pairs], dtype=pl.Binary)
+    # pragma: no mutate end
 
 
 def routed(rows: pl.LazyFrame, detected: pl.LazyFrame) -> pl.LazyFrame:
@@ -57,6 +59,8 @@ def routed(rows: pl.LazyFrame, detected: pl.LazyFrame) -> pl.LazyFrame:
         .drop("detected", "code")
     )
     pairs = pl.struct(code="translation_language", text="model_text")
+    # pragma: no mutate start (_keys gives Binary, with or without return_dtype)
     return with_kind.with_columns(
         key=pl.when(pl.col("translation") == NLLB).then(pairs.map_batches(_keys, return_dtype=pl.Binary))
     )
+    # pragma: no mutate end

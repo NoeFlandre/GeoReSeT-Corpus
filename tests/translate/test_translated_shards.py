@@ -103,3 +103,53 @@ def test_load_translations_deduplicates(tmp_path):
     TRANSLATIONS.head(1).write_parquet(tmp_path / "b.parquet")
     assert assemble.load_translations([tmp_path / "a.parquet", tmp_path / "b.parquet"]).equals(TRANSLATIONS)
     assert assemble.load_translations([]).schema == assemble.TRANSLATIONS_SCHEMA
+
+
+def test_translation_columns_keep_unsplit_rows_unsplit():
+    frame = pl.DataFrame(_table(status=True)).with_columns(status=pl.lit("unsplit"))
+    out = assemble.translation_columns(frame, OVERRIDES, TRANSLATIONS)
+    assert out["translation"].to_list() == ["unsplit", "original", "unsplit", "unsplit"]
+
+
+def test_translation_columns_keep_the_rows_order():
+    n = 300
+    texts = [f"Bonjour {i % 40}" for i in range(n)]
+    frame = pl.DataFrame(
+        {
+            "id": [str(i) for i in range(n)],
+            "text": texts,
+            "language": ["fra_Latn"] * n,
+            "source": ["wikipedia"] * n,
+        }
+    )
+    translations = pl.DataFrame(
+        {
+            "key": [route.key("fra_Latn", f"Bonjour {i}") for i in reversed(range(40))],
+            "text_en": [f"Hello {i}" for i in reversed(range(40))],
+            "translation_flags": [[]] * 40,
+        },
+        schema=assemble.TRANSLATIONS_SCHEMA,
+    )
+    out = assemble.translation_columns(frame, OVERRIDES.head(0), translations)
+    assert out["text_en"].to_list() == [t.replace("Bonjour", "Hello") for t in texts]
+
+
+def test_load_translations_keep_the_first_result_of_each_key_in_order(tmp_path):
+    n = 200
+    first = pl.DataFrame(
+        {"key": [str(i).encode() for i in range(n)], "text_en": ["a"] * n, "translation_flags": [[]] * n},
+        schema=assemble.TRANSLATIONS_SCHEMA,
+    )
+    first.write_parquet(tmp_path / "a.parquet")
+    first.with_columns(text_en=pl.lit("b")).write_parquet(tmp_path / "b.parquet")
+    assert assemble.load_translations([tmp_path / "a.parquet", tmp_path / "b.parquet"]).equals(first)
+
+
+def test_translation_flags_are_strings_even_when_no_result_has_any():
+    untyped = pl.DataFrame(
+        {"key": [route.key("fra_Latn", "Bonjour")], "text_en": ["Hello"], "translation_flags": [[]]}
+    )
+    assert untyped.schema["translation_flags"] == pl.List(pl.Null)
+    frame = pl.DataFrame(_table()).head(3)
+    out = assemble.translation_columns(frame, OVERRIDES, untyped)
+    assert out.schema["translation_flags"] == pl.List(pl.String)
