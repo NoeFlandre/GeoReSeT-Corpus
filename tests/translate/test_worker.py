@@ -213,3 +213,10 @@ def test_run_measures_each_shard_by_its_own_duration(bucket, tmp_path):
     _bucket_with(bucket, {"a/00000": [(b"k", "fra_Latn", "x")], "a/00001": [(b"j", "fra_Latn", "y")]})
     run = worker.Worker(bucket, FakeEngine(), _english, tmp_path, 0, budget_s=100, clock=Clock(1.0))
     assert run.run() == 2
+
+
+def test_translate_shard_keeps_the_languages_in_their_first_seen_order():
+    languages = [f"l{i:02d}_Latn" for i in reversed(range(40))]
+    work = _work([(lang.encode(), lang, "x") for lang in languages])
+    out = worker.translate_shard(FakeEngine(), _english, work)
+    assert out["key"].to_list() == [lang.encode() for lang in languages]

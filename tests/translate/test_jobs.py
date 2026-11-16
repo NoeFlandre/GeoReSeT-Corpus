@@ -221,15 +221,16 @@ def test_plan_all_plans_the_units_not_planned_yet(bucket, tmp_path, monkeypatch)
     monkeypatch.setattr(jobs, "release", lambda: "sha")
     monkeypatch.setattr(jobs, "Bucket", lambda: bucket)
     monkeypatch.setattr(jobs, "ProcessPoolExecutor", _Pool)
-    monkeypatch.setattr(
-        jobs.hub, "list_files", lambda repo, rev: ["data/w/deu_Latn/a.parquet", "data/w/fra_Latn/a.parquet"]
-    )
+    listed = []
+    files = ["data/w/deu_Latn/a.parquet", "data/w/fra_Latn/a.parquet"]
+    monkeypatch.setattr(jobs.hub, "list_files", lambda repo, rev: listed.append((repo, rev)) or files)
     monkeypatch.setattr(
         jobs, "_plan_in_process", lambda unit, rev, scratch: done.append((unit, rev, scratch))
     )
     jobs.plan_all(tmp_path, 3)
     assert bucket.calls == [("create",)]
     assert _Pool.made == [(3, jobs._init_identify)]
+    assert listed == [(jobs.REPO, "sha")]
     assert done == [("fra_Latn", "sha", tmp_path), ("unlabelled", "sha", tmp_path)]
     done.clear()
     jobs.plan_all(tmp_path, 1, ["deu_Latn", "ita_Latn"])
@@ -261,7 +262,7 @@ def test_assemble_all_needs_every_shard_translated(bucket, tmp_path, monkeypatch
     monkeypatch.setattr(jobs, "release", lambda: "sha")
     monkeypatch.setattr(jobs, "Bucket", lambda: bucket)
     monkeypatch.setattr(jobs.fuse, "fetch_corpus", lambda *args: pytest.fail("fetched"))
-    with pytest.raises(RuntimeError, match="work shards are left: translation is not finished"):
+    with pytest.raises(RuntimeError, match=r"^work shards are left: translation is not finished$"):
         jobs.assemble_all(tmp_path / "out", tmp_path / "work", tmp_path / "scratch")
 
 
@@ -293,3 +294,4 @@ def test_assemble_all_assembles_each_unit_then_writes_the_summary(bucket, tmp_pa
         (("unlabelled: 2 shards",), {"flush": True}),
     ]
     assert (work / "translation.json").read_text() == '{\n  "distinct": 1\n}'
+    assert [p.name for p in work.iterdir()] == ["translation.json"]

@@ -101,3 +101,26 @@ def test_translation_context_reads_the_summary_and_the_shards(tmp_path):
         "r",
         0.9,
     )
+
+
+def test_translation_context_reads_its_files_by_their_exact_names(tmp_path, monkeypatch):
+    import polars as pl
+
+    names = []
+
+    class Seen(type(tmp_path)):
+        def __truediv__(self, name):
+            names.append(name)
+            return super().__truediv__(name)
+
+    out, work = tmp_path / "out", tmp_path / "work"
+    _translated(out, "unlabelled", [("nllb", "deu_Latn", [])])
+    _translated(out, "data/wikipedia/fra_Latn", [("nllb", "fra_Latn", [])])
+    work.mkdir()
+    meta = {"distinct": 1, "model": "m/x", "revision": "r", "threshold": 0.9, "release": "s"}
+    (work / "translation.json").write_text(json.dumps(meta))
+    scanned, scan = [], pl.scan_parquet
+    monkeypatch.setattr(pl, "scan_parquet", lambda path: scanned.append(path) or scan(path))
+    assert report.translation_context(out, Seen(work)) is not None
+    assert names == ["translation.json"]
+    assert scanned == [out / "data" / "*" / "*" / "*.parquet", out / "unlabelled" / "*.parquet"]

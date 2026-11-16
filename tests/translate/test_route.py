@@ -1,5 +1,6 @@
 import hashlib
 
+import numpy as np
 import polars as pl
 
 from georeset.translate import route
@@ -62,3 +63,24 @@ def test_routed_rows():
         route.key("deu_Latn", "Hallo"),
         route.key("srp_Cyrl", "Београд"),
     ]
+
+
+def test_overrides_compare_probabilities_in_float64():
+    rows = _rows(("a", "Home", "hin_Deva", "website", None))
+    probability = np.array([route.THRESHOLD], dtype=np.float32)  # 0.89999998 once widened
+    assert route.overrides(rows, ["eng_Latn"], probability).height == 0
+
+
+def test_overrides_of_no_rows_keep_their_schema():
+    out = route.overrides(_rows(), [], [])
+    assert out.schema == {"id": pl.String, "detected": pl.String}
+
+
+def test_routed_rows_keep_their_order():
+    rows = _rows(*[(str(i), "Home", "hin_Deva", "website", None) for i in range(300)])
+    detected = pl.DataFrame(
+        {"id": [str(i) for i in reversed(range(0, 300, 3))], "detected": ["eng_Latn"] * 100}
+    )
+    out = route.routed(rows.lazy(), detected.lazy()).collect()
+    assert out["id"].to_list() == [str(i) for i in range(300)]
+    assert out["translation"].to_list() == ["original" if i % 3 == 0 else "nllb" for i in range(300)]

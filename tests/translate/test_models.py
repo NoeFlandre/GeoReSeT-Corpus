@@ -1,6 +1,8 @@
+import sys
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from georeset.translate import models
 from georeset.translate.worker import Output
@@ -82,3 +84,40 @@ def test_glotlid_flattens_texts_and_strips_labels():
     assert lid.model.seen == ["a b", "", "c"]
     assert lid.labels(["x"]) == ["eng_Latn"]
     assert lid.predict([]) == ([], [])
+
+
+def test_translate_tokenizes_in_the_source_language():
+    nllb = _nllb()
+    nllb.translate(["un"], "fra_Latn", [8])
+    assert nllb.tokenizer.languages == ["fra_Latn"]
+
+
+def test_translate_refuses_a_result_count_mismatch():
+    nllb = _nllb()
+    nllb.translator.translate_batch = lambda sources, **kwargs: []
+    with pytest.raises(ValueError, match="zip"):
+        nllb.translate(["un"], "fra_Latn", [8])
+
+
+def test_nllb_loads_the_model_on_the_gpu_in_float16(monkeypatch, tmp_path):
+    loaded = []
+    ctranslate2 = SimpleNamespace(Translator=lambda *a, **k: loaded.append(("translator", a, k)) or "t")
+    tokenizer = SimpleNamespace(from_pretrained=lambda *a, **k: loaded.append(("tokenizer", a, k)) or "k")
+    monkeypatch.setitem(sys.modules, "ctranslate2", ctranslate2)
+    monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(AutoTokenizer=tokenizer))
+    nllb = models.Nllb(tmp_path)
+    assert (nllb.translator, nllb.tokenizer) == ("t", "k")
+    assert loaded == [
+        ("translator", (str(tmp_path),), {"device": "cuda", "compute_type": "float16"}),
+        ("tokenizer", (tmp_path,), {}),
+    ]
+
+
+def test_glotlid_downloads_the_benchmark_model(monkeypatch):
+    import huggingface_hub
+
+    calls = []
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", lambda **k: calls.append(k) or "glotlid.bin")
+    monkeypatch.setitem(sys.modules, "fasttext", SimpleNamespace(load_model=lambda path: ("model", path)))
+    assert models.GlotLid().model == ("model", "glotlid.bin")
+    assert calls == [{"repo_id": models.GLOTLID_REPO, "filename": models.GLOTLID_FILE}]

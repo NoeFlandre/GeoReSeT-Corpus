@@ -238,10 +238,31 @@ def test_propose_uploads_to_a_new_pull_request(tmp_path, monkeypatch):
         ("me/d",),
         {"title": "Add translations", "repo_type": "dataset"},
     )
-    uploads = api.calls[1:]
-    assert len(uploads) == len(hub.upload_units(out)) + 1
-    assert all(call[2]["revision"] == "refs/pr/3" for call in uploads)
-    assert uploads[-1][2]["path_in_repo"] == "README.md"
+    folders = [
+        (
+            "upload_folder",
+            (),
+            {
+                "repo_id": "me/d",
+                "repo_type": "dataset",
+                "folder_path": out / unit,
+                "path_in_repo": unit,
+                "delete_patterns": "*",
+                "commit_message": f"Upload {unit}",
+                "revision": "refs/pr/3",
+            },
+        )
+        for unit in hub.upload_units(out)
+    ]
+    card = {
+        "repo_id": "me/d",
+        "repo_type": "dataset",
+        "path_or_fileobj": out / "README.md",
+        "path_in_repo": "README.md",
+        "commit_message": "Update dataset card",
+        "revision": "refs/pr/3",
+    }
+    assert api.calls[1:] == [*folders, ("upload_file", (), card)]
 
 
 def test_merge(monkeypatch):

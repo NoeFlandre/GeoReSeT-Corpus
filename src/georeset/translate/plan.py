@@ -58,8 +58,12 @@ def ordered(work: pl.DataFrame) -> pl.DataFrame:
 def shards(work: pl.DataFrame, chars: int = SHARD_CHARS) -> list[pl.DataFrame]:
     """Consecutive slices of ``work`` holding about ``chars`` characters each."""
     size = work["text"].str.len_chars().cum_sum() - 1
+    # pragma: no mutate start (size is unsigned: / then a cast truncates like //)
     labelled = work.with_columns(shard=(size // chars).cast(pl.Int64))
+    # pragma: no mutate end
+    # pragma: no mutate start (order kept by default)
     return [part.drop("shard") for part in labelled.partition_by("shard", maintain_order=True)]
+    # pragma: no mutate end
 
 
 class Plan:
@@ -79,7 +83,9 @@ class Plan:
 
     def texts(self) -> pl.DataFrame:
         work = pl.concat(self.work) if self.work else pl.DataFrame(schema=_WORK_SCHEMA)
+        # pragma: no mutate start (a key fixes its row, which ordered() sorts)
         return ordered(work.unique("key", maintain_order=True))
+        # pragma: no mutate end
 
     def summary(self, texts: pl.DataFrame) -> dict[str, int]:
         return {**dict(sorted(self.counts.items())), "distinct": texts.height, "characters": _chars(texts)}
@@ -110,5 +116,7 @@ _ROUTE_SCHEMA = {"id": pl.String, "detected": pl.String}
 
 
 def _parquet(frame: pl.DataFrame, local: Path, remote: str) -> tuple[Path, str]:
+    # pragma: no mutate start (zstd is the default)
     frame.write_parquet(local, compression="zstd")
+    # pragma: no mutate end
     return local, remote

@@ -28,7 +28,9 @@ def translation_columns(
 ) -> pl.DataFrame:
     """The four new columns for ``frame``'s rows, in order."""
     if "status" not in frame.columns:
+        # pragma: no mutate start (a null of any type is not UNSPLIT)
         frame = frame.with_columns(status=pl.lit(None, dtype=pl.String))
+        # pragma: no mutate end
     routed = route.routed(frame.select(route.COLUMNS).lazy(), overrides.lazy())
     joined = routed.join(translations.lazy(), on="key", how="left", maintain_order="left").collect()
     is_nllb = pl.col("translation") == route.NLLB
@@ -48,7 +50,9 @@ def translation_columns(
 def with_translations(table: pa.Table, columns: pl.DataFrame) -> pa.Table:
     """``table`` with ``columns`` appended; its own columns and schema metadata untouched."""
     out = table
+    # pragma: no mutate start (both from the same frame)
     for name, column in zip(columns.columns, columns.to_arrow().columns, strict=True):
+        # pragma: no mutate end
         out = out.append_column(name, column)
     return out.replace_schema_metadata(table.schema.metadata)
 
@@ -66,7 +70,9 @@ def same_originals(old: pa.Table, new: pa.Table) -> bool:
 def rewrite(path: Path, overrides: pl.DataFrame, translations: pl.DataFrame) -> None:
     """Replace the shard at ``path`` with its translated version, after checking it."""
     old = pq.read_table(path)
+    # pragma: no mutate start (no rows: any size)
     row_group = pq.ParquetFile(path).metadata.row_group(0).num_rows if old.num_rows else 1
+    # pragma: no mutate end
     present = [name for name in route.COLUMNS if name in old.column_names]
     columns = translation_columns(pl.DataFrame(old.select(present)), overrides, translations)
     tmp = path.with_name(path.name + ".tmp")  # pragma: no mutate (private scratch name)
