@@ -72,7 +72,7 @@ def test_read_vectors(tmp_path):
     (path,) = _embed(sorted((tmp_path / "s").glob("*.parquet")), tmp_path / "e")
     ids, vectors = themes.read_vectors(str(path))
     assert ids.to_list() == pl.read_parquet(path)["id"].to_list()
-    assert vectors.dtype == np.float32 and vectors.shape == (10, 4)
+    assert vectors.dtype == np.float16 and vectors.shape == (10, 4)
 
 
 def test_write_sentences_of_scenes(tmp_path):

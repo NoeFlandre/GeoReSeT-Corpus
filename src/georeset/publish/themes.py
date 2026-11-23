@@ -26,7 +26,8 @@ MODEL = "microsoft/harrier-oss-v1-0.6b"  # as in scripts/embed.py
 PROMPT = "Instruct: Identify the land use or land cover described\nQuery: "
 MAX_TOKENS = 512  # longest input, as in scripts/embed.py
 PCS = [f"pc{i}" for i in range(1, COMPONENTS + 1)]
-AHEAD = 4  # shards loading in the background while one is processed
+AHEAD = 1  # shards loading in the background while one is processed
+CHUNK_ROWS = 65_536  # vectors summed at a time: bounds the memory of a shard
 LANDUSE = card.Corpus(
     name="landuse",
     source="data/*/*/*.parquet",
@@ -96,12 +97,12 @@ def write_sentences(
 
 
 def read_vectors(source, filesystem=None) -> tuple[pl.Series, np.ndarray]:
-    """An embeddings shard: its ``id`` and its vectors as a float32 matrix."""
+    """An embeddings shard: its ``id`` and its vectors as a float16 matrix (summed in float64 by chunks)."""
     table = pq.read_table(source, columns=["id", "vector"], filesystem=filesystem)
     column = table.column("vector").combine_chunks()
     vectors = column.values.to_numpy(zero_copy_only=False).reshape(len(column), -1)
     ids = pl.Series("id", table.column("id").combine_chunks())
-    return ids, vectors.astype(np.float32)
+    return ids, vectors
 
 
 def _prefetched(load: Callable, items: Iterable, ahead: int = AHEAD) -> Iterator:
@@ -177,12 +178,14 @@ def _locate(sentences: list[Path], languages: list[str], photos: pl.DataFrame | 
 
 
 def _cell_means(pairs, cells: _Cells) -> np.ndarray:
-    """Second pass: each cell's mean vector."""
+    """Second pass: each cell's mean vector, summed ``CHUNK_ROWS`` rows at a time."""
     sums = None
     for (_, vectors), (index, cell) in zip(pairs, cells.placements, strict=True):
         sums = np.zeros((len(cells.ids), vectors.shape[1])) if sums is None else sums
-        present, part, _ = stats.group_sums(cell, vectors[index])
-        sums[present] += part
+        for start in range(0, len(index), CHUNK_ROWS):
+            rows = slice(start, start + CHUNK_ROWS)
+            present, part, _ = stats.group_sums(cell[rows], vectors[index[rows]])
+            sums[present] += part
     return np.asarray(sums) / cells.texts[:, None]
 
 
