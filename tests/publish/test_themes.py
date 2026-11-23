@@ -239,9 +239,9 @@ def test_prefetched_keeps_order_whatever_the_lookahead():
         assert list(themes._prefetched(lambda x: x * x, items, ahead)) == [x * x for x in items]
 
 
-def test_cell_means_average_each_cell_then_hexagons_average_cells(tmp_path):
-    # Two sibling cells under one display cell: one with 3 texts, one with 1. The display cell is the mean
-    # of the two cells, not of the four texts.
+def test_cell_means_average_each_text_in_its_cell_once(tmp_path):
+    # Two sibling resolution-5 cells under one resolution-4 cell: 3 texts in one, 1 in the other. The
+    # resolution-4 cell is the mean of its four texts, each counted once, not of its two sub-cells.
     import h3.api.basic_int as h3_int
 
     parent = geo.h3_parents(geo.h3_cells(np.array([2.35]), np.array([48.85])))[0]
@@ -259,15 +259,10 @@ def test_cell_means_average_each_cell_then_hexagons_average_cells(tmp_path):
     (tmp_path / "s").mkdir()
     rows.write_parquet(tmp_path / "s" / "x.parquet")
     cells = themes._locate([tmp_path / "s" / "x.parquet"], [""], None)
-    assert dict(zip(cells.ids.tolist(), cells.texts.tolist(), strict=True)) == {
-        int(near[0]): 3,
-        int(near[1]): 1,
-    }
+    assert cells.ids.tolist() == [int(parent)] and cells.texts.tolist() == [4]
     vectors = np.array([[1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
     means = themes._cell_means([(rows, vectors)], cells)
-    by_cell = dict(zip(cells.ids.tolist(), means.tolist(), strict=True))
-    assert by_cell[int(near[0])] == [1.0, 0.0] and by_cell[int(near[1])] == [0.0, 1.0]
-    kept, display_means, texts, parents = themes._display(cells, means, 1)
-    assert kept.tolist() == [parent] and parents.tolist() == [parent, parent]
-    assert display_means.tolist() == [[0.5, 0.5]] and texts.tolist() == [4]
+    assert means.tolist() == [[0.75, 0.25]]
+    kept, display_means, texts = themes._display(cells, means, 1)
+    assert kept.tolist() == [parent] and display_means.tolist() == [[0.75, 0.25]] and texts.tolist() == [4]
     assert themes._display(cells, means, 5)[0].size == 0

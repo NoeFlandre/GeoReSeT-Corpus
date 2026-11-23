@@ -1,6 +1,6 @@
 # What places talk about: the PCA axes of the scene descriptions
 
-The 39,998 scene descriptions each count once in every H3 cell where its scene has photos (resolution 5); each cell takes the mean embedding of its texts, and each of the 30,906 resolution-4 cells with 10 descriptions or more the mean of its child cells. PCA of those means; scores below are the texts' projections on each axis.
+The 39,998 scene descriptions each count once in every H3 cell where its scene has photos (resolution 4). Each of the 30,906 resolution-4 cells with 10 descriptions or more takes the mean embedding of its texts. PCA of those means; scores below are the texts' projections on each axis.
 
 ## PC1: paved urban streets ↔ arid rugged land
 

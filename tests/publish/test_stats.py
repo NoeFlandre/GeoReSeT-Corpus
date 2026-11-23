@@ -212,7 +212,7 @@ def test_photo_cells_pairs_each_scene_with_its_photos_cells():
     photos = pl.DataFrame(
         {"scene_id": [1, 1, 1, 2], "lat": [48.85, 48.85, -33.9, 48.85], "lon": [2.35, 2.35, 18.4, 2.35]}
     )
-    paris, cape = geo.h3_cells(np.array([2.35, 18.4]), np.array([48.85, -33.9]))
+    paris, cape = geo.h3_cells(np.array([2.35, 18.4]), np.array([48.85, -33.9]), geo.PCA_RESOLUTION)
     assert stats.photo_cells(photos).rows() == sorted([(1, paris), (1, cape), (2, paris)])
 
 

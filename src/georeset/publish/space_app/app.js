@@ -233,7 +233,7 @@ async function select(cell) {
   const total = (k) => fmt.format(cell[k] || 0);
   $("drawer").hidden = false;
   $("drawer-body").innerHTML = `<h3>H3 cell, resolution ${res}</h3>
-    <p class="muted" style="margin:0">${res === 5 ? "About 250 km²." : "Totals over the cell; colours are the mean of its resolution-5 cells."}</p>
+    <p class="muted" style="margin:0">${res === 5 ? "About 250 km². Its what-places-talk-about colour is its resolution-4 cell's." : "Totals over the cell; colours are the mean of its resolution-5 cells (what places talk about: of its resolution-4 cells)."}</p>
     <h4>Numbers</h4>
     <dl class="stats"><dt>Land-use sentences</dt><dd>${total("relevant")}</dd>
     ${SOURCES.slice(1).map((s) => `<dt class="sub">${s.label}</dt><dd>${total(s.id)}</dd>`).join("")}

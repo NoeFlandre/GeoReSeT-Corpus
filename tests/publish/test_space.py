@@ -4,7 +4,7 @@ import h3.api.basic_int as h3_int
 import numpy as np
 import polars as pl
 
-from georeset.publish import space, themes
+from georeset.publish import geo, space, themes
 
 PARIS = (48.85, 2.35)
 CAPE = (-33.9, 18.4)
@@ -55,13 +55,14 @@ def _work(tmp_path):
     work = tmp_path / "work"
     folder = work / "themes" / "landuse"
     folder.mkdir(parents=True)
-    paris = h3_int.latlng_to_cell(*PARIS, 5)
-    near = h3_int.latlng_to_cell(*_sibling(*PARIS), 5)
+    # The PCA cells are at the PCA's resolution: Paris (8 texts) and Cape Town (2, under PCA_MIN).
+    paris = h3_int.latlng_to_cell(*PARIS, geo.PCA_RESOLUTION)
+    cape = h3_int.latlng_to_cell(*CAPE, geo.PCA_RESOLUTION)
     cells = pl.DataFrame(
         {
-            "cell": pl.Series([paris, near], dtype=pl.UInt64),
-            "n": [6, 2],
-            "pc1": [1.0, -1.0],
+            "cell": pl.Series([paris, cape], dtype=pl.UInt64),
+            "n": [8, 2],
+            "pc1": [0.0, 0.0],
             "pc2": [0.0, 0.0],
             "pc3": [0.5, 0.5],
         }
@@ -114,14 +115,17 @@ def test_build_writes_every_resolution_samples_and_manifest(tmp_path):
     cape = r4.filter(cell=format(h3_int.latlng_to_cell(*CAPE, 4), "x")).row(0, named=True)
     assert cape["m_wikipedia"] is None and cape["m_photos"] == 1.0
     assert r4["m_wikipedia"].is_nan().sum() == 0
-    # PCA: the two cells' mean scores (0, 0, 0.5) scaled between the display limits (2nd and 98th
-    # percentiles: ±1.92, ±0.96, ±0.96), packed as r << 16 | g << 8 | b.
+    # PCA: the cell's scores (0, 0, 0.5) scaled between the display limits (2nd and 98th percentiles:
+    # ±1.92, ±0.96, ±0.96), packed as r << 16 | g << 8 | b.
     packed = row["pca_landuse"]
     assert (packed >> 16 & 255, packed >> 8 & 255, packed & 255) == (128, 128, 194)
+    # Under PCA_MIN: no colour (Cape Town has 2 texts).
+    assert r4.filter(cell=format(h3_int.latlng_to_cell(*CAPE, 4), "x"))["pca_landuse"].null_count() == 1
     assert manifest["chunks"] and all((out / "r5" / f"{c}.parquet").is_file() for c in manifest["chunks"])
     r5 = pl.concat(pl.read_parquet(p) for p in (out / "r5").glob("*.parquet"))
     near = r5.filter(cell=format(h3_int.latlng_to_cell(*_sibling(*PARIS), 5), "x"))
-    assert near["pca_landuse"].null_count() == 1  # 2 texts: under PCA_MIN
+    # A resolution-5 cell takes its resolution-4 cell's colour.
+    assert near["pca_landuse"].to_list() == [packed]
     samples = pl.concat(pl.read_parquet(p) for p in (out / "samples").glob("*.parquet"))
     paris5 = format(h3_int.latlng_to_cell(*PARIS, 5), "x")
     here = samples.filter(cell=paris5)

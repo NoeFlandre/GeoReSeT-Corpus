@@ -156,9 +156,9 @@ def scene_sentences(scenes: pl.LazyFrame) -> pl.LazyFrame:
     return rows.sort("id").unique("text", keep="first", maintain_order=True)
 
 
-def photo_cells(photos: pl.DataFrame) -> pl.DataFrame:
+def photo_cells(photos: pl.DataFrame, resolution: int = geo.PCA_RESOLUTION) -> pl.DataFrame:
     """Each (``id``, H3 ``cell``) pair where scene ``id`` has ``photos`` (``scene_id``, ``lat``, ``lon``)."""
-    cells = geo.h3_cells(photos["lon"].to_numpy(), photos["lat"].to_numpy())
+    cells = geo.h3_cells(photos["lon"].to_numpy(), photos["lat"].to_numpy(), resolution)
     return pl.DataFrame({"id": photos["scene_id"], "cell": cells}).unique().sort("id", "cell")
 
 

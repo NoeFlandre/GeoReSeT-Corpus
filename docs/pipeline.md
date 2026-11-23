@@ -76,12 +76,12 @@ georeset fuse ...                                         card: maps, legends, w
 self-contained (PEP 723 dependencies): `microsoft/harrier-oss-v1-0.6b` in bf16, the instruction
 `Identify the land use or land cover described`, L2-normalised vectors stored as float16. Shards already on
 the Hub are skipped, so jobs can be killed, resubmitted or run on several GPUs at once.
-Every map of the card has two layers (`georeset.publish.geo`): points are counted in H3 cells of resolution
-5, then each H3 cell of resolution 4 shows the mean of its child cells, so that every place counts once
-however much is written there; maps use the Equal Earth projection. For the PCA, each cell takes the mean
-embedding of its texts (a scene description counts in every cell where its scene has photos), each
-resolution-4 cell the mean of its child cells; those with fewer than 20 sentences (10 scene descriptions)
-are dropped and PCA is fitted on the rest. The passes over the shards (cells, cell means, axis ends)
+Maps use the Equal Earth projection (`georeset.publish.geo`). The count maps have two layers: points are
+counted in H3 cells of resolution 5, then each H3 cell of resolution 4 shows the mean of its child cells, so
+that every place counts once however much is written there. The PCA has one: each text counts once, in its
+H3 cell of resolution 4 (a scene description counts in every cell where its scene has photos), and each
+cell takes the mean embedding of its texts; those with fewer than 20 sentences (10 scene descriptions) are
+dropped and PCA is fitted on the rest. The passes over the shards (cells, cell means, axis ends)
 load the next shards in the background. The axes' names in `georeset.publish.themes.LANDUSE`, `ENGLISH` and
 `SCENES` are read from the axes' extreme texts: [sentences](pca_axes.md), [English sentences](pca_axes_english.md),
 [scene descriptions](pca_axes_scenes.md). The sentences' axes are
@@ -92,13 +92,14 @@ descriptions are all English.
 
 [An interactive map](https://huggingface.co/spaces/NoeFlandre/GeoReSeT-Corpus-Fused) of the fused dataset,
 on the same two layers: numbers per H3 cell of resolution 5, and coarser cells (resolutions 2 to 4, as the map
-zooms out) showing the mean of their resolution-5 cells. It shows only the sentences labelled relevant
+zooms out) showing the mean of their resolution-5 cells. The PCA colours are one layer at resolution 4: each
+resolution-5 cell takes its resolution-4 cell's colour, each coarser cell the mean of its resolution-4 cells. It shows only the sentences labelled relevant
 (`landuse` true), from every source or one; layers: those sentences, scene photos, their most frequent
 language and the three PCA maps; a click shows a cell's numbers, up to three relevant sentences and the
 scene with the most photos there. The dataset itself is not changed.
 
 ```
-georeset themes --corpus C ...   (each corpus, as above: also writes every resolution-5 cell's scores)
+georeset themes --corpus C ...   (each corpus, as above: also writes every resolution-4 cell's scores)
 georeset space                   data from the dataset's current revision, app files → the Space
 ```
 
