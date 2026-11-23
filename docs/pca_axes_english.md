@@ -1,6 +1,6 @@
 # What places talk about: the PCA axes of the relevant sentences in English
 
-The 5,046,840 relevant sentences in English each count in the H3 cell of its location (resolution 5); each cell takes the mean embedding of its texts, and each of the 13,745 resolution-4 cells with 20 sentences or more the mean of its child cells. PCA of those means; scores below are the texts' projections on each axis.
+The 5,046,840 relevant sentences in English each count in the H3 cell of its location (resolution 4). Each of the 13,745 resolution-4 cells with 20 sentences or more takes the mean embedding of its texts. PCA of those means; scores below are the texts' projections on each axis.
 
 ## PC1: historic city buildings ↔ lakes and outdoor recreation
 

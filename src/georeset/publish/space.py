@@ -1,7 +1,10 @@
 """Data of the explorer Space: per-H3-cell numbers of the relevant sentences at every resolution it shows.
 
 Resolution 5 is the data layer; each coarser cell holds the mean of its resolution-5 children (each child
-counts once), as on the card. ``build`` writes, into ``out``:
+counts once), as on the card. The PCA colours are at resolution ``geo.PCA_RESOLUTION``: each resolution-5
+cell takes its parent's colour, each coarser cell the mean of its ``geo.PCA_RESOLUTION`` children's scores.
+
+``build`` writes, into ``out``:
 
 * ``r2.parquet``, ``r3.parquet``, ``r4.parquet``: every cell of those resolutions;
 * ``r5/<res-1 cell>.parquet`` and ``samples/<res-1 cell>.parquet``: resolution-5 cells, and up to
@@ -66,8 +69,8 @@ def photo_cells(photos: pl.LazyFrame) -> pl.DataFrame:
 
 
 def pca_cells(work: Path) -> dict[str, tuple[pl.DataFrame, np.ndarray]]:
-    """Each computed corpus' resolution-5 cell scores (``cell``, ``n``, ``pc1``..) and the colour limits of
-    the card's maps (global: 2nd and 98th percentiles)."""
+    """Each computed corpus' ``geo.PCA_RESOLUTION`` cell scores (``cell``, ``n``, ``pc1``..) and the colour
+    limits of the card's maps (global: 2nd and 98th percentiles)."""
     out = {}
     for corpus in themes.CORPORA.values():
         folder = work / "themes" / corpus.name
@@ -96,7 +99,8 @@ def _colours(name: str, scores: pl.DataFrame, limits: np.ndarray) -> pl.DataFram
 def rollup(cells: pl.DataFrame, languages: pl.DataFrame, pca: dict, resolution: int) -> pl.DataFrame:
     """Cells of ``resolution``: summed counts and each count's mean over the children holding it.
 
-    Also the most frequent language and each PCA's colour from its children's mean scores.
+    Also the most frequent language and each PCA's colour: from the mean scores of the PCA cells under each
+    cell, or of the PCA cell holding it when ``resolution`` is finer than the PCA's.
     """
     parent = pl.Series("parent", geo.h3_parents(cells["cell"].to_numpy(), resolution), pl.UInt64)
     children = cells.with_columns(parent)
@@ -110,17 +114,16 @@ def rollup(cells: pl.DataFrame, languages: pl.DataFrame, pca: dict, resolution: 
         languages.with_columns(hexagon=parents).group_by("hexagon", "language").agg(pl.col("n").sum())
     )
     out = out.join(top.rename({"hexagon": "parent"}), on="parent", how="left")
+    level = min(resolution, geo.PCA_RESOLUTION)
+    holder = pl.Series(geo.h3_parents(out["parent"].to_numpy(), level), dtype=pl.UInt64)
     for name, (scores, limits) in pca.items():
         child = scores.with_columns(
-            parent=pl.Series(geo.h3_parents(scores["cell"].to_numpy(), resolution), dtype=pl.UInt64)
+            cell=pl.Series(geo.h3_parents(scores["cell"].to_numpy(), level), dtype=pl.UInt64)
         )
-        mean = child.group_by("parent").agg(pl.col("n").sum(), *[pl.col(a).mean() for a in themes.PCS])
-        colours = _colours(PCA[name], mean.rename({"parent": "cell"}), limits)
-        out = out.join(
-            colours.rename({"cell": "parent"}),
-            on="parent",
-            how="left",
-        )
+        mean = child.group_by("cell").agg(pl.col("n").sum(), *[pl.col(a).mean() for a in themes.PCS])
+        colours = _colours(PCA[name], mean, limits).rename({"cell": "holder"})
+        joined = out.with_columns(holder=holder).join(colours, on="holder", how="left")
+        out = joined.drop("holder")
     return out.rename({"parent": "cell"})
 
 

@@ -4,8 +4,8 @@ Three corpora: the relevant sentences (``LANDUSE``), the same in English only (`
 vectors) and the scene descriptions (``SCENES``). ``write_sentences`` splits a corpus' texts into its
 shards; ``scripts/embed.py`` embeds each into the same-named file of the corpus' folder (``id``, ``lat``,
 ``lon``, ``vector``), row for row. ``compute`` reads the shards three times: the texts' H3 cells, the
-cells' mean vectors (then the display cells' means and their PCA), and each text's scores (axis ends).
-``render`` turns its outputs into the maps and the corpus' axes report.
+cells' mean vectors (then their PCA), and each text's scores (axis ends). Each text counts once, in its
+cell of ``geo.PCA_RESOLUTION``. ``render`` turns its outputs into the maps and the corpus' axes report.
 """
 
 import json
@@ -172,7 +172,7 @@ def _pairs(
 
 @dataclass(frozen=True)
 class _Cells:
-    """The maps' first layer: the H3 cells the texts count in."""
+    """The H3 cells the texts count in, at ``geo.PCA_RESOLUTION``."""
 
     ids: np.ndarray  # sorted cell ids
     placements: list[tuple[np.ndarray, np.ndarray]]  # per shard: row index, then index in ``ids``
@@ -183,7 +183,8 @@ class _Cells:
 def _placement(rows: pl.DataFrame, pairs: pl.DataFrame | None) -> tuple[np.ndarray, np.ndarray, pl.Series]:
     """Each placement's row, H3 cell and language: the text's own location, or each cell of its photos."""
     if pairs is None:
-        index, cells = np.arange(rows.height), geo.h3_cells(rows["lon"].to_numpy(), rows["lat"].to_numpy())
+        index = np.arange(rows.height)
+        cells = geo.h3_cells(rows["lon"].to_numpy(), rows["lat"].to_numpy(), geo.PCA_RESOLUTION)
     else:
         placed = rows.select("id").with_row_index("row").join(pairs, on="id")
         index, cells = placed["row"].to_numpy(), placed["cell"].to_numpy()
@@ -222,16 +223,10 @@ def _cell_means(pairs, cells: _Cells) -> np.ndarray:
     return np.asarray(sums) / cells.texts[:, None]
 
 
-def _display(cells: _Cells, values: np.ndarray, minimum: int) -> tuple[np.ndarray, ...]:
-    """The display layer: the parent cells with ``minimum`` texts or more.
-
-    Returns those cells, the mean of their child cells' ``values`` (each child counts once), their number
-    of texts, and every child's parent.
-    """
-    parents, sums, size, inverse = stats.parent_sums(cells.ids, values)
-    _, texts, _, _ = stats.parent_sums(cells.ids, cells.texts[:, None])
-    kept = texts[:, 0] >= minimum
-    return parents[kept], sums[kept] / size[kept, None], texts[kept, 0].astype(np.int64), parents[inverse]
+def _display(cells: _Cells, values: np.ndarray, minimum: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The cells with ``minimum`` texts or more: their ids, ``values`` rows and number of texts."""
+    kept = cells.texts >= minimum
+    return cells.ids[kept], values[kept], cells.texts[kept].astype(np.int64)
 
 
 def ends(scored: pl.DataFrame, n: int) -> pl.DataFrame:
@@ -287,12 +282,12 @@ def compute(
     filesystem=None,
     languages: list[str] | None = None,
 ) -> Path:
-    """Two-layer means (H3 cells, then their parents), their PCA and axis ends, in ``work/themes/<corpus>``.
+    """Each cell's mean vector, the PCA of the cells with enough texts, and axis ends, in ``work/themes``.
 
     ``languages``: the language each sentence shard is filtered to (empty: all its rows); by default, the
     corpus' ``only_language`` for every shard.
 
-    ``cells.parquet`` keeps every resolution-5 cell's scores on the axes, for the explorer Space.
+    ``cells.parquet`` keeps every cell's scores on the axes, for the explorer Space.
 
     ``photos`` (``scene_id``, ``lat``, ``lon``): each text counts once in every cell of its photos,
     instead of in its own location's.
@@ -300,10 +295,10 @@ def compute(
     languages = languages or [corpus.only_language] * len(sentences)
     cells = _locate(sentences, languages, photos)
     means = _cell_means(_pairs(sentences, embeddings, filesystem, languages), cells)
-    kept, display_means, texts, parents = _display(cells, means, corpus.min_texts)
+    kept, display_means, texts = _display(cells, means, corpus.min_texts)
     fit = stats.pca(display_means, COMPONENTS)
     hexagons = _with_scores(pl.DataFrame({"hexagon": kept, "n": texts}), fit.scores(display_means))
-    mix = cells.languages.with_columns(hexagon=pl.Series(parents).gather(cells.languages["cell"]))
+    mix = cells.languages.with_columns(hexagon=pl.Series(cells.ids).gather(cells.languages["cell"]))
     total, best = _ends(_pairs(sentences, embeddings, filesystem, languages), fit)
     out = work / "themes" / corpus.name
     out.mkdir(parents=True, exist_ok=True)
@@ -390,10 +385,9 @@ def axes_markdown(ranked: pl.DataFrame, axes: card.Themes) -> str:
     lines = [
         f"# What places talk about: the PCA axes of the {corpus.what}",
         "",
-        f"The {axes.texts:,} {corpus.what} each count {corpus.placement} (resolution {geo.CELL_RESOLUTION}); "
-        f"each cell takes the mean embedding of its texts, and each of the {axes.hexagons:,} resolution-"
-        f"{geo.DISPLAY_RESOLUTION} cells with {corpus.min_texts} {corpus.unit} or more the mean of its child "
-        "cells. "
+        f"The {axes.texts:,} {corpus.what} each count {corpus.placement} (resolution {geo.PCA_RESOLUTION}). "
+        f"Each of the {axes.hexagons:,} resolution-{geo.PCA_RESOLUTION} cells with {corpus.min_texts} "
+        f"{corpus.unit} or more takes the mean embedding of its texts. "
         f"PCA of those means; scores below are the texts' projections on each axis.{check}",
         "",
     ]
@@ -403,14 +397,11 @@ def axes_markdown(ranked: pl.DataFrame, axes: card.Themes) -> str:
 
 
 def _layers(corpus: card.Corpus) -> str:
-    return (
-        f"Mean embedding of the {corpus.what} per H3 cell (resolution {geo.CELL_RESOLUTION}), "
-        f"mean per resolution-{geo.DISPLAY_RESOLUTION} cell"
-    )
+    return f"Mean embedding of the {corpus.what} per H3 cell (resolution {geo.PCA_RESOLUTION})"
 
 
 def _grey(minimum: int, corpus: card.Corpus) -> str:
-    return f"grey: land with fewer than {minimum} {corpus.unit} per resolution-{geo.DISPLAY_RESOLUTION} cell"
+    return f"grey: land with fewer than {minimum} {corpus.unit} per resolution-{geo.PCA_RESOLUTION} cell"
 
 
 def render(work: Path, assets: Path, corpus: card.Corpus = LANDUSE) -> card.Themes:
@@ -431,7 +422,7 @@ def render(work: Path, assets: Path, corpus: card.Corpus = LANDUSE) -> card.Them
         warning=LANGUAGE_WARNING,
     )
     rgb = stats.unit_scale(scores)
-    land = geo.land_cells()
+    land = geo.land_cells(geo.PCA_RESOLUTION)
     grey = _grey(corpus.min_texts, corpus)
     caption = (
         f"{_layers(corpus)}. Red, green, blue: principal components 1, 2, 3 (2nd to 98th percentile)\n{grey}"

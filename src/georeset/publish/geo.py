@@ -1,8 +1,9 @@
 """Numbers behind the maps: H3 cells, the Equal Earth projection, log-spaced colour bins.
 
-Every map has two layers: points are counted in H3 cells of ``CELL_RESOLUTION``, then each cell of
+Count maps have two layers: points are counted in H3 cells of ``CELL_RESOLUTION``, then each cell of
 ``DISPLAY_RESOLUTION`` (their parent) shows the mean of its child cells, drawn on the Equal Earth
-projection, which keeps areas true.
+projection, which keeps areas true. The PCA maps have one: each text counts once, in its cell of
+``PCA_RESOLUTION``, and each cell shows the mean of its texts.
 """
 
 import itertools
@@ -17,6 +18,7 @@ import polars as pl
 
 CELL_RESOLUTION = 5  # where points are counted: cells of about 250 km²
 DISPLAY_RESOLUTION = 4  # what the maps draw: cells of about 1,800 km², each the mean of its child cells
+PCA_RESOLUTION = 4  # the PCA's averages: cells of about 1,800 km², each the mean of its texts
 LATITUDES = (-60, 85)  # the maps' latitude range
 # Natural Earth 1:110m land (public domain, v5.1.2).
 LAND = files("georeset.publish").joinpath("assets/ne_110m_land.geojson")
