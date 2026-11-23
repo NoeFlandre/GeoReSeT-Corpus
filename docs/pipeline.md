@@ -69,7 +69,7 @@ sentences in English only (`--corpus english`: same vectors, no language effect)
 georeset themes-sentences --corpus C --sentences S/       distinct texts: 128 shards (landuse), 1 (scenes)
 uv run scripts/embed.py S/ --folder F --worker k --workers n   on GPUs; each shard → F/ on the Hub
 georeset themes --corpus C --work work-fused --sentences S/    cell means, PCA, axis ends → work-fused/themes/C/
-georeset fuse ...                                         card: maps, legends, work-fused/pca_axes*.md
+georeset fuse ...                                         card: maps, legends
 ```
 
 `F` is `embeddings` for the sentences and `scene_embeddings` for the scenes. `scripts/embed.py` is
@@ -81,12 +81,9 @@ counted in H3 cells of resolution 5, then each H3 cell of resolution 4 shows the
 that every place counts once however much is written there. The PCA has one: each text counts once, in its
 H3 cell of resolution 4 (a scene description counts in every cell where its scene has photos), and each
 cell takes the mean embedding of its texts; those with fewer than 20 sentences (10 scene descriptions) are
-dropped and PCA is fitted on the rest. The passes over the shards (cells, cell means, axis ends)
-load the next shards in the background. The axes' names in `georeset.publish.themes.LANDUSE`, `ENGLISH` and
-`SCENES` are read from the axes' extreme texts: [sentences](pca_axes.md), [English sentences](pca_axes_english.md),
-[scene descriptions](pca_axes_scenes.md). The sentences' axes are
-also checked against language (R² of each axis on the cell's most frequent language); the scene
-descriptions are all English.
+dropped and PCA is fitted on the rest. The two passes over the shards (cells, cell means) load the next
+shards in the background. The card shows the PCA only: its maps and each component's share of variance,
+with no axis names or axis reports.
 
 ## Explorer Space
 

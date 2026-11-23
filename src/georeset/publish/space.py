@@ -10,7 +10,7 @@ cell takes its parent's colour, each coarser cell the mean of its ``geo.PCA_RESO
 * ``r5/<res-1 cell>.parquet`` and ``samples/<res-1 cell>.parquet``: resolution-5 cells, and up to
   ``SAMPLES`` relevant sentences per source and one scene per cell, split by resolution-1 parent and
   loaded as the map zooms in;
-* ``manifest.json``: the dataset revision they come from, the layers' ranges, the PCA axes' names.
+* ``manifest.json``: the dataset revision they come from, the layers' ranges, the PCA's variance.
 """
 
 import json
@@ -197,7 +197,6 @@ def _axes(work: Path, names: list[str]) -> dict:
         out[name] = {
             "what": corpus.what,
             "explained": summary["explained"],
-            "axes": [list(corpus.axes[i]) for i in range(1, themes.COMPONENTS + 1)],
         }
     return out
 

@@ -191,23 +191,6 @@ def test_dominant_language_breaks_ties_by_name():
     assert stats.dominant_language(counts).sort("hexagon").rows() == [(1, "a"), (2, "y")]
 
 
-def test_r_squared():
-    scores = np.array([[1.0, 1.0], [3.0, 2.0], [10.0, 1.0], [12.0, 2.0]])
-    r2 = stats.r_squared(scores, ["a", "a", "b", "b"])
-    assert r2[0] == pytest.approx(1 - 4 / 85)
-    assert r2[1] == pytest.approx(0)
-
-
-def test_extremes_and_language_mix():
-    scored = pl.DataFrame(
-        {"id": ["a", "b", "c", "d"], "language": ["x", "y", "x", "x"], "score": [3.0, 1.0, 3.0, -2.0]}
-    )
-    high, low = stats.extremes(scored, "score", 2)
-    assert high["id"].to_list() == ["a", "c"]
-    assert low["id"].to_list() == ["d", "b"]
-    assert stats.language_mix(scored).rows() == [("x", 0.75), ("y", 0.25)]
-
-
 def test_photo_cells_pairs_each_scene_with_its_photos_cells():
     photos = pl.DataFrame(
         {"scene_id": [1, 1, 1, 2], "lat": [48.85, 48.85, -33.9, 48.85], "lon": [2.35, 2.35, 18.4, 2.35]}

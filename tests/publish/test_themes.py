@@ -44,8 +44,6 @@ def _embed(sentences, out):
 
 @pytest.fixture
 def computed(tmp_path, monkeypatch):
-    monkeypatch.setattr(themes, "MIX", 6)
-    monkeypatch.setattr(themes, "EXTREMES", 3)
     n = themes.write_sentences(_data(12), tmp_path / "sentences", shards=3)
     sentences = sorted((tmp_path / "sentences").glob("*.parquet"))
     embeddings = _embed(sentences, tmp_path / "embeddings")
@@ -93,21 +91,11 @@ def test_compute(computed):
     hexagons = pl.read_parquet(out / "hexagons.parquet")
     assert hexagons.height == 5
     assert hexagons["n"].to_list() == [12] * 5
-    assert sorted(hexagons["language"].to_list()) == sorted(LANGUAGES)
-    assert hexagons.columns == ["hexagon", "n", "pc1", "pc2", "pc3", "language"]
+    assert hexagons.columns == ["hexagon", "n", "pc1", "pc2", "pc3"]
     summary = json.loads((out / "summary.json").read_text())
-    assert summary["sentences"] == n
+    assert summary["sentences"] == n and summary["cells"] == 5
     assert summary["explained"][0] > summary["explained"][1] > summary["explained"][2] > 0
-    ends = pl.read_parquet(out / "ends.parquet")
-    assert ends.group_by("pc", "end").len().sort("pc", "end").rows() == [
-        (pc, end, 6) for pc in (1, 2, 3) for end in ("high", "low")
-    ]
-    high = ends.filter(pc=1, end="high")
-    assert high["rank"].to_list() == list(range(1, 7))
-    assert high["score"].is_sorted(descending=True)
-    assert ends.filter(pc=1, end="low")["score"].is_sorted()
-    # The place with the longest vectors (place 3) sits at one end of the first axis.
-    assert ends.filter(pc=1)["text"].str.starts_with("place 3").any()
+    assert not (out / "ends.parquet").exists()
 
 
 def test_compute_rejects_mismatched_shards(tmp_path):
@@ -120,29 +108,19 @@ def test_compute_rejects_mismatched_shards(tmp_path):
 
 def test_render(computed, monkeypatch):
     _, _, tmp_path = computed
-    monkeypatch.setattr(themes, "EXTREMES", 3)
-    corpus = replace(themes.LANDUSE, min_texts=10, axes={1: ("towns", "farms"), 2: ("", ""), 3: ("", "")})
+    corpus = replace(themes.LANDUSE, min_texts=10)
     result = themes.render(tmp_path / "work", tmp_path / "assets", corpus)
-    report = tmp_path / "work" / "pca_axes.md"
     assert isinstance(result, card.Themes)
     assert result.hexagons == 5 and result.corpus.min_texts == 10
-    assert len(result.language_r2) == 3
-    # One language per hexagon: language explains every axis.
-    assert result.language_r2 == pytest.approx([1.0, 1.0, 1.0])
+    assert result.explained == pytest.approx(
+        json.loads((tmp_path / "work/themes/landuse/summary.json").read_text())["explained"]
+    )
     for name in ("map_pca.png", "map_pc1.png", "map_pc2.png", "map_pc3.png"):
         assert (tmp_path / "assets" / name).read_bytes()[:4] == b"\x89PNG"
-    text = report.read_text()
-    assert "## PC1: towns ↔ farms" in text
-    assert "### Highest (farms)" in text and "### Lowest (towns)" in text
-    assert "## PC2\n" in text and "### Highest\n" in text
-    assert text.count("**Warning: mostly language.**") == 3
-    # Three axes, three texts at each end.
-    assert text.count("| 3 |") == 6 and "| 4 |" not in text
-    assert "Local" not in text
-    assert "Languages of the 6 sentences at this end:" in text
+    assert not (tmp_path / "work" / "pca_axes.md").exists()
 
 
-def test_render_scenes_names_files_and_skips_languages(computed):
+def test_render_scenes_names_files(computed):
     _, out, tmp_path = computed
     work = tmp_path / "work"
     out.rename(work / "themes" / "scenes")
@@ -151,45 +129,9 @@ def test_render_scenes_names_files_and_skips_languages(computed):
     assert result.corpus is corpus
     for name in ("map_pca_scenes.png", "map_pc1_scenes.png", "map_pc3_scenes.png"):
         assert (tmp_path / "assets" / name).is_file()
-    text = (work / "pca_axes_scenes.md").read_text()
-    assert text.startswith("# What places talk about: the PCA axes of the scene descriptions")
-    assert "with 10 descriptions or more" in text
-    assert "language" not in text.lower()
-    assert "| # | Score | Text |" in text
-
-
-def test_axes_markdown_escapes_and_quiet_axes():
-    ends = pl.DataFrame(
-        {
-            "pc": [1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
-            "end": ["high", "low"] * 5,
-            "rank": [1] * 10,
-            "id": list("abcdefghij"),
-            "text": ["a | b\nc", "x", "y", "z", "u", "v", "p", "q", "r", "s"],
-            "language": ["fra_Latn"] * 10,
-            "score": [1.0, -1.0] * 5,
-        },
-        schema_overrides={"rank": pl.UInt32},
-    )
-    axes = card.Themes(
-        corpus=replace(themes.LANDUSE, min_texts=1),
-        model="m",
-        prompt="p",
-        texts=6,
-        hexagons=3,
-        explained=[0.5, 0.2, 0.1],
-        language_r2=[0.1, 0.6, 0.5],
-        warning=0.5,
-    )
-    text = themes.axes_markdown(ends, axes)
-    assert "a \\| b c" in text
-    assert "50.0% of the variance; language R² 0.10." in text
-    assert text.count("Warning") == 1
-    assert "French · fra_Latn 100.0%" in text
 
 
 def test_compute_with_places_counts_each_text_once_per_hexagon(tmp_path, monkeypatch):
-    monkeypatch.setattr(themes, "MIX", 6)
     themes.write_sentences(_data(12), tmp_path / "s", shards=2)
     sentences = sorted((tmp_path / "s").glob("*.parquet"))
     embeddings = _embed(sentences, tmp_path / "e")
@@ -214,9 +156,6 @@ def test_compute_with_places_counts_each_text_once_per_hexagon(tmp_path, monkeyp
     assert counts[int(hexes[0])] == 60 and counts[int(hexes[1])] == 12
     summary = json.loads((out / "summary.json").read_text())
     assert summary["sentences"] == 60 and summary["cells"] == 5
-    # Axis ends list each text once, wherever it counts.
-    ends = pl.read_parquet(out / "ends.parquet")
-    assert ends.group_by("pc", "end").agg(pl.col("id").is_unique().all())["id"].all()
 
 
 def test_pairs_keep_only_one_language_with_its_vectors(tmp_path):

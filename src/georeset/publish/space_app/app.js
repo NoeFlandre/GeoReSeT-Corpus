@@ -145,8 +145,8 @@ function legend() {
     box.innerHTML = `<div class="swatches">${items.join("")}<span class="swatch"><i style="background:${OTHER}"></i>Other</span></div>`;
   } else {
     const pca = state.manifest.pca[layer.corpus];
-    box.innerHTML = `<div class="axes-legend">${pca.axes.map(([low, high], i) =>
-      `<div><b style="background:${AXIS_COLOURS[i]}"></b><span>${["Red", "Green", "Blue"][i]} (${Math.round(pca.explained[i] * 100)}%): ${low} → ${high}</span></div>`).join("")}</div>
+    box.innerHTML = `<div class="axes-legend">${pca.explained.map((share, i) =>
+      `<div><b style="background:${AXIS_COLOURS[i]}"></b><span>${["Red", "Green", "Blue"][i]} (PC${i + 1}, ${Math.round(share * 100)}%)</span></div>`).join("")}</div>
       <p class="muted" style="margin:6px 0 0;font-size:12px">Similar colours, similar ${pca.what}.</p>`;
   }
 }
@@ -218,8 +218,8 @@ function axes(cell) {
     const rgb = unpack(v);
     const bar = (low, high, position, colour) => `<div class="axis"><div class="axis-names"><span>${low}</span><span>${high}</span></div>
       <div class="axis-track"><i style="left:${position * 100}%;background:${colour}"></i></div></div>`;
-    return `<h4>What it talks about: ${pca.what}</h4>`
-      + pca.axes.map(([low, high], i) => bar(low, high, rgb[i] / 255, AXIS_COLOURS[i])).join("");
+    return `<h4>Principal components: ${pca.what}</h4>`
+      + pca.explained.map((_, i) => bar(`PC${i + 1}`, "", rgb[i] / 255, AXIS_COLOURS[i])).join("");
   }).join("");
 }
 

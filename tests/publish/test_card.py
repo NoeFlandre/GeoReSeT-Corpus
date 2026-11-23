@@ -217,7 +217,6 @@ def test_area(m2, text):
     assert card.area(m2) == text
 
 
-_AXES = {1: ("towns", "farms"), 2: ("coast", "mountains"), 3: ("old", "new")}
 _LANDUSE = card.Corpus(
     name="landuse",
     source="data/*.parquet",
@@ -227,8 +226,6 @@ _LANDUSE = card.Corpus(
     selection="distinct sentences",
     shards=2,
     min_texts=50,
-    axes=_AXES,
-    mixed_languages=True,
     placement="at its location",
 )
 _SCENES = card.Corpus(
@@ -240,15 +237,13 @@ _SCENES = card.Corpus(
     selection="distinct scene descriptions",
     shards=1,
     min_texts=10,
-    axes=_AXES,
-    mixed_languages=False,
     placement="once in every hexagon where its scene has photos",
     photos="scene_photos/*.parquet",
     suffix="_scenes",
 )
 
 
-def _themes(r2=(0.2, 0.7, 0.1), corpus=_LANDUSE):
+def _themes(corpus=_LANDUSE):
     return card.Themes(
         corpus=corpus,
         model="org/model",
@@ -256,8 +251,6 @@ def _themes(r2=(0.2, 0.7, 0.1), corpus=_LANDUSE):
         texts=1234,
         hexagons=56,
         explained=[0.4, 0.2, 0.1],
-        language_r2=list(r2),
-        warning=0.5,
     )
 
 
@@ -276,14 +269,10 @@ def test_themed_card_shows_maps_legend_and_embeddings():
         < text.index("assets/map_pc3.png")
         < text.index("### Fields")
     )
-    assert (
-        "* **PC1** (red, 40.0% of the variance): towns ↔ farms. "
-        "The cell's most frequent language explains 20% of it." in text
-    )
-    assert "* **PC2** (green, 20.0% of the variance): coast ↔ mountains." in text
-    assert text.count("Mostly language: read with care.") == 1
+    assert "* **PC1** (red, 40.0% of the variance)." in text
+    assert "* **PC2** (green, 20.0% of the variance)." in text
+    assert "towns" not in text and "Mostly language" not in text and "pca_axes" not in text
     assert "Each of the 56 cells of resolution 4 holding 50 sentences or more takes the mean" in text
-    assert "https://github.com/me/code/blob/master/docs/pca_axes.md" in text
     assert "embeddings/train-*.parquet                 relevant sentences, one vector each" in text
     assert "`scenes`, `scene_photos`, `embeddings`." in text
     assert "[GeoReSeT Explorer](https://huggingface.co/spaces/me/data)" in text
@@ -303,7 +292,6 @@ def test_english_pca_follows_the_sentences_pca_and_shares_its_vectors():
         _LANDUSE,
         name="english",
         what="relevant sentences in English",
-        mixed_languages=False,
         suffix="_english",
     )
     three = (_themes(), _themes(corpus=english), _themes(corpus=_SCENES))
@@ -340,13 +328,11 @@ def test_card_with_both_pcas():
         "counts once in every hexagon where its scene has photos (resolution 4). Each of the 56 cells" in text
     )
     assert "the 56 cells of resolution 4 holding 10 descriptions or more" in text
-    assert "docs/pca_axes_scenes.md" in text
     assert "scene_embeddings/train-*.parquet           scene descriptions, one vector each" in text
     assert "`embeddings`, `scene_embeddings`." in text
     assert "**Embeddings of the relevant sentences.**" in text
     assert "\n9. **Embeddings of the scene descriptions.** The 1,234 distinct scene descriptions" in text
-    # The language check is shown for the sentences only.
-    assert text.count("most frequent language explains") == 3
+    assert "most frequent language" not in text
 
 
 def test_card_without_themes_has_no_embeddings():
@@ -460,7 +446,7 @@ def test_extras_template_has_every_part():
 
 def _themes_on(folder):
     corpus = card.Corpus("x", "s", folder, "w", "u", "sel", 1, 1, {}, False, "p")
-    return card.Themes(corpus, "m", "p", 1, 1, [], [], 0.5)
+    return card.Themes(corpus, "m", "p", 1, 1, [])
 
 
 @pytest.mark.parametrize(
@@ -531,14 +517,13 @@ def test_pca_section_has_both_maps_and_a_method():
     )
     assert "(assets/map_pc3_english_pool.png)" in text
     assert "Principal component analysis (PCA)" in text and "Each sentence is turned into" in text
-    assert "| 2 (green) | 20.0% | " in text
+    assert "| 2 (green) | 20.0% |" in text
 
 
-def test_pca_table_dashes_the_language_share_when_languages_do_not_vary():
-    theme = replace(_themes(), corpus=replace(_LANDUSE, mixed_languages=False))
-    assert "| 1 (red) | 40.0% | towns ↔ farms | \u2013 |" in card._pca_table(theme)
-    assert "mostly language" not in card._pca_table(_themes(r2=(0.2, 0.1, 0.1)))
-    assert "70% · mostly language" in card._pca_table(_themes(r2=(0.2, 0.7, 0.1)))
+def test_pca_table_lists_each_axis_with_its_variance_only():
+    assert card._pca_table(_themes()) == (
+        "| Axis | Variance |\n|---|---:|\n| 1 (red) | 40.0% |\n| 2 (green) | 20.0% |\n| 3 (blue) | 10.0% |"
+    )
 
 
 def test_pca_section_is_empty_without_both_maps_or_on_fused():

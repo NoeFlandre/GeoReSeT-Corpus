@@ -3,9 +3,9 @@
 Three corpora: the relevant sentences (``LANDUSE``), the same in English only (``ENGLISH``, on the same
 vectors) and the scene descriptions (``SCENES``). ``write_sentences`` splits a corpus' texts into its
 shards; ``scripts/embed.py`` embeds each into the same-named file of the corpus' folder (``id``, ``lat``,
-``lon``, ``vector``), row for row. ``compute`` reads the shards three times: the texts' H3 cells, the
-cells' mean vectors (then their PCA), and each text's scores (axis ends). Each text counts once, in its
-cell of ``geo.PCA_RESOLUTION``. ``render`` turns its outputs into the maps and the corpus' axes report.
+``lon``, ``vector``), row for row. ``compute`` reads the shards twice: the texts' H3 cells, then the cells'
+mean vectors, whose PCA it fits. Each text counts once, in its cell of ``geo.PCA_RESOLUTION``. ``render``
+turns its outputs into the maps.
 """
 
 import json
@@ -19,14 +19,9 @@ import numpy as np
 import polars as pl
 import pyarrow.parquet as pq
 
-from georeset.normalize.languages import display_name
 from georeset.publish import card, figures, geo, stats
 
 COMPONENTS = 3
-EXTREMES = 10  # texts listed per end of an axis
-MIX = 1_000  # texts kept per end, whose languages are counted
-MIX_TOP = 5
-LANGUAGE_WARNING = 0.5
 MODEL = "microsoft/harrier-oss-v1-0.6b"  # as in scripts/embed.py
 PROMPT = "Instruct: Identify the land use or land cover described\nQuery: "
 MAX_TOKENS = 512  # longest input, as in scripts/embed.py
@@ -41,12 +36,6 @@ LANDUSE = card.Corpus(
     selection="distinct sentences with `landuse` true (the first `id` keeps a repeated text)",
     shards=128,
     min_texts=20,
-    axes={
-        1: ("Cebuano place stubs", "Russian village histories"),
-        2: ("airports and stations", "lakes, wetlands and islands"),
-        3: ("Cebuano airport stubs", "Iberian church architecture"),
-    },
-    mixed_languages=True,
     placement="in the H3 cell of its location",
 )
 SCENES = card.Corpus(
@@ -58,12 +47,6 @@ SCENES = card.Corpus(
     selection="distinct scene descriptions (`text` of `scenes`, `id` its `scene_id`)",
     shards=1,
     min_texts=10,
-    axes={
-        1: ("paved urban streets", "arid rugged land"),
-        2: ("dry open land", "lakes and forests"),
-        3: ("lush tropical vegetation", "polar ice and cold seas"),
-    },
-    mixed_languages=False,
     placement="once in every H3 cell where its scene has photos",
     photos="scene_photos/*.parquet",
     suffix="_scenes",
@@ -74,28 +57,16 @@ ENGLISH = replace(
     name="english",
     what="relevant sentences in English",
     selection="relevant sentences in English (`language` `eng_Latn`)",
-    axes={
-        1: ("historic city buildings", "lakes and outdoor recreation"),
-        2: ("residential amenities", "islands and geology"),
-        3: ("airports and cargo hubs", "rural churches and woodland"),
-    },
-    mixed_languages=False,
     only_language="eng_Latn",
     suffix="_english",
 )
 # The relevant sentences in English, original and translated, pooled. Original English vectors are LANDUSE's
-# (``embeddings``), translations are ``embeddings_en``. Each keeps its source language, so the language
-# share shows what the English vectors still carry of their source language.
+# (``embeddings``), translations are ``embeddings_en``.
 ENGLISH_POOL = replace(
     LANDUSE,
     name="english_pool",
     what="relevant sentences in English, original and translated",
     selection="relevant sentences in English: those labelled so, and the English translations of the rest",
-    axes={
-        1: ("historic city buildings", "lakes and lagoons"),
-        2: ("airports and airline hubs", "rural village churches"),
-        3: ("Russian village stubs", "parks and recreation"),
-    },
     only_language="",
     suffix="_english_pool",
 )
@@ -172,45 +143,37 @@ def _pairs(
 
 @dataclass(frozen=True)
 class _Cells:
-    """The H3 cells the texts count in, at ``geo.PCA_RESOLUTION``."""
+    """The H3 cells the texts count in, at ``geo.PCA_RESOLUTION``, and the number of texts."""
 
     ids: np.ndarray  # sorted cell ids
     placements: list[tuple[np.ndarray, np.ndarray]]  # per shard: row index, then index in ``ids``
     texts: np.ndarray  # texts per cell
-    languages: pl.DataFrame  # (``cell`` index, ``language``, ``n`` texts)
+    total: int  # texts, each counted once
 
 
-def _placement(rows: pl.DataFrame, pairs: pl.DataFrame | None) -> tuple[np.ndarray, np.ndarray, pl.Series]:
-    """Each placement's row, H3 cell and language: the text's own location, or each cell of its photos."""
+def _placement(rows: pl.DataFrame, pairs: pl.DataFrame | None) -> tuple[np.ndarray, np.ndarray]:
+    """Each placement's row and H3 cell: the text's own location, or each cell of its photos."""
     if pairs is None:
-        index = np.arange(rows.height)
         cells = geo.h3_cells(rows["lon"].to_numpy(), rows["lat"].to_numpy(), geo.PCA_RESOLUTION)
-    else:
-        placed = rows.select("id").with_row_index("row").join(pairs, on="id")
-        index, cells = placed["row"].to_numpy(), placed["cell"].to_numpy()
-    return index, cells, rows["language"].gather(index)
-
-
-def _languages(cells: tuple[np.ndarray, ...], languages: tuple[pl.Series, ...]) -> pl.DataFrame:
-    """Texts per (``cell``, ``language``), from each shard's placements."""
-    shards = (pl.DataFrame({"cell": c, "language": lang}) for c, lang in zip(cells, languages, strict=True))
-    return pl.concat(shards).group_by("cell", "language").agg(n=pl.len())
+        return np.arange(rows.height), cells
+    placed = rows.select("id").with_row_index("row").join(pairs, on="id")
+    return placed["row"].to_numpy(), placed["cell"].to_numpy()
 
 
 def _locate(sentences: list[Path], languages: list[str], photos: pl.DataFrame | None) -> _Cells:
     """First pass, without vectors: each text's H3 cell, or each cell where its scene has photos."""
     pairs = None if photos is None else stats.photo_cells(photos)
-    index, cells, labels = zip(
-        *(
-            _placement(_rows(text, language), pairs)
-            for text, language in zip(sentences, languages, strict=True)
-        ),
-        strict=True,
-    )
+    index, cells, total = [], [], 0
+    for text, language in zip(sentences, languages, strict=True):
+        rows = _rows(text, language)
+        total += rows.height
+        shard_index, shard_cells = _placement(rows, pairs)
+        index.append(shard_index)
+        cells.append(shard_cells)
     ids = np.unique(np.concatenate(cells))
     positions = tuple(np.searchsorted(ids, c) for c in cells)
     texts = np.bincount(np.concatenate(positions), minlength=len(ids))
-    return _Cells(ids, list(zip(index, positions, strict=True)), texts, _languages(positions, labels))
+    return _Cells(ids, list(zip(index, positions, strict=True)), texts, total)
 
 
 def _cell_means(pairs, cells: _Cells) -> np.ndarray:
@@ -229,48 +192,9 @@ def _display(cells: _Cells, values: np.ndarray, minimum: int) -> tuple[np.ndarra
     return cells.ids[kept], values[kept], cells.texts[kept].astype(np.int64)
 
 
-def ends(scored: pl.DataFrame, n: int) -> pl.DataFrame:
-    """The ``n`` highest and lowest rows on each of ``PCS``: ``pc``, ``end``, ``rank``, row, ``score``."""
-    parts = []
-    for i, pc in enumerate(PCS, 1):
-        for end, rows in zip(
-            ("high", "low"), stats.extremes(scored.rename({pc: "score"}), "score", n), strict=True
-        ):
-            parts.append(
-                rows.select("id", "text", "language", "score")
-                .with_row_index("rank", 1)
-                .with_columns(pc=pl.lit(i), end=pl.lit(end))
-            )
-    return pl.concat(parts).select("pc", "end", "rank", "id", "text", "language", "score")
-
-
 def _with_scores(rows: pl.DataFrame, scores: np.ndarray) -> pl.DataFrame:
     """``rows`` with one column per axis of ``PCS``."""
-    names = PCS
-    return rows.with_columns([pl.Series(name, scores[:, i]) for i, name in enumerate(names)])
-
-
-def _ends(pairs, fit: stats.Pca) -> tuple[int, pl.DataFrame]:
-    """Third pass: the number of texts and each axis' most extreme texts."""
-    texts, best = 0, []
-    for rows, vectors in pairs:
-        texts += rows.height
-        best.append(ends(_with_scores(rows, fit.scores(vectors)), MIX))
-    return texts, _final_ends(pl.concat(best))
-
-
-def _final_ends(candidates: pl.DataFrame) -> pl.DataFrame:
-    """The ``MIX`` most extreme rows per component and end, ranked, from every shard's own."""
-    return pl.concat(
-        [
-            candidates.filter(pc=i, end=end)
-            .sort("score", "id", descending=[end == "high", False])
-            .head(MIX)
-            .with_columns(rank=pl.int_range(1, pl.len() + 1, dtype=pl.UInt32))
-            for i in range(1, len(PCS) + 1)
-            for end in ("high", "low")
-        ]
-    )
+    return rows.with_columns([pl.Series(name, scores[:, i]) for i, name in enumerate(PCS)])
 
 
 def compute(
@@ -282,7 +206,7 @@ def compute(
     filesystem=None,
     languages: list[str] | None = None,
 ) -> Path:
-    """Each cell's mean vector, the PCA of the cells with enough texts, and axis ends, in ``work/themes``.
+    """Each cell's mean vector, then the PCA of the cells with enough texts, in ``work/themes/<corpus>``.
 
     ``languages``: the language each sentence shard is filtered to (empty: all its rows); by default, the
     corpus' ``only_language`` for every shard.
@@ -297,103 +221,22 @@ def compute(
     means = _cell_means(_pairs(sentences, embeddings, filesystem, languages), cells)
     kept, display_means, texts = _display(cells, means, corpus.min_texts)
     fit = stats.pca(display_means, COMPONENTS)
-    hexagons = _with_scores(pl.DataFrame({"hexagon": kept, "n": texts}), fit.scores(display_means))
-    mix = cells.languages.with_columns(hexagon=pl.Series(cells.ids).gather(cells.languages["cell"]))
-    total, best = _ends(_pairs(sentences, embeddings, filesystem, languages), fit)
     out = work / "themes" / corpus.name
     out.mkdir(parents=True, exist_ok=True)
-    dominant = stats.dominant_language(mix.group_by("hexagon", "language").agg(pl.col("n").sum()))
-    hexagons.join(dominant, on="hexagon").write_parquet(out / "hexagons.parquet")
-    best.write_parquet(out / "ends.parquet")
+    _with_scores(pl.DataFrame({"hexagon": kept, "n": texts}), fit.scores(display_means)).write_parquet(
+        out / "hexagons.parquet"
+    )
     cell_scores = pl.DataFrame(
         {"cell": cells.ids, "n": cells.texts}, schema={"cell": pl.UInt64, "n": pl.Int64}
     )
     _with_scores(cell_scores, fit.scores(means)).write_parquet(out / "cells.parquet")
-    summary = {
-        "sentences": total,
-        "cells": len(cells.ids),
-        "explained": fit.explained.tolist(),
-    }
+    summary = {"sentences": cells.total, "cells": len(cells.ids), "explained": fit.explained.tolist()}
     (out / "summary.json").write_text(json.dumps(summary))
     return out
 
 
 def _share(x: float) -> str:
     return f"{x:.1%}"
-
-
-def _cell(text: str) -> str:
-    return text.replace("|", "\\|").replace("\n", " ")
-
-
-def _mix(rows: pl.DataFrame) -> str:
-    mix = stats.language_mix(rows).head(MIX_TOP)
-    return ", ".join(f"{display_name(lang)} {_share(share)}" for lang, share in mix.iter_rows())
-
-
-def _end(rows: pl.DataFrame, title: str, languages: bool) -> list[str]:
-    """One end of an axis: its first ``EXTREMES`` texts, with their language mix if languages vary."""
-    intro = (
-        [f"Languages of the {rows.height:,} sentences at this end: {_mix(rows)}.", ""] if languages else []
-    )
-    header = (
-        "| # | Score | Language | Sentence |\n|---:|---:|---|---|"
-        if languages
-        else "| # | Score | Text |\n|---:|---:|---|"
-    )
-    lines = [f"### {title}", "", *intro, header]
-    for r in rows.filter(pl.col("rank") <= EXTREMES).iter_rows(named=True):
-        language = f" {r['language']} |" if languages else ""
-        lines.append(f"| {r['rank']} | {r['score']:.3f} |{language} {_cell(r['text'])} |")
-    return [*lines, ""]
-
-
-def _variance(axes: card.Themes, i: int) -> str:
-    """The axis' share of variance, and its language R² where languages vary."""
-    share = f"{_share(axes.explained[i - 1])} of the variance"
-    if not axes.corpus.mixed_languages:
-        return f"{share}."
-    r2 = axes.language_r2[i - 1]
-    warning = " **Warning: mostly language.**" if r2 > axes.warning else ""
-    return f"{share}; language R² {r2:.2f}.{warning}"
-
-
-def _axis(ranked: pl.DataFrame, axes: card.Themes, i: int) -> list[str]:
-    """Axis ``i``: its name, its variance, then the texts at each end (``ranked``: that axis' ends)."""
-    languages = axes.corpus.mixed_languages
-    low, high = axes.corpus.axes[i]
-    name = f": {low} ↔ {high}" if low else ""
-    return [
-        f"## PC{i}{name}",
-        "",
-        _variance(axes, i),
-        "",
-        *_end(ranked.filter(end="high"), f"Highest ({high})" if high else "Highest", languages),
-        *_end(ranked.filter(end="low"), f"Lowest ({low})" if low else "Lowest", languages),
-    ]
-
-
-def axes_markdown(ranked: pl.DataFrame, axes: card.Themes) -> str:
-    """A corpus' axes report: each axis with its most extreme texts (and their languages)."""
-    corpus = axes.corpus
-    check = (
-        " Language R²: share of the axis' variance across cells explained by the cell's "
-        "most frequent language."
-        if corpus.mixed_languages
-        else ""
-    )
-    lines = [
-        f"# What places talk about: the PCA axes of the {corpus.what}",
-        "",
-        f"The {axes.texts:,} {corpus.what} each count {corpus.placement} (resolution {geo.PCA_RESOLUTION}). "
-        f"Each of the {axes.hexagons:,} resolution-{geo.PCA_RESOLUTION} cells with {corpus.min_texts} "
-        f"{corpus.unit} or more takes the mean embedding of its texts. "
-        f"PCA of those means; scores below are the texts' projections on each axis.{check}",
-        "",
-    ]
-    for i in range(1, COMPONENTS + 1):
-        lines += _axis(ranked.filter(pc=i), axes, i)
-    return "\n".join(lines)
 
 
 def _layers(corpus: card.Corpus) -> str:
@@ -405,7 +248,7 @@ def _grey(minimum: int, corpus: card.Corpus) -> str:
 
 
 def render(work: Path, assets: Path, corpus: card.Corpus = LANDUSE) -> card.Themes:
-    """A corpus: maps of the display cells (RGB, then one per axis) and its axes report in ``work``."""
+    """A corpus: maps of its cells (RGB, then one per axis) in ``assets``; its PCA's facts for the card."""
     out = work / "themes" / corpus.name
     hexagons = pl.read_parquet(out / "hexagons.parquet")
     summary = json.loads((out / "summary.json").read_text())
@@ -418,8 +261,6 @@ def render(work: Path, assets: Path, corpus: card.Corpus = LANDUSE) -> card.Them
         texts=summary["sentences"],
         hexagons=hexagons.height,
         explained=summary["explained"],
-        language_r2=stats.r_squared(scores, hexagons["language"].to_list()).tolist(),
-        warning=LANGUAGE_WARNING,
     )
     rgb = stats.unit_scale(scores)
     land = geo.land_cells(geo.PCA_RESOLUTION)
@@ -429,12 +270,8 @@ def render(work: Path, assets: Path, corpus: card.Corpus = LANDUSE) -> card.Them
     )
     figures.rgb_map(index, rgb, assets / f"map_pca{corpus.suffix}.png", land, caption)
     for i in range(COMPONENTS):
-        low, high = corpus.axes[i + 1]
-        label = (
-            f"PC{i + 1} ({_share(axes.explained[i])} of variance): {low or 'low'} ↔ {high or 'high'} ({grey})"
-        )
+        label = f"PC{i + 1} ({_share(axes.explained[i])} of variance) ({grey})"
         values = scores[:, i]
         path = assets / f"map_pc{i + 1}{corpus.suffix}.png"
         figures.diverging_map(index, values, stats.symmetric_limit(values), label, path, land)
-    (work / corpus.report).write_text(axes_markdown(pl.read_parquet(out / "ends.parquet"), axes))
     return axes

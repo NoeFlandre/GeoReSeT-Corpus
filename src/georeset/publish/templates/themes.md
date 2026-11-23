@@ -7,7 +7,7 @@
 
 $themes_legend
 
-Each axis on its own, blue below zero and orange above. The $themes_what at both ends of each axis are in [`$themes_report`]($code_url/blob/master/docs/$themes_report).
+Each axis on its own, blue below zero and orange above.
 
 ![First principal component of the $themes_what per H3 cell of resolution $themes_resolution](assets/map_pc1$themes_suffix.png)
 

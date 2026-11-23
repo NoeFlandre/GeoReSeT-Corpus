@@ -71,7 +71,7 @@ def draw_maps(data: pl.LazyFrame, out: Path) -> None:
 
 
 def theme_context(work: Path, assets: Path) -> tuple[card.Themes, ...]:
-    """Maps and axes report of each embeddings PCA that ``georeset themes`` has computed."""
+    """Maps of each embeddings PCA that ``georeset themes`` has computed."""
     return tuple(
         themes.render(work, assets, corpus)
         for corpus in themes.CORPORA.values()

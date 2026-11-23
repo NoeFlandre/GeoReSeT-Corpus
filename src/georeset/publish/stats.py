@@ -224,29 +224,6 @@ def dominant_language(counts: pl.DataFrame) -> pl.DataFrame:
     return ranked.group_by("hexagon", maintain_order=True).first().select("hexagon", "language")
 
 
-def r_squared(scores: np.ndarray, groups: list[str]) -> np.ndarray:
-    """Share of each column's variance explained by group means (one-way ANOVA R²)."""
-    frame = pl.DataFrame({"group": groups}).with_columns(
-        [pl.Series(f"s{i}", scores[:, i]) for i in range(scores.shape[1])]
-    )
-    columns = [f"s{i}" for i in range(scores.shape[1])]
-    fitted = frame.select(pl.col(columns).mean().over("group")).to_numpy()
-    total = ((scores - scores.mean(axis=0)) ** 2).sum(axis=0)
-    return 1 - ((scores - fitted) ** 2).sum(axis=0) / total
-
-
-def extremes(scored: pl.DataFrame, column: str, n: int) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """The ``n`` rows with the highest, then the lowest ``column``."""
-    ranked = scored.sort(column, "id", descending=[True, False])
-    return ranked.head(n), ranked.reverse().head(n)
-
-
-def language_mix(rows: pl.DataFrame) -> pl.DataFrame:
-    """Share of each language among ``rows``, largest first."""
-    counts = rows.group_by("language").agg(share=pl.len() / rows.height)
-    return counts.sort("share", "language", descending=[True, False])
-
-
 def translation_kinds(rows: pl.LazyFrame) -> pl.DataFrame:
     """Rows per ``translation`` kind, largest first."""
     counts = _collect(rows.group_by("translation").agg(sentences=pl.len().cast(pl.Int64)))

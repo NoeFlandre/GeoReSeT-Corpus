@@ -4,7 +4,7 @@ import h3.api.basic_int as h3_int
 import numpy as np
 import polars as pl
 
-from georeset.publish import geo, space, themes
+from georeset.publish import geo, space
 
 PARIS = (48.85, 2.35)
 CAPE = (-33.9, 18.4)
@@ -101,7 +101,7 @@ def test_build_writes_every_resolution_samples_and_manifest(tmp_path):
     assert manifest["folders"] == commits
     assert manifest["resolutions"] == [2, 3, 4, 5]
     assert manifest["languages"][0] == "fra_Latn"
-    assert manifest["pca"]["landuse"]["axes"] == [list(themes.LANDUSE.axes[i]) for i in (1, 2, 3)]
+    assert set(manifest["pca"]["landuse"]) == {"what", "explained"}
     r4 = pl.read_parquet(out / "r4.parquet")
     paris4 = format(h3_int.latlng_to_cell(*PARIS, 4), "x")
     row = r4.filter(cell=paris4).row(0, named=True)

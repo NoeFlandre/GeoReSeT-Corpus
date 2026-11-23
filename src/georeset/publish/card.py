@@ -155,17 +155,11 @@ class Corpus:
     selection: str  # which texts, for the methodology
     shards: int
     min_texts: int  # per hexagon
-    axes: dict[int, tuple[str, str]]  # (low end, high end) per component, named from its axes report
-    mixed_languages: bool  # the texts vary in language, so each axis is checked against it
     placement: str  # where a text counts on the map, for the card
     # Parquet glob of the photos (``scene_id``, ``lat``, ``lon``) a text counts at; empty: its own lat/lon.
     photos: str = ""
     only_language: str = ""  # keep only the texts in this language; empty: all
-    suffix: str = ""  # of its maps and axes report
-
-    @property
-    def report(self) -> str:
-        return f"pca_axes{self.suffix}.md"
+    suffix: str = ""  # of its maps
 
 
 @dataclass(frozen=True)
@@ -178,8 +172,6 @@ class Themes:
     texts: int
     hexagons: int
     explained: list[float]
-    language_r2: list[float]
-    warning: float  # language R² above which an axis is flagged
 
 
 @dataclass(frozen=True)
@@ -346,16 +338,11 @@ _COLOURS = ("red", "green", "blue")
 
 
 def legend(themes: Themes) -> str:
-    """One line per principal component: its colour, share of variance, ends and (if any) language R²."""
-    lines = []
-    for i, (share, r2) in enumerate(zip(themes.explained, themes.language_r2, strict=True), 1):
-        low, high = themes.corpus.axes[i]
-        line = f"* **PC{i}** ({_COLOURS[i - 1]}, {pct(share)} of the variance): {low} ↔ {high}."
-        if themes.corpus.mixed_languages:
-            flag = " Mostly language: read with care." if r2 > themes.warning else ""
-            line += f" The cell's most frequent language explains {r2:.0%} of it.{flag}"
-        lines.append(line)
-    return "\n".join(lines)
+    """One line per principal component: its colour and share of variance."""
+    return "\n".join(
+        f"* **PC{i}** ({_COLOURS[i - 1]}, {pct(share)} of the variance)."
+        for i, share in enumerate(themes.explained, 1)
+    )
 
 
 # Method steps are list items, one per line; the other parts carry their own separators.
@@ -380,7 +367,6 @@ def _theme_values(ctx: Context, themes: Themes, step: int) -> dict[str, str]:
         "themes_folder": corpus.folder,
         "themes_files": f"{corpus.folder}/train-*.parquet".ljust(_FILES_COLUMN),
         "themes_suffix": corpus.suffix,
-        "themes_report": corpus.report,
         "themes_legend": legend(themes),
         "themes_step": str(step),
         "code_url": ctx.code_url,
@@ -507,14 +493,9 @@ def english_parts(ctx: Context) -> dict[str, str]:
 
 
 def _pca_table(theme: Themes) -> str:
-    """Each axis: its colour, variance, ends and language share (a dash where languages do not vary)."""
-    rows = ["| Axis | Variance | Low end ↔ high end | Language explains |", "|---|---:|---|---:|"]
-    for i, (share, r2) in enumerate(zip(theme.explained, theme.language_r2, strict=True), 1):
-        low, high = theme.corpus.axes[i]
-        language = "\u2013"
-        if theme.corpus.mixed_languages:
-            language = f"{r2:.0%}" + (" · mostly language" if r2 > theme.warning else "")
-        rows.append(f"| {i} ({_COLOURS[i - 1]}) | {pct(share)} | {low} ↔ {high} | {language} |")
+    """Each axis: its colour and variance."""
+    rows = ["| Axis | Variance |", "|---|---:|"]
+    rows += [f"| {i} ({_COLOURS[i - 1]}) | {pct(share)} |" for i, share in enumerate(theme.explained, 1)]
     return "\n".join(rows)
 
 
@@ -522,8 +503,7 @@ def _pca_block(theme: Themes) -> str:
     """One corpus' colour map, its table, and each axis' own map."""
     suffix, what = theme.corpus.suffix, theme.corpus.what
     axes = [
-        f"![Axis {i} ({_COLOURS[i - 1]}): {theme.corpus.axes[i][0]} ↔ {theme.corpus.axes[i][1]}]"
-        f"(assets/map_pc{i}{suffix}.png)"
+        f"![Axis {i} ({_COLOURS[i - 1]})](assets/map_pc{i}{suffix}.png)"
         for i in range(1, len(theme.explained) + 1)
     ]
     return "\n".join(
@@ -553,8 +533,6 @@ def pca_parts(ctx: Context) -> dict[str, str]:
         "hexagons": fmt(landuse.hexagons),
         "pool_hexagons": fmt(pool.hexagons),
         "min_texts": fmt(landuse.corpus.min_texts),
-        "report_landuse": f"{ctx.code_url}/blob/master/docs/{landuse.corpus.report}",
-        "report_pool": f"{ctx.code_url}/blob/master/docs/{pool.corpus.report}",
         "landuse_block": _pca_block(landuse),
         "pool_block": _pca_block(pool),
     }
