@@ -538,3 +538,25 @@ def test_plain_card_has_no_sentence_section_maps():
     text = card.render(_plain_with_pca())
     assert "assets/map_pca.png" in text
     assert text.count("assets/map_pca.png") == 1
+
+
+PCA_SNAPSHOT = Path(__file__).parents[1] / "data" / "card_pca_snapshot.md"
+
+
+def test_plain_card_with_pca_matches_snapshot():
+    """Every line of the plain card's Principal components section. Regenerate with ``UPDATE_SNAPSHOTS=1``."""
+    text = card.render(_plain_with_pca())
+    if os.environ.get("UPDATE_SNAPSHOTS"):
+        PCA_SNAPSHOT.write_text(text)
+    assert text == PCA_SNAPSHOT.read_text()
+
+
+THEMES_SNAPSHOT = Path(__file__).parents[1] / "data" / "card_themes_snapshot.md"
+
+
+def test_fused_card_with_both_pcas_matches_snapshot():
+    """Every line the fused card adds for its two PCAs. Regenerate with ``UPDATE_SNAPSHOTS=1``."""
+    text = card.render(card.Context(**{**_fused().__dict__, "themes": (_themes(), _themes(corpus=_SCENES))}))
+    if os.environ.get("UPDATE_SNAPSHOTS"):
+        THEMES_SNAPSHOT.write_text(text)
+    assert text == THEMES_SNAPSHOT.read_text()
