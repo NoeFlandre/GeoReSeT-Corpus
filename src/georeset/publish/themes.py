@@ -238,10 +238,6 @@ def compute(
     return out
 
 
-def _share(x: float) -> str:
-    return f"{x:.1%}"
-
-
 def _layers(corpus: card.Corpus) -> str:
     return f"Mean embedding of the {corpus.what} per H3 cell (resolution {geo.PCA_RESOLUTION})"
 
@@ -273,7 +269,7 @@ def render(work: Path, assets: Path, corpus: card.Corpus = LANDUSE) -> card.Them
     )
     figures.rgb_map(index, rgb, assets / f"map_pca{corpus.suffix}.png", land, caption)
     for i in range(COMPONENTS):
-        label = f"PC{i + 1} ({_share(axes.explained[i])} of variance) ({grey})"
+        label = f"PC{i + 1} ({card.pct(axes.explained[i])} of variance) ({grey})"
         values = scores[:, i]
         path = assets / f"map_pc{i + 1}{corpus.suffix}.png"
         figures.diverging_map(index, values, stats.symmetric_limit(values), label, path, land)

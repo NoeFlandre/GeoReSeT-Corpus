@@ -161,6 +161,5 @@ def propose(out: Path) -> str:
 
 def finalize(number: int, bucket: Bucket) -> None:
     """Merge the reviewed pull request, tag the release, delete the bucket."""
-    hub.merge(REPO, number)
-    hub.tag(REPO, NEXT_RELEASE)
+    hub.release(REPO, number, NEXT_RELEASE)
     bucket.remove()

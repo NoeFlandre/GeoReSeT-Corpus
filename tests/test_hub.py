@@ -30,6 +30,9 @@ class _FakeApi:
     def merge_pull_request(self, *args, **kwargs):
         self.calls.append(("merge_pull_request", args, kwargs))
 
+    def create_tag(self, *args, **kwargs):
+        self.calls.append(("create_tag", args, kwargs))
+
 
 def _out(tmp_path):
     for d in ["data/wikipedia/fra_Latn", "data/website/eng_Latn", "polygons", "assets", "unlabelled"]:
@@ -224,7 +227,7 @@ def test_folder_commits_keeps_the_asked_folders(monkeypatch):
     assert seen == {"repo": "me/d", "repo_type": "dataset", "revision": "rev", "expand": True}
 
 
-def test_revision_of_and_tag(monkeypatch):
+def test_revision_of(monkeypatch):
     seen = []
 
     class Info:
@@ -235,13 +238,9 @@ def test_revision_of_and_tag(monkeypatch):
             seen.append(("info", repo, revision))
             return Info()
 
-        def create_tag(self, repo, tag, repo_type):
-            seen.append(("tag", repo, tag, repo_type))
-
     monkeypatch.setattr(hub, "HfApi", Api)
     assert hub.revision_of("me/d", "v1.0") == "def"
-    hub.tag("me/d", "v1.1")
-    assert seen == [("info", "me/d", "v1.0"), ("tag", "me/d", "v1.1", "dataset")]
+    assert seen == [("info", "me/d", "v1.0")]
 
 
 def test_propose_uploads_to_a_new_pull_request(tmp_path, monkeypatch):
@@ -281,11 +280,12 @@ def test_propose_uploads_to_a_new_pull_request(tmp_path, monkeypatch):
     assert api.calls[1:] == [*folders, ("upload_file", (), card)]
 
 
-def test_merge(monkeypatch):
+def test_release_opens_merges_then_tags(monkeypatch):
     api = _FakeApi()
     monkeypatch.setattr(hub, "HfApi", lambda: api)
-    hub.merge("me/d", 3)
+    hub.release("me/d", 3, "v1.2")
     assert api.calls == [
         ("change_discussion_status", ("me/d", 3, "open"), {"repo_type": "dataset"}),
         ("merge_pull_request", ("me/d", 3), {"repo_type": "dataset"}),
+        ("create_tag", ("me/d",), {"tag": "v1.2", "repo_type": "dataset"}),
     ]

@@ -227,10 +227,11 @@ def test_propose_leaves_the_release_files_out(tmp_path, monkeypatch):
 
 def test_finalize_merges_tags_v1_3_then_deletes_the_bucket(bucket, monkeypatch):
     calls = []
-    monkeypatch.setattr(embedding.hub, "merge", lambda repo, n: calls.append(("merge", repo, n)))
-    monkeypatch.setattr(embedding.hub, "tag", lambda repo, name: calls.append(("tag", repo, name)))
+    monkeypatch.setattr(
+        embedding.hub, "release", lambda repo, n, name: calls.append(("release", repo, n, name))
+    )
     embedding.finalize(7, bucket)
-    assert calls == [("merge", embedding.REPO, 7), ("tag", embedding.REPO, "v1.3")]
+    assert calls == [("release", embedding.REPO, 7, "v1.3")]
     assert bucket.calls == [("remove",)]
 
 

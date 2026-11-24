@@ -110,10 +110,9 @@ def test_propose_leaves_polygons_out(tmp_path, monkeypatch):
 
 def test_finalize_merges_tags_then_deletes_the_bucket(bucket, monkeypatch):
     calls = []
-    monkeypatch.setattr(jobs.hub, "merge", lambda repo, n: calls.append(("merge", repo, n)))
-    monkeypatch.setattr(jobs.hub, "tag", lambda repo, name: calls.append(("tag", repo, name)))
+    monkeypatch.setattr(jobs.hub, "release", lambda repo, n, name: calls.append(("release", repo, n, name)))
     jobs.finalize(4, bucket)
-    assert calls == [("merge", jobs.REPO, 4), ("tag", jobs.REPO, "v1.1")]
+    assert calls == [("release", jobs.REPO, 4, "v1.1")]
     assert bucket.calls == [("remove",)]
 
 

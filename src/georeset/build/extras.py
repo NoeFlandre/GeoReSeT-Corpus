@@ -106,5 +106,4 @@ def propose(out: Path) -> str:
 
 def finalize(number: int) -> None:
     """Merge the reviewed pull request and tag the release."""
-    hub.merge(REPO, number)
-    hub.tag(REPO, NEXT_RELEASE)
+    hub.release(REPO, number, NEXT_RELEASE)

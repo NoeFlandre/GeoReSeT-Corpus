@@ -15,11 +15,6 @@ def revision_of(repo: str, ref: str) -> str:
     return str(HfApi().dataset_info(repo, revision=ref).sha)
 
 
-def tag(repo: str, name: str) -> None:
-    """Tag the current commit of a dataset repo (a release)."""
-    HfApi().create_tag(repo, tag=name, repo_type="dataset")
-
-
 def list_files(repo: str, rev: str) -> frozenset[str]:
     return frozenset(HfApi().list_repo_files(repo, repo_type="dataset", revision=rev))
 
@@ -108,8 +103,12 @@ def propose(folder: Path, repo_id: str, title: str) -> str:
     return str(pr.url)
 
 
-def merge(repo_id: str, number: int) -> None:
-    """Merge pull request ``number``; the Hub opens pull requests as drafts, which cannot be merged."""
+def release(repo_id: str, number: int, tag_name: str) -> None:
+    """Merge pull request ``number`` and tag the merged commit ``tag_name``, a release.
+
+    The Hub opens pull requests as drafts, which cannot be merged, so the draft is opened first.
+    """
     api = HfApi()
     api.change_discussion_status(repo_id, number, "open", repo_type="dataset")
     api.merge_pull_request(repo_id, number, repo_type="dataset")
+    api.create_tag(repo_id, tag=tag_name, repo_type="dataset")

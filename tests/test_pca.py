@@ -55,15 +55,14 @@ def test_shard_size_is_the_embedding_one():
 
 def test_finalize_merges_tags_v1_4_then_deletes_the_bucket(monkeypatch):
     calls = []
-    monkeypatch.setattr(pca.hub, "merge", lambda repo, n: calls.append(("merge", repo, n)))
-    monkeypatch.setattr(pca.hub, "tag", lambda repo, name: calls.append(("tag", repo, name)))
+    monkeypatch.setattr(pca.hub, "release", lambda repo, n, name: calls.append(("release", repo, n, name)))
 
     class Bucket:
         def remove(self):
             calls.append(("remove",))
 
     pca.finalize(9, Bucket())
-    assert calls == [("merge", pca.REPO, 9), ("tag", pca.REPO, "v1.4"), ("remove",)]
+    assert calls == [("release", pca.REPO, 9, "v1.4"), ("remove",)]
 
 
 def test_fetch_themes_brings_each_corpus_outputs_back(tmp_path, monkeypatch):

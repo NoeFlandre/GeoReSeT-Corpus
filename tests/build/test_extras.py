@@ -213,7 +213,6 @@ def test_propose_leaves_the_release_files_out(tmp_path, monkeypatch):
 
 def test_finalize_merges_then_tags_v1_2(monkeypatch):
     calls = []
-    monkeypatch.setattr(extras.hub, "merge", lambda repo, n: calls.append(("merge", repo, n)))
-    monkeypatch.setattr(extras.hub, "tag", lambda repo, name: calls.append(("tag", repo, name)))
+    monkeypatch.setattr(extras.hub, "release", lambda repo, n, name: calls.append(("release", repo, n, name)))
     extras.finalize(5)
-    assert calls == [("merge", extras.REPO, 5), ("tag", extras.REPO, "v1.2")]
+    assert calls == [("release", extras.REPO, 5, "v1.2")]
