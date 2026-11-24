@@ -11,3 +11,4 @@ site/
 coverage.json
 work-fused/
 out-fused/
+.DS_Store

@@ -14,10 +14,10 @@ def _shards(folder: Path, names: list[str]) -> list[Path]:
     return sorted(folder / name for name in names)
 
 
-def test_pools_pair_each_sentence_shard_with_its_vectors_and_language():
+def test_pools_pair_each_sentence_shard_with_its_vectors_and_language(tmp_path):
     landuse = [Path("s/a.parquet"), Path("s/b.parquet")]
     translated = [Path("t/0.parquet")]
-    vectors = Path("v")
+    vectors = tmp_path / "v"
     _shards(vectors / "embeddings", ["train-a.parquet", "train-b.parquet"])
     _shards(vectors / "embeddings_en", ["train-0.parquet"])
     (landuse_pool, translated_pool) = pca.pools(landuse, translated, vectors)
