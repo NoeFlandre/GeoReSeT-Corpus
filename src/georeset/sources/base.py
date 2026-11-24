@@ -9,18 +9,6 @@ import polars as pl
 from georeset.normalize.languages import Scheme, normalize
 from georeset.normalize.osm import has_letters
 
-POLYGON_SCHEMA = pl.Schema(
-    {
-        "polygon_id": pl.String,
-        "name": pl.String,
-        "osm_tag": pl.String,
-        "lat": pl.Float64,
-        "lon": pl.Float64,
-        "area_m2": pl.Float64,
-        "geometry": pl.Binary,
-    }
-)
-LINK_SCHEMA = pl.Schema({"doc_key": pl.String, "polygon_id": pl.String})
 SENTENCE_SCHEMA = pl.Schema(
     {
         "source": pl.String,

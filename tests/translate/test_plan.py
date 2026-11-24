@@ -119,7 +119,7 @@ def test_to_translate_keeps_each_key_once_in_first_seen_order():
     rows = [(str(i), "nllb", "fra_Latn", f"t{i % 50}", f"k{i % 50}".encode()) for i in range(200)]
     rows.insert(3, ("x", "original", None, "Hello", None))
     out = plan.to_translate(_routed(rows))
-    assert out.columns == list(plan.WORK_COLUMNS)
+    assert out.columns == ["key", "translation_language", "text"]
     assert out["key"].to_list() == [f"k{i}".encode() for i in range(50)]
     assert out["text"].to_list() == [f"t{i}" for i in range(50)]
 

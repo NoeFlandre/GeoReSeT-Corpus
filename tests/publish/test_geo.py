@@ -30,7 +30,7 @@ def test_hex_counts_of_no_points():
     assert geo.hex_counts(pts).height == 0
 
 
-def test_h3_cells_parents_and_centres():
+def test_h3_cells_and_parents():
     lon, lat = np.array([2.35, 18.4]), np.array([48.85, -33.9])
     cells = geo.h3_cells(lon, lat)
     assert cells.dtype == np.uint64
@@ -39,10 +39,6 @@ def test_h3_cells_parents_and_centres():
     ]
     parents = geo.h3_parents(cells)
     assert parents.tolist() == [h3_int.cell_to_parent(int(c), geo.DISPLAY_RESOLUTION) for c in cells]
-    centre_lon, centre_lat = geo.h3_centres(cells)
-    np.testing.assert_allclose(centre_lon, lon, atol=0.2)
-    np.testing.assert_allclose(centre_lat, lat, atol=0.2)
-    assert geo.h3_centres(np.array([], np.uint64))[0].size == 0
 
 
 def test_equal_earth():

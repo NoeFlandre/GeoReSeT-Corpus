@@ -185,7 +185,7 @@ def test_cell_means_average_each_text_in_its_cell_once(tmp_path):
 
     parent = geo.h3_parents(geo.h3_cells(np.array([2.35]), np.array([48.85])))[0]
     near = np.array(sorted(h3_int.cell_to_children(int(parent), geo.CELL_RESOLUTION))[:2], np.uint64)
-    lon, lat = geo.h3_centres(near)
+    lat, lon = np.array([h3_int.cell_to_latlng(int(c)) for c in near]).T
     rows = pl.DataFrame(
         {
             "id": ["a", "b", "c", "d"],

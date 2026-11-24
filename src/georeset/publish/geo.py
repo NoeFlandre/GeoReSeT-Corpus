@@ -38,12 +38,6 @@ def h3_parents(cells: np.ndarray, resolution: int = DISPLAY_RESOLUTION) -> np.nd
     return np.fromiter((h3_int.cell_to_parent(int(c), resolution) for c in cells), np.uint64, len(cells))
 
 
-def h3_centres(cells: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """(lon, lat) of each H3 cell's centre."""
-    centres = np.array([h3_int.cell_to_latlng(int(c)) for c in cells], float).reshape(-1, 2)
-    return centres[:, 1], centres[:, 0]
-
-
 def hex_counts(points: pl.DataFrame, resolution: int = CELL_RESOLUTION) -> pl.DataFrame:
     """Sum ``n`` per H3 ``cell`` (64-bit id) of each (lat, lon) point."""
     cells = h3_cells(points["lon"].to_numpy(), points["lat"].to_numpy(), resolution)

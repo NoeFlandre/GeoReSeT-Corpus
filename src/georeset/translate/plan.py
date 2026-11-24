@@ -16,7 +16,6 @@ from georeset.translate import route
 
 UNLABELLED = "unlabelled"
 SHARD_CHARS = 1_500_000
-WORK_COLUMNS = ("key", "translation_language", "text")
 Identify = Callable[[list[str]], tuple[list[str], list[float]]]
 
 
