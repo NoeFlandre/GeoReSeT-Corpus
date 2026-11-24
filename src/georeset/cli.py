@@ -29,6 +29,11 @@ Downloads = Annotated[int, typer.Option(help="Parallel downloads.")]
 Regions = Annotated[list[str] | None, typer.Option("--region", help="Geofabrik stems; default: all.")]
 
 
+def _echo_card(work: Path, out: Path, repo: str = REPO_ID) -> None:
+    """Write the dataset card of ``out`` for ``repo``, and print its path."""
+    typer.echo(report.build_card(pipeline.Layout(work, out), repo, CODE_URL))
+
+
 def _stems(regions: list[str] | None) -> list[str]:
     if regions:
         return regions
@@ -67,7 +72,7 @@ def shards(work: Work = Path("work"), out: Out = Path("out"), workers: Workers =
 @app.command("card")
 def card_cmd(work: Work = Path("work"), out: Out = Path("out"), repo: str = REPO_ID) -> None:
     """Compute stats and figures, write README.md."""
-    typer.echo(report.build_card(pipeline.Layout(work, out), repo, CODE_URL))
+    _echo_card(work, out, repo)
 
 
 Sentences = Annotated[Path, typer.Option(help="Directory of the sentence shards to embed.")]
@@ -176,7 +181,7 @@ def fuse(
     """Copy a corpus release, add the geo-rag scenes, write the card, then optionally publish."""
     fusion.fetch_corpus(REPO_ID, corpus, out, work)
     fusion.build_scenes(fusion.fetch_scenes(work), out)
-    typer.echo(report.build_card(pipeline.Layout(work, out), repo, CODE_URL))
+    _echo_card(work, out, repo)
     if publish_:
         publish(out, repo, private)
 
@@ -237,7 +242,7 @@ def translate_assemble(
 ) -> None:
     """Copy the release, add the translation columns, write the card, open a pull request (CPU job)."""
     translation.assemble_all(out, work, scratch)
-    typer.echo(report.build_card(pipeline.Layout(work, out), REPO_ID, CODE_URL))
+    _echo_card(work, out)
     typer.echo(translation.propose(out))
 
 
@@ -261,7 +266,7 @@ def extras_propose(
     """Copy the fused dataset's embeddings and EUNIS label shares into the release, check them, write the
     card, open a pull request (CPU job)."""
     extras.assemble(out, work)
-    typer.echo(report.build_card(pipeline.Layout(work, out), REPO_ID, CODE_URL))
+    _echo_card(work, out)
     typer.echo(extras.propose(out))
 
 
@@ -304,7 +309,7 @@ def embed_assemble(
     """Add the vectors to the release as embeddings_en, check them, write the card, open a pull request
     (CPU job)."""
     embedding.assemble(out, work, Bucket(EMBED_BUCKET))
-    typer.echo(report.build_card(pipeline.Layout(work, out), REPO_ID, CODE_URL))
+    _echo_card(work, out)
     typer.echo(embedding.propose(out))
 
 
