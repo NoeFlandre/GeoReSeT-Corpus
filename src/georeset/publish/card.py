@@ -5,6 +5,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib.resources import files
+from importlib.resources.abc import Traversable
 from string import Template
 
 import polars as pl
@@ -298,6 +299,11 @@ def parts(text: str) -> dict[str, str]:
     return {name: body.removesuffix("\n") for name, body in pairs}
 
 
+def _fill(template: Traversable, values: dict[str, str]) -> dict[str, str]:
+    """Each named part of ``template``, its ``$name`` placeholders replaced by ``values``."""
+    return {name: Template(body).substitute(values) for name, body in parts(template.read_text()).items()}
+
+
 def _scene_values(ctx: Context, scenes: Scenes) -> dict[str, str]:
     totals = scenes.totals
     ((raw_repo, raw_rev),) = scenes.raw.items()
@@ -329,9 +335,7 @@ def scene_parts(ctx: Context) -> dict[str, str]:
     if ctx.scenes is None:
         return {name: "" for name in SCENE_PARTS}
     values = _scene_values(ctx, ctx.scenes) | {"themes_section_scenes": theme_parts(ctx)["section_scenes"]}
-    return {
-        name: Template(body).substitute(values) for name, body in parts(SCENES_TEMPLATE.read_text()).items()
-    }
+    return _fill(SCENES_TEMPLATE, values)
 
 
 _COLOURS = ("red", "green", "blue")
@@ -379,15 +383,13 @@ def _rendered_themes(ctx: Context) -> list[tuple[Themes, dict[str, str], bool]]:
     A PCA on vectors an earlier one already uses (a subset of them) gets no file, config or method step.
     """
     first = _themes_first(ctx)
-    template = parts(THEMES_TEMPLATE.read_text())
     folders: dict[str, int] = {}  # each vectors folder and its method step, in order
     rendered = []
     for themes in ctx.themes:
         new = themes.corpus.folder not in folders
         step = folders.setdefault(themes.corpus.folder, first + len(folders))
         values = _theme_values(ctx, themes, step)
-        filled = {name: Template(body).substitute(values) for name, body in template.items()}
-        rendered.append((themes, filled, new))
+        rendered.append((themes, _fill(THEMES_TEMPLATE, values), new))
     return rendered
 
 
@@ -441,11 +443,7 @@ def translation_parts(ctx: Context) -> dict[str, str]:
     """The translation columns' text, or empty strings for a card without them."""
     if ctx.translation is None:
         return dict.fromkeys(TRANSLATION_PARTS, "")
-    values = _translation_values(ctx, ctx.translation)
-    return {
-        name: Template(body).substitute(values)
-        for name, body in parts(TRANSLATION_TEMPLATE.read_text()).items()
-    }
+    return _fill(TRANSLATION_TEMPLATE, _translation_values(ctx, ctx.translation))
 
 
 def extras_parts(ctx: Context) -> dict[str, str]:
@@ -459,9 +457,7 @@ def extras_parts(ctx: Context) -> dict[str, str]:
         "polygons": fmt(ctx.polygons),
         "fused": pinned(repo, rev),
     }
-    return {
-        name: Template(body).substitute(values) for name, body in parts(EXTRAS_TEMPLATE.read_text()).items()
-    }
+    return _fill(EXTRAS_TEMPLATE, values)
 
 
 def _themes_first(ctx: Context) -> int:
@@ -487,9 +483,7 @@ def english_parts(ctx: Context) -> dict[str, str]:
         "code_url": ctx.code_url,
         "step": str(english_step(ctx)),
     }
-    return {
-        name: Template(body).substitute(values) for name, body in parts(ENGLISH_TEMPLATE.read_text()).items()
-    }
+    return _fill(ENGLISH_TEMPLATE, values)
 
 
 def _pca_table(theme: Themes) -> str:
