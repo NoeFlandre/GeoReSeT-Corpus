@@ -51,10 +51,18 @@ def restore_context(work: Path) -> None:
     _write(work / "translation.json", translation_summary(card))
 
 
+def fetch_release(out: Path, work: Path, release: str, folders: tuple[str, ...] = ()) -> None:
+    """The ``release`` tag into ``out`` (its corpus folders, then ``folders``); its context into ``work``."""
+    rev = hub.revision_of(REPO, release)
+    fuse.fetch_corpus(REPO, rev, out, work)
+    if folders:
+        hub.snapshot(REPO, rev, out, [f"{folder}/*" for folder in folders])
+    restore_context(work)
+
+
 def fetch(out: Path, work: Path) -> None:
     """The release and fused folders into ``out``; their pins and the translation summary into ``work``."""
-    fuse.fetch_corpus(REPO, hub.revision_of(REPO, RELEASE), out, work)
-    restore_context(work)
+    fetch_release(out, work, RELEASE)
     fused = hub.revision(FUSED_REPO)
     hub.snapshot(FUSED_REPO, fused, out, [f"{folder}/*" for folder in EXTRAS_FOLDERS])
     _write(work / "fused.json", {FUSED_REPO: fused})

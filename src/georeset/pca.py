@@ -13,7 +13,7 @@ from pathlib import Path
 import polars as pl
 
 from georeset import embedding, hub
-from georeset.build import extras, fuse
+from georeset.build import extras
 from georeset.build.pipeline import Layout
 from georeset.publish import report, themes
 from georeset.translate.store import Bucket
@@ -90,10 +90,7 @@ def fetch_themes(work: Path, bucket: Bucket) -> None:
 
 def card_context(out: Path, work: Path) -> None:  # pragma: no cover (Grid'5000 CPU job)
     """The release (data, and the copied folders the card counts) with the context its card keeps."""
-    rev = hub.revision_of(REPO, RELEASE)
-    fuse.fetch_corpus(REPO, rev, out, work)
-    hub.snapshot(REPO, rev, out, [f"{folder}/*" for folder in (*extras.EXTRAS_FOLDERS, "embeddings_en")])
-    extras.restore_context(work)
+    extras.fetch_release(out, work, RELEASE, (*extras.EXTRAS_FOLDERS, "embeddings_en"))
 
 
 def propose(out: Path, work: Path, bucket: Bucket) -> str:  # pragma: no cover (Grid'5000 CPU job)

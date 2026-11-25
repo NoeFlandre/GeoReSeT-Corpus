@@ -138,9 +138,7 @@ def fetch(out: Path, work_dir: Path, bucket: Bucket) -> None:
     """The release and its card context, then the vectors as ``out/embeddings_en``."""
     if bucket.files("work/"):
         raise RuntimeError("work shards are left: embedding is not finished")
-    fuse.fetch_corpus(REPO, hub.revision_of(REPO, RELEASE), out, work_dir)
-    hub.snapshot(REPO, hub.revision_of(REPO, RELEASE), out, [f"{f}/*" for f in extras.EXTRAS_FOLDERS])
-    extras.restore_context(work_dir)
+    extras.fetch_release(out, work_dir, RELEASE, extras.EXTRAS_FOLDERS)
     pairs = result_names(bucket.files("results/"))
     bucket.get([(path, out / FOLDER / name) for path, name in pairs])
 

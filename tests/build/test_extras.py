@@ -216,3 +216,30 @@ def test_finalize_merges_then_tags_v1_2(monkeypatch):
     monkeypatch.setattr(extras.hub, "release", lambda repo, n, name: calls.append(("release", repo, n, name)))
     extras.finalize(5)
     assert calls == [("release", extras.REPO, 5, "v1.2")]
+
+
+def test_fetch_release_takes_the_release_and_the_given_folders(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(extras.hub, "revision_of", lambda repo, ref: f"{repo}@{ref}")
+    monkeypatch.setattr(
+        extras.fuse,
+        "fetch_corpus",
+        lambda repo, rev, out, work: calls.append(("corpus", repo, rev, out, work)),
+    )
+    monkeypatch.setattr(
+        extras.hub,
+        "snapshot",
+        lambda repo, rev, out, patterns: calls.append(("snapshot", repo, rev, out, patterns)),
+    )
+    monkeypatch.setattr(extras, "restore_context", lambda work: calls.append(("context", work)))
+    out, work = tmp_path / "out", tmp_path / "work"
+    rev = f"{extras.REPO}@v9"
+    extras.fetch_release(out, work, "v9", ("embeddings",))
+    assert calls == [
+        ("corpus", extras.REPO, rev, out, work),
+        ("snapshot", extras.REPO, rev, out, ["embeddings/*"]),
+        ("context", work),
+    ]
+    calls.clear()
+    extras.fetch_release(out, work, "v9")
+    assert calls == [("corpus", extras.REPO, rev, out, work), ("context", work)]
