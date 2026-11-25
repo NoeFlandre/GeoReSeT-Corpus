@@ -7,7 +7,6 @@ propose   (CPU job) the release's card with the two maps, its figures, and a pul
           with only the figures and the card; ``finalize`` merges it, tags v1.4 and deletes the bucket
 """
 
-import shutil
 from pathlib import Path
 
 import polars as pl
@@ -98,17 +97,8 @@ def propose(out: Path, work: Path, bucket: Bucket) -> str:  # pragma: no cover (
     card_context(out, work)
     fetch_themes(work, bucket)
     report.build_card(Layout(work, out), REPO, CODE_URL)
-    for path in out.iterdir():
-        if path.name not in KEPT_ON_PR:
-            _remove(path)
-    return hub.propose(out, REPO, PR_TITLE)
-
-
-def _remove(path: Path) -> None:
-    if path.is_dir():
-        shutil.rmtree(path)
-    else:
-        path.unlink()
+    drop = [path.name for path in out.iterdir() if path.name not in KEPT_ON_PR]
+    return hub.propose(out, REPO, PR_TITLE, drop)
 
 
 def finalize(number: int, bucket: Bucket) -> None:

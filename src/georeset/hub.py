@@ -1,5 +1,7 @@
 """Thin Hugging Face Hub I/O layer."""
 
+import shutil
+from collections.abc import Iterable
 from pathlib import Path
 
 from huggingface_hub import HfApi, hf_hub_download, snapshot_download
@@ -95,12 +97,24 @@ def _upload(api: HfApi, folder: Path, repo_id: str, revision: str | None) -> Non
     )
 
 
-def propose(folder: Path, repo_id: str, title: str) -> str:
-    """Upload ``folder`` to a new pull request of the dataset repo, for review; returns its URL."""
+def propose(folder: Path, repo_id: str, title: str, drop: Iterable[str] = ()) -> str:
+    """Upload ``folder`` to a new pull request of the dataset repo, for review; returns its URL.
+
+    ``drop``: names in ``folder`` deleted first, so the pull request leaves them out (the release's own).
+    """
+    for name in drop:
+        _delete(folder / name)
     api = HfApi()
     pr = api.create_pull_request(repo_id, title=title, repo_type="dataset")
     _upload(api, folder, repo_id, pr.git_reference)
     return str(pr.url)
+
+
+def _delete(path: Path) -> None:
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
 
 
 def release(repo_id: str, number: int, tag_name: str) -> None:

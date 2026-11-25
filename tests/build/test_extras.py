@@ -193,22 +193,12 @@ def test_assemble_refuses_folders_that_do_not_fit(tmp_path, monkeypatch):
 
 
 def test_propose_leaves_the_release_files_out(tmp_path, monkeypatch):
-    for folder in (
-        "data/wikipedia",
-        "unlabelled",
-        "polygons",  # no assets: a missing folder is skipped
-        "embeddings",
-        "polygons_labels_shares",
-    ):
-        (tmp_path / folder).mkdir(parents=True)
     seen = []
     monkeypatch.setattr(
-        extras.hub,
-        "propose",
-        lambda out, repo, title: seen.append((sorted(p.name for p in out.iterdir()), repo, title)) or "url",
+        extras.hub, "propose", lambda out, repo, title, drop: seen.append((out, repo, title, drop)) or "url"
     )
     assert extras.propose(tmp_path) == "url"
-    assert seen == [(["embeddings", "polygons_labels_shares"], extras.REPO, extras.PR_TITLE)]
+    assert seen == [(tmp_path, extras.REPO, extras.PR_TITLE, extras.UNCHANGED)]
 
 
 def test_finalize_merges_then_tags_v1_2(monkeypatch):

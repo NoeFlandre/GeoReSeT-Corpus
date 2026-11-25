@@ -155,8 +155,7 @@ PR_TITLE = (
 
 def propose(out: Path) -> str:
     """Open a pull request with the translated release, for review; ``polygons`` (unchanged) is left out."""
-    shutil.rmtree(out / "polygons", ignore_errors=True)
-    return hub.propose(out, REPO, PR_TITLE)
+    return hub.propose(out, REPO, PR_TITLE, ("polygons",))
 
 
 def finalize(number: int, bucket: Bucket) -> None:

@@ -289,3 +289,15 @@ def test_release_opens_merges_then_tags(monkeypatch):
         ("merge_pull_request", ("me/d", 3), {"repo_type": "dataset"}),
         ("create_tag", ("me/d",), {"tag": "v1.2", "repo_type": "dataset"}),
     ]
+
+
+def test_propose_drops_the_given_folders_and_files_before_uploading(tmp_path, monkeypatch):
+    api = _FakeApi()
+    monkeypatch.setattr(hub, "HfApi", lambda: api)
+    out = _out(tmp_path)
+    (out / "notes.txt").write_text("x")
+    hub.propose(out, "me/d", "Add translations", drop=("polygons", "notes.txt", "missing"))
+    assert not (out / "polygons").exists() and not (out / "notes.txt").exists()
+    assert (out / "assets").is_dir() and (out / "README.md").is_file()
+    uploaded = [kwargs["path_in_repo"] for name, _, kwargs in api.calls if name == "upload_folder"]
+    assert "polygons" not in uploaded and "assets" in uploaded

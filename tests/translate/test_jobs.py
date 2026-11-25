@@ -97,15 +97,12 @@ def test_planned_units(bucket):
 
 
 def test_propose_leaves_polygons_out(tmp_path, monkeypatch):
-    (tmp_path / "polygons").mkdir()
-    (tmp_path / "data").mkdir()
     seen = []
     monkeypatch.setattr(
-        jobs.hub, "propose", lambda out, repo, title: seen.append((out, repo, title)) or "url"
+        jobs.hub, "propose", lambda out, repo, title, drop: seen.append((out, repo, title, drop)) or "url"
     )
     assert jobs.propose(tmp_path) == "url"
-    assert seen == [(tmp_path, jobs.REPO, jobs.PR_TITLE)]
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["data"]
+    assert seen == [(tmp_path, jobs.REPO, jobs.PR_TITLE, ("polygons",))]
 
 
 def test_finalize_merges_tags_then_deletes_the_bucket(bucket, monkeypatch):
@@ -157,17 +154,6 @@ def test_assemble_unit_reads_what_it_downloaded(bucket, tmp_path, monkeypatch):
     folder = tmp_path / "scratch" / "fra_Latn"
     assert loaded == [[folder / "results/fra_Latn/00000.parquet"]]
     assert read == [folder / "results/fra_Latn/00000.parquet", folder / "routes/fra_Latn.parquet"]
-
-
-def test_propose_removes_polygons_and_tolerates_their_absence(tmp_path, monkeypatch):
-    removed = []
-    monkeypatch.setattr(jobs.shutil, "rmtree", lambda path, **kwargs: removed.append((path, kwargs)))
-    monkeypatch.setattr(jobs.hub, "propose", lambda out, repo, title: "url")
-    jobs.propose(tmp_path)
-    assert removed == [(tmp_path / "polygons", {"ignore_errors": True})]
-    monkeypatch.undo()
-    monkeypatch.setattr(jobs.hub, "propose", lambda out, repo, title: "url")
-    assert jobs.propose(tmp_path) == "url"
 
 
 class _Identify:

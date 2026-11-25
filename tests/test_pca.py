@@ -82,15 +82,6 @@ def test_fetch_themes_brings_each_corpus_outputs_back(tmp_path, monkeypatch):
     ]
 
 
-def test_remove_deletes_folders_and_files(tmp_path):
-    (tmp_path / "data").mkdir()
-    (tmp_path / "data" / "x.parquet").write_bytes(b"")
-    (tmp_path / "f.txt").write_bytes(b"")
-    pca._remove(tmp_path / "data")
-    pca._remove(tmp_path / "f.txt")
-    assert list(tmp_path.iterdir()) == []
-
-
 def test_corpora_are_the_landuse_and_the_english_pool():
     assert pca.CORPORA == (themes.LANDUSE, themes.ENGLISH_POOL)
     assert themes.ENGLISH_POOL.only_language == ""

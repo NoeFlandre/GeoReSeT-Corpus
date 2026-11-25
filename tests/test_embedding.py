@@ -213,16 +213,16 @@ def test_assemble_refuses_vectors_that_do_not_fit(tmp_path, monkeypatch):
 
 
 def test_propose_leaves_the_release_files_out(tmp_path, monkeypatch):
-    for folder in ("data/wikipedia", "unlabelled", "embeddings", "polygons_labels_shares", "embeddings_en"):
-        (tmp_path / folder).mkdir(parents=True)  # no polygons nor assets: a missing folder is skipped
     seen = []
     monkeypatch.setattr(
         embedding.hub,
         "propose",
-        lambda out, repo, title: seen.append((sorted(p.name for p in out.iterdir()), repo, title)) or "url",
+        lambda out, repo, title, drop: seen.append((out, repo, title, drop)) or "url",
     )
     assert embedding.propose(tmp_path) == "url"
-    assert seen == [(["embeddings_en"], embedding.REPO, embedding.PR_TITLE)]
+    assert seen == [
+        (tmp_path, embedding.REPO, embedding.PR_TITLE, (*embedding.RELEASE_FOLDERS, "assets")),
+    ]
 
 
 def test_finalize_merges_tags_v1_3_then_deletes_the_bucket(bucket, monkeypatch):

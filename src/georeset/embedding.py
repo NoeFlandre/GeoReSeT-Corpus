@@ -177,9 +177,7 @@ def assemble(out: Path, work_dir: Path, bucket: Bucket) -> None:
 
 def propose(out: Path) -> str:
     """Open a pull request with ``embeddings_en`` and the new card; the release's own files are left out."""
-    for folder in (*RELEASE_FOLDERS, "assets"):
-        shutil.rmtree(out / folder, ignore_errors=True)
-    return hub.propose(out, REPO, PR_TITLE)
+    return hub.propose(out, REPO, PR_TITLE, (*RELEASE_FOLDERS, "assets"))
 
 
 def finalize(number: int, bucket: Bucket) -> None:

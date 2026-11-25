@@ -6,7 +6,6 @@ new card; the release's own files are left out of it, unchanged.
 
 import json
 import re
-import shutil
 from pathlib import Path
 
 import polars as pl
@@ -107,9 +106,7 @@ def assemble(out: Path, work: Path) -> None:
 
 def propose(out: Path) -> str:
     """Open a pull request with the copied folders and the new card; the release's own files are left out."""
-    for folder in UNCHANGED:
-        shutil.rmtree(out / folder, ignore_errors=True)
-    return hub.propose(out, REPO, PR_TITLE)
+    return hub.propose(out, REPO, PR_TITLE, UNCHANGED)
 
 
 def finalize(number: int) -> None:
