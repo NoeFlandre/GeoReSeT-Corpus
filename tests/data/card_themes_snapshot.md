@@ -68,9 +68,9 @@ local = scenes.filter(lambda s: s["spread_km_p90"] <= 100)  # descriptions of on
 
 ![Sentences labelled relevant per H3 cell](assets/map_landuse.png)
 
-**What places talk about, from the relevant sentences**: each is embedded with [`org/model`](https://huggingface.co/org/model) and counts at its location (resolution 4). Each of the 56 cells of resolution 4 holding 50 sentences or more takes the mean embedding of its texts. Those means are projected on their first three principal components, shown as red, green and blue:
+**What places talk about, from the relevant sentences**: each is embedded with [`org/model`](https://huggingface.co/org/model) and counts at its location (resolution 5). Each of the 56 cells of resolution 5 holding 50 sentences or more takes the mean embedding of its texts. Those means are projected on their first three principal components, shown as red, green and blue:
 
-![Mean embedding of the relevant sentences per H3 cell of resolution 4, first three principal components as red, green and blue](assets/map_pca.png)
+![Mean embedding of the relevant sentences per H3 cell of resolution 5, first three principal components as red, green and blue](assets/map_pca.png)
 
 * **PC1** (red, 40.0% of the variance).
 * **PC2** (green, 20.0% of the variance).
@@ -78,11 +78,11 @@ local = scenes.filter(lambda s: s["spread_km_p90"] <= 100)  # descriptions of on
 
 Each axis on its own, blue below zero and orange above.
 
-![First principal component of the relevant sentences per H3 cell of resolution 4](assets/map_pc1.png)
+![First principal component of the relevant sentences per H3 cell of resolution 5](assets/map_pc1.png)
 
-![Second principal component of the relevant sentences per H3 cell of resolution 4](assets/map_pc2.png)
+![Second principal component of the relevant sentences per H3 cell of resolution 5](assets/map_pc2.png)
 
-![Third principal component of the relevant sentences per H3 cell of resolution 4](assets/map_pc3.png)
+![Third principal component of the relevant sentences per H3 cell of resolution 5](assets/map_pc3.png)
 
 | Source | Sentences | Words | Polygons | Languages | Regions | `landuse` share |
 |---|---:|---:|---:|---:|---:|---:|
@@ -156,9 +156,9 @@ Photos of the scenes per H3 cell:
 
 ![Scene photos per H3 cell](assets/map_scenes.png)
 
-**What places talk about, from the scene descriptions**: each is embedded with [`org/model`](https://huggingface.co/org/model) and counts once in every hexagon where its scene has photos (resolution 4). Each of the 56 cells of resolution 4 holding 10 descriptions or more takes the mean embedding of its texts. Those means are projected on their first three principal components, shown as red, green and blue:
+**What places talk about, from the scene descriptions**: each is embedded with [`org/model`](https://huggingface.co/org/model) and counts once in every hexagon where its scene has photos (resolution 5). Each of the 56 cells of resolution 5 holding 10 descriptions or more takes the mean embedding of its texts. Those means are projected on their first three principal components, shown as red, green and blue:
 
-![Mean embedding of the scene descriptions per H3 cell of resolution 4, first three principal components as red, green and blue](assets/map_pca_scenes.png)
+![Mean embedding of the scene descriptions per H3 cell of resolution 5, first three principal components as red, green and blue](assets/map_pca_scenes.png)
 
 * **PC1** (red, 40.0% of the variance).
 * **PC2** (green, 20.0% of the variance).
@@ -166,11 +166,11 @@ Photos of the scenes per H3 cell:
 
 Each axis on its own, blue below zero and orange above.
 
-![First principal component of the scene descriptions per H3 cell of resolution 4](assets/map_pc1_scenes.png)
+![First principal component of the scene descriptions per H3 cell of resolution 5](assets/map_pc1_scenes.png)
 
-![Second principal component of the scene descriptions per H3 cell of resolution 4](assets/map_pc2_scenes.png)
+![Second principal component of the scene descriptions per H3 cell of resolution 5](assets/map_pc2_scenes.png)
 
-![Third principal component of the scene descriptions per H3 cell of resolution 4](assets/map_pc3_scenes.png)
+![Third principal component of the scene descriptions per H3 cell of resolution 5](assets/map_pc3_scenes.png)
 
 A description belongs to all the photos of its cluster, and a cluster groups photos that **look** alike, not photos of one place: half the clusters have photos in 20 countries or more. So:
 
@@ -240,8 +240,8 @@ Configs: `all` (default), one per source, one per language, `unlabelled`, `polyg
    * [`me/up` @ `abc1234`](https://huggingface.co/datasets/me/up/tree/abc1234def)
 6. **This dataset.** One row per sentence of each document (a document linked to several polygons appears once); overlapping extracts resolved to the most specific one; language codes normalized; sentences with fewer than two letters dropped, and Wikipedia / Wikivoyage rows made only of bracketed edit links or citations (`[ edit | edit source ]`, `[Smith 1998]`) removed. Join the raw outputs on `sha256(text)` = `text_sha256`. Code: https://github.com/me/code
 7. **Scenes** ([geo-rag](https://github.com/ananthu-aniraj/geo-rag) @ [`4252e04`](https://github.com/ananthu-aniraj/geo-rag/tree/4252e043b3e8f1afbbc1a6cfb55e3577bcb4ee04)). Geotagged photos scraped from Mapillary, Flickr, iNaturalist and KartaView, plus Google Landmarks v2 and camera-trap archives; duplicates removed on [H3](https://h3geo.org) cells and GPS glitches filtered. Photos embedded with [`google/tipsv2-b14`](https://huggingface.co/google/tipsv2-b14) (CLS) and clustered with FAISS k-means into 40,000 clusters under 2,000 parents. For each cluster, [`google/gemma-4-E4B-it`](https://huggingface.co/google/gemma-4-E4B-it) described a strip of 4 diverse photos near its centre (`visual_description`), then, given that description and the photos' location, season and Köppen climate, chose a land-use / land-cover class and wrote the final description (`text`). Here: the 2 clusters whose labelling failed are dropped, 6 labels outside the class list mapped to the nearest one, local file paths removed, Mapillary keys turned into links, and links removed for photos whose license forbids reuse. Raw input: [`me/raw` @ `fffffff`](https://huggingface.co/datasets/me/raw/tree/ffffffffffffffffffffffffffffffffffffffff) (private).
-8. **Embeddings of the relevant sentences.** The 1,234 distinct sentences embedded with [`org/model`](https://huggingface.co/org/model) (sentence-transformers, bf16, instruction `Instruct: x\nQuery: `, last-token pooling, L2-normalised), stored as float16 in `embeddings` with their `id`, `lat` and `lon`; join on `id` for the rest. For the maps, each counts at its location (resolution 4), each cell takes the mean of its texts, cells with fewer than 50 sentences are left out, and PCA is fitted on the means of the other cells (each cell counts once). Maps use the Equal Earth projection.
-9. **Embeddings of the scene descriptions.** The 1,234 distinct scene descriptions embedded with [`org/model`](https://huggingface.co/org/model) (sentence-transformers, bf16, instruction `Instruct: x\nQuery: `, last-token pooling, L2-normalised), stored as float16 in `scene_embeddings` with their `id`, `lat` and `lon`; join on `id` for the rest. For the maps, each counts once in every hexagon where its scene has photos (resolution 4), each cell takes the mean of its texts, cells with fewer than 10 descriptions are left out, and PCA is fitted on the means of the other cells (each cell counts once). Maps use the Equal Earth projection.
+8. **Embeddings of the relevant sentences.** The 1,234 distinct sentences embedded with [`org/model`](https://huggingface.co/org/model) (sentence-transformers, bf16, instruction `Instruct: x\nQuery: `, last-token pooling, L2-normalised), stored as float16 in `embeddings` with their `id`, `lat` and `lon`; join on `id` for the rest. For the maps, each counts at its location (resolution 5), each cell takes the mean of its texts, cells with fewer than 50 sentences are left out, and PCA is fitted on the means of the other cells (each cell counts once). Maps use the Equal Earth projection.
+9. **Embeddings of the scene descriptions.** The 1,234 distinct scene descriptions embedded with [`org/model`](https://huggingface.co/org/model) (sentence-transformers, bf16, instruction `Instruct: x\nQuery: `, last-token pooling, L2-normalised), stored as float16 in `scene_embeddings` with their `id`, `lat` and `lon`; join on `id` for the rest. For the maps, each counts once in every hexagon where its scene has photos (resolution 5), each cell takes the mean of its texts, cells with fewer than 10 descriptions are left out, and PCA is fitted on the means of the other cells (each cell counts once). Maps use the Equal Earth projection.
 ## License
 
 * OpenStreetMap data (`osm_description` text, polygons, names, tags): [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/), © OpenStreetMap contributors.

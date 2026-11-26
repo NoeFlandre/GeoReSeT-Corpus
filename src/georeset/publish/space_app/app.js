@@ -3,6 +3,7 @@ import { parquetRead } from "https://esm.sh/hyparquet@1.9.1";
 const { MapboxOverlay, H3HexagonLayer } = deck;
 const DATA = "data/";
 const API = "https://huggingface.co/api/datasets/";
+const RES = 5; // the only H3 resolution the explorer shows: one cell is about 250 km²
 
 const PCA = "What places talk about (PCA)";
 const LAYERS = [
@@ -26,9 +27,8 @@ const PALETTE = ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948
   "#9c755f", "#86bcb6", "#d37295", "#8cd17d"];
 const OTHER = "#bab0ac";
 const AXIS_COLOURS = ["#e15759", "#59a14f", "#4e79a7"];
-const ZOOMS = [[2.5, 2], [4, 3], [5.5, 4], [Infinity, 5]];
 
-const state = { layer: "relevant", source: "relevant", res: 2, manifest: null, tables: {}, chunks: new Map(), samples: new Map(), selected: null, labels: undefined };
+const state = { layer: "relevant", source: "relevant", manifest: null, chunks: new Map(), samples: new Map(), selected: null, labels: undefined };
 const ALPHA = 170; // translucent cells: roads, coasts and water stay readable underneath
 const $ = (id) => document.getElementById(id);
 const fmt = new Intl.NumberFormat("en");
@@ -67,14 +67,12 @@ function layerOf(id) { return LAYERS.find((l) => l.id === id); }
 function field(layer) { return layer.id === "relevant" ? state.source : layer.id; }
 
 function value(cell, layer) {
-  if (layer.kind === "count") return res5() ? cell[field(layer)] : cell[`m_${field(layer)}`];
-  if (layer.kind === "pca") return cell[layer.id];
+  if (layer.kind === "count") return cell[field(layer)];
   return cell[layer.id];
 }
-const res5 = () => state.res === 5;
 
 function colour(layer) {
-  const top = state.manifest.ranges[state.res];
+  const top = state.manifest.ranges[RES];
   const languages = state.manifest.languages;
   return (cell) => {
     const v = value(cell, layer);
@@ -88,7 +86,7 @@ function colour(layer) {
 }
 
 function visible(layer) {
-  const rows = res5() ? [...state.chunks.values()].flat() : state.tables[state.res] || [];
+  const rows = [...state.chunks.values()].flat();
   return rows.filter((cell) => {
     const v = layer.kind === "language" ? cell.language : value(cell, layer);
     return v !== null && v !== undefined && !(typeof v === "number" && (Number.isNaN(v) || (layer.kind === "count" && v <= 0)));
@@ -101,7 +99,7 @@ function tooltip({ object }) {
   const v = value(object, layer);
   let line;
   const label = layer.id === "relevant" && state.source !== "relevant" ? `${sourceOf().label} sentences` : layer.label;
-  if (layer.kind === "count") line = `${label}: <b>${fmt.format(Math.round(v * 10) / 10)}</b>${res5() ? "" : " per res-5 cell"}`;
+  if (layer.kind === "count") line = `${label}: <b>${fmt.format(Math.round(v * 10) / 10)}</b> per H3 cell`;
   else if (layer.kind === "language") line = `Most frequent: <b>${language(object.language)}</b>`;
   else line = `${layer.label}: click for the three axes`;
   return { html: `${line}<br><span style="opacity:.7">${fmt.format(object.relevant)} land-use sentences · click for details</span>` };
@@ -111,11 +109,11 @@ let overlay;
 function render() {
   const layer = layerOf(state.layer);
   const cells = new H3HexagonLayer({
-    id: `cells-${state.res}`,
+    id: "cells",
     data: visible(layer),
     getHexagon: (d) => d.cell,
     getFillColor: colour(layer),
-    updateTriggers: { getFillColor: [state.layer, state.source, state.res] },
+    updateTriggers: { getFillColor: [state.layer, state.source] },
     stroked: false, extruded: false, pickable: true, highPrecision: "auto",
     autoHighlight: true, highlightColor: [20, 20, 20, 70],
     onClick: ({ object }) => object && select(object),
@@ -130,16 +128,15 @@ function render() {
     beforeId: state.labels,
   });
   overlay.setProps({ layers: [cells, selected] });
-  $("resolution").textContent = `H3 resolution ${state.res}${res5() ? " (data layer)" : ": mean of resolution-5 cells"}`;
 }
 
 function legend() {
   const layer = layerOf(state.layer);
   const box = $("legend");
   if (layer.kind === "count") {
-    const top = state.manifest.ranges[state.res][field(layer)];
+    const top = state.manifest.ranges[RES][field(layer)];
     box.innerHTML = `<div class="ramp" style="background:linear-gradient(90deg,${RAMP.join(",")})"></div>
-      <div class="ramp-labels"><span>1</span><span>${short(top)}+ ${res5() ? "per cell" : "per res-5 cell"}</span></div>`;
+      <div class="ramp-labels"><span>1</span><span>${short(top)}+ per cell</span></div>`;
   } else if (layer.kind === "language") {
     const items = state.manifest.languages.map((code, i) => `<span class="swatch"><i style="background:${PALETTE[i]}"></i>${language(code)}</span>`);
     box.innerHTML = `<div class="swatches">${items.join("")}<span class="swatch"><i style="background:${OTHER}"></i>Other</span></div>`;
@@ -185,7 +182,6 @@ function controls() {
 }
 
 async function loadChunks(map) {
-  if (!res5()) return;
   // The chunks under the view: those of a 5 × 5 grid of points over it (chunks are far larger than a cell).
   const b = map.getBounds();
   const steps = [0, 0.25, 0.5, 0.75, 1];
@@ -207,8 +203,7 @@ async function samples(cell) {
   const parent = h3.cellToParent(cell, state.manifest.chunk_resolution);
   if (!state.manifest.chunks.includes(parent)) return [];
   if (!state.samples.has(parent)) state.samples.set(parent, await table(`samples/${parent}.parquet`));
-  const res = h3.getResolution(cell);
-  return state.samples.get(parent).filter((row) => (res === 5 ? row.cell === cell : h3.cellToParent(row.cell, res) === cell));
+  return state.samples.get(parent).filter((row) => row.cell === cell);
 }
 
 function axes(cell) {
@@ -229,11 +224,10 @@ async function select(cell) {
   state.selected = cell.cell;
   state.cellRow = cell;
   render();
-  const res = h3.getResolution(cell.cell);
   const total = (k) => fmt.format(cell[k] || 0);
   $("drawer").hidden = false;
-  $("drawer-body").innerHTML = `<h3>H3 cell, resolution ${res}</h3>
-    <p class="muted" style="margin:0">${res === 5 ? "About 250 km². Its what-places-talk-about colour is its resolution-4 cell's." : "Totals over the cell; colours are the mean of its resolution-5 cells (what places talk about: of its resolution-4 cells)."}</p>
+  $("drawer-body").innerHTML = `<h3>H3 cell, resolution ${RES}</h3>
+    <p class="muted" style="margin:0">About 250 km². Its what-places-talk-about colour is its own.</p>
     <h4>Numbers</h4>
     <dl class="stats"><dt>Land-use sentences</dt><dd>${total("relevant")}</dd>
     ${SOURCES.slice(1).map((s) => `<dt class="sub">${s.label}</dt><dd>${total(s.id)}</dd>`).join("")}
@@ -310,15 +304,8 @@ async function main() {
   // Cells go under the first label layer, so place names stay on top.
   state.labels = map.getStyle().layers.find((l) => l.type === "symbol")?.id;
   controls(); legend(); source();
-  busy(true);
-  const coarse = await Promise.all(state.manifest.resolutions.filter((r) => r < 5).map(async (r) => [r, await table(`r${r}.parquet`)]));
-  coarse.forEach(([r, rows]) => { state.tables[r] = rows; });
-  busy(false);
-  const update = () => {
-    const res = ZOOMS.find(([z]) => map.getZoom() < z)[1];
-    if (res !== state.res) { state.res = res; legend(); }
-    render(); loadChunks(map); remember(map);
-  };
+  $("resolution").textContent = `H3 resolution ${RES}`;
+  const update = () => { render(); loadChunks(map); remember(map); };
   map.on("moveend", update);
   update();
   $("search").addEventListener("submit", (e) => search(e, map));

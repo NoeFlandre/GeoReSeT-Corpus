@@ -1,9 +1,8 @@
 """Numbers behind the maps: H3 cells, the Equal Earth projection, log-spaced colour bins.
 
-Count maps have two layers: points are counted in H3 cells of ``CELL_RESOLUTION``, then each cell of
-``DISPLAY_RESOLUTION`` (their parent) shows the mean of its child cells, drawn on the Equal Earth
-projection, which keeps areas true. The PCA maps have one: each text counts once, in its cell of
-``PCA_RESOLUTION``, and each cell shows the mean of its texts.
+Every map and every count is at one resolution, ``CELL_RESOLUTION``: points are counted in their H3 cell,
+and the maps draw those cells on the Equal Earth projection, which keeps areas true. The PCA maps use the
+same cells: each text counts once, in its cell, and each cell shows the mean of its texts.
 """
 
 import itertools
@@ -16,9 +15,7 @@ import h3.api.basic_int as h3_int
 import numpy as np
 import polars as pl
 
-CELL_RESOLUTION = 5  # where points are counted: cells of about 250 km²
-DISPLAY_RESOLUTION = 4  # what the maps draw: cells of about 1,800 km², each the mean of its child cells
-PCA_RESOLUTION = 4  # the PCA's averages: cells of about 1,800 km², each the mean of its texts
+CELL_RESOLUTION = 5  # the one resolution of every count and map: cells of about 250 km²
 LATITUDES = (-60, 85)  # the maps' latitude range
 # Natural Earth 1:110m land (public domain, v5.1.2).
 LAND = files("georeset.publish").joinpath("assets/ne_110m_land.geojson")
@@ -33,7 +30,7 @@ def h3_cells(lon: np.ndarray, lat: np.ndarray, resolution: int = CELL_RESOLUTION
     return np.fromiter((h3_int.latlng_to_cell(a, o, resolution) for a, o in pairs), np.uint64, len(lat))
 
 
-def h3_parents(cells: np.ndarray, resolution: int = DISPLAY_RESOLUTION) -> np.ndarray:
+def h3_parents(cells: np.ndarray, resolution: int) -> np.ndarray:
     """Each cell's parent at ``resolution``."""
     return np.fromiter((h3_int.cell_to_parent(int(c), resolution) for c in cells), np.uint64, len(cells))
 
@@ -78,7 +75,7 @@ def cell_rings(cells: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
 
 
 @cache
-def land_cells(resolution: int = DISPLAY_RESOLUTION) -> np.ndarray:
+def land_cells(resolution: int = CELL_RESOLUTION) -> np.ndarray:
     """Cells whose centre is on land (south of the maps' range left out), sorted."""
     cells: set[int] = set()
     for feature in json.loads(LAND.read_text())["features"]:

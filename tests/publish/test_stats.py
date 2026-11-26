@@ -195,7 +195,7 @@ def test_photo_cells_pairs_each_scene_with_its_photos_cells():
     photos = pl.DataFrame(
         {"scene_id": [1, 1, 1, 2], "lat": [48.85, 48.85, -33.9, 48.85], "lon": [2.35, 2.35, 18.4, 2.35]}
     )
-    paris, cape = geo.h3_cells(np.array([2.35, 18.4]), np.array([48.85, -33.9]), geo.PCA_RESOLUTION)
+    paris, cape = geo.h3_cells(np.array([2.35, 18.4]), np.array([48.85, -33.9]), geo.CELL_RESOLUTION)
     assert stats.photo_cells(photos).rows() == sorted([(1, paris), (1, cape), (2, paris)])
 
 
@@ -203,21 +203,6 @@ def test_unit_scale_with_shared_limits():
     scores = np.array([[0.0], [10.0]])
     limits = np.array([[0.0], [20.0]])
     np.testing.assert_allclose(stats.unit_scale(scores, limits), [[0.0], [0.5]])
-
-
-def test_parent_sums_group_children_under_their_display_cell():
-    import h3.api.basic_int as h3_int
-
-    parent = h3_int.latlng_to_cell(48.85, 2.35, geo.DISPLAY_RESOLUTION)
-    a, b = sorted(h3_int.cell_to_children(parent, geo.CELL_RESOLUTION))[:2]
-    other = h3_int.latlng_to_cell(-33.9, 18.4, geo.CELL_RESOLUTION)
-    cells = np.array([a, other, b], np.uint64)
-    parents, sums, sizes, inverse = stats.parent_sums(cells, np.array([[1.0], [10.0], [3.0]]))
-    by_parent = dict(
-        zip(parents.tolist(), zip(sums[:, 0].tolist(), sizes.tolist(), strict=True), strict=True)
-    )
-    assert by_parent[parent] == (4.0, 2)
-    assert parents[inverse].tolist() == [parent, h3_int.cell_to_parent(other, geo.DISPLAY_RESOLUTION), parent]
 
 
 def test_translation_stats_without_translated_rows():

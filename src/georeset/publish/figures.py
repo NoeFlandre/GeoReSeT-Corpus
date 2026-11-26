@@ -21,7 +21,6 @@ from matplotlib.patches import Polygon
 from georeset.normalize.languages import display_name
 from georeset.publish.geo import (
     CELL_RESOLUTION,
-    DISPLAY_RESOLUTION,
     LATITUDES,
     cell_rings,
     edge_labels,
@@ -109,14 +108,12 @@ def _bar(fig, ax, hexes, label: str, **kwargs):
 def world_map(
     cells: np.ndarray, values: np.ndarray, path: Path, unit: str, grey: np.ndarray | None = None
 ) -> Path:
-    """``values`` per display cell (the mean ``unit`` of its child cells), log-binned on one blue ramp.
+    """``values`` per H3 cell of ``CELL_RESOLUTION``, log-binned on one blue ramp.
 
     ``grey``: cells drawn grey under them (the full dataset).
     """
     fig, ax = _figure(12, 6.4)
-    label = (
-        f"{unit} per H3 cell (resolution {CELL_RESOLUTION}), mean per resolution-{DISPLAY_RESOLUTION} cell"
-    )
+    label = f"{unit} per H3 cell (resolution {CELL_RESOLUTION})"
     if grey is not None:
         _grey(ax, grey)
         label += " (grey: the full dataset)"

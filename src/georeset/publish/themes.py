@@ -4,7 +4,7 @@ Three corpora: the relevant sentences (``LANDUSE``), the same in English only (`
 vectors) and the scene descriptions (``SCENES``). ``write_sentences`` splits a corpus' texts into its
 shards; ``scripts/embed.py`` embeds each into the same-named file of the corpus' folder (``id``, ``lat``,
 ``lon``, ``vector``), row for row. ``compute`` reads the shards twice: the texts' H3 cells, then the cells'
-mean vectors, whose PCA it fits. Each text counts once, in its cell of ``geo.PCA_RESOLUTION``. ``render``
+mean vectors, whose PCA it fits. Each text counts once, in its cell of ``geo.CELL_RESOLUTION``. ``render``
 turns its outputs into the maps.
 """
 
@@ -142,7 +142,7 @@ def _pairs(
 
 @dataclass(frozen=True)
 class _Cells:
-    """The H3 cells the texts count in, at ``geo.PCA_RESOLUTION``, and the number of texts."""
+    """The H3 cells the texts count in, at ``geo.CELL_RESOLUTION``, and the number of texts."""
 
     ids: np.ndarray  # sorted cell ids
     placements: list[tuple[np.ndarray, np.ndarray]]  # per shard: row index, then index in ``ids``
@@ -153,7 +153,7 @@ class _Cells:
 def _placement(rows: pl.DataFrame, pairs: pl.DataFrame | None) -> tuple[np.ndarray, np.ndarray]:
     """Each placement's row and H3 cell: the text's own location, or each cell of its photos."""
     if pairs is None:
-        cells = geo.h3_cells(rows["lon"].to_numpy(), rows["lat"].to_numpy(), geo.PCA_RESOLUTION)
+        cells = geo.h3_cells(rows["lon"].to_numpy(), rows["lat"].to_numpy(), geo.CELL_RESOLUTION)
         return np.arange(rows.height), cells
     placed = rows.select("id").with_row_index("row").join(pairs, on="id")
     return placed["row"].to_numpy(), placed["cell"].to_numpy()
@@ -236,11 +236,11 @@ def compute(
 
 
 def _layers(corpus: card.Corpus) -> str:
-    return f"Mean embedding of the {corpus.what} per H3 cell (resolution {geo.PCA_RESOLUTION})"
+    return f"Mean embedding of the {corpus.what} per H3 cell (resolution {geo.CELL_RESOLUTION})"
 
 
 def _grey(minimum: int, corpus: card.Corpus) -> str:
-    return f"grey: land with fewer than {minimum} {corpus.unit} per resolution-{geo.PCA_RESOLUTION} cell"
+    return f"grey: land with fewer than {minimum} {corpus.unit} per resolution-{geo.CELL_RESOLUTION} cell"
 
 
 def render(work: Path, assets: Path, corpus: card.Corpus = LANDUSE) -> card.Themes:
@@ -259,7 +259,7 @@ def render(work: Path, assets: Path, corpus: card.Corpus = LANDUSE) -> card.Them
         explained=summary["explained"],
     )
     rgb = stats.unit_scale(scores)
-    land = geo.land_cells(geo.PCA_RESOLUTION)
+    land = geo.land_cells(geo.CELL_RESOLUTION)
     grey = _grey(corpus.min_texts, corpus)
     caption = (
         f"{_layers(corpus)}. Red, green, blue: principal components 1, 2, 3 (2nd to 98th percentile)\n{grey}"

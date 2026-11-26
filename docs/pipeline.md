@@ -76,32 +76,30 @@ georeset fuse ...                                         card: maps, legends
 self-contained (PEP 723 dependencies): `microsoft/harrier-oss-v1-0.6b` in bf16, the instruction
 `Identify the land use or land cover described`, L2-normalised vectors stored as float16. Shards already on
 the Hub are skipped, so jobs can be killed, resubmitted or run on several GPUs at once.
-Maps use the Equal Earth projection (`georeset.publish.geo`). The count maps have two layers: points are
-counted in H3 cells of resolution 5, then each H3 cell of resolution 4 shows the mean of its child cells, so
-that every place counts once however much is written there. The PCA has one: each text counts once, in its
-H3 cell of resolution 4 (a scene description counts in every cell where its scene has photos), and each
-cell takes the mean embedding of its texts; those with fewer than 20 sentences (10 scene descriptions) are
-dropped and PCA is fitted on the rest. The two passes over the shards (cells, cell means) load the next
-shards in the background. The card shows the PCA only: its maps and each component's share of variance,
-with no axis names or axis reports.
+Maps use the Equal Earth projection (`georeset.publish.geo`) and a single H3 resolution, 5 (about 250 km²):
+every count and every map is per resolution-5 cell. Each text counts once, in its own cell (a scene
+description counts in every cell where its scene has photos), and each cell takes the mean embedding of its
+texts; those with fewer than 20 sentences (10 scene descriptions) are dropped and PCA is fitted on the rest.
+The two passes over the shards (cells, cell means) load the next shards in the background. The card shows
+the PCA only: its maps and each component's share of variance, with no axis names or axis reports.
 
 ## Explorer Space
 
 [An interactive map](https://huggingface.co/spaces/NoeFlandre/GeoReSeT-Corpus-Fused) of the fused dataset,
-on the same two layers: numbers per H3 cell of resolution 5, and coarser cells (resolutions 2 to 4, as the map
-zooms out) showing the mean of their resolution-5 cells. The PCA colours are one layer at resolution 4: each
-resolution-5 cell takes its resolution-4 cell's colour, each coarser cell the mean of its resolution-4 cells. It shows only the sentences labelled relevant
+on the same two layers: numbers per H3 cell of resolution 5, each cell on its own (no zoom levels, no coarser
+cells, nothing averaged over other cells). The PCA colours are each resolution-5 cell's own colour. It shows only
+the sentences labelled relevant
 (`landuse` true), from every source or one; layers: those sentences, scene photos, their most frequent
 language and the three PCA maps; a click shows a cell's numbers, up to three relevant sentences and the
 scene with the most photos there. The dataset itself is not changed.
 
 ```
-georeset themes --corpus C ...   (each corpus, as above: also writes every resolution-4 cell's scores)
+georeset themes --corpus C ...   (each corpus, as above: also writes every resolution-5 cell's scores)
 georeset space                   data from the dataset's current revision, app files → the Space
 ```
 
-`georeset.publish.space` writes the data (`r2`–`r4.parquet`, `r5/` and `samples/` split by resolution-1
-parent, loaded as the map zooms in) and `manifest.json`, which names the dataset revision it was built from.
+`georeset.publish.space` writes the data (`r5/` and `samples/` split by resolution-1
+parent, loaded as the map moves) and `manifest.json`, which names the dataset revision it was built from.
 The app (`georeset/publish/space_app`, a static page: MapLibre, deck.gl, h3-js, hyparquet) shows that
 revision and says when the dataset has changed since: rebuild with the two steps above after each release.
 

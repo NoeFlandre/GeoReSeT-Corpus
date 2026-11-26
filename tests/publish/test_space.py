@@ -55,9 +55,9 @@ def _work(tmp_path):
     work = tmp_path / "work"
     folder = work / "themes" / "landuse"
     folder.mkdir(parents=True)
-    # The PCA cells are at the PCA's resolution: Paris (8 texts) and Cape Town (2, under PCA_MIN).
-    paris = h3_int.latlng_to_cell(*PARIS, geo.PCA_RESOLUTION)
-    cape = h3_int.latlng_to_cell(*CAPE, geo.PCA_RESOLUTION)
+    # The PCA cells are the map's cells: Paris (8 texts) and Cape Town (2, under PCA_MIN).
+    paris = h3_int.latlng_to_cell(*PARIS, geo.CELL_RESOLUTION)
+    cape = h3_int.latlng_to_cell(*CAPE, geo.CELL_RESOLUTION)
     cells = pl.DataFrame(
         {
             "cell": pl.Series([paris, cape], dtype=pl.UInt64),
@@ -99,33 +99,23 @@ def test_build_writes_every_resolution_samples_and_manifest(tmp_path):
     manifest = json.loads((out / "manifest.json").read_text())
     assert manifest["revision"] == "abc123" and manifest["dataset"] == "me/data"
     assert manifest["folders"] == commits
-    assert manifest["resolutions"] == [2, 3, 4, 5]
+    assert manifest["resolutions"] == [5]
     assert manifest["languages"][0] == "fra_Latn"
     assert set(manifest["pca"]["landuse"]) == {"what", "explained"}
-    r4 = pl.read_parquet(out / "r4.parquet")
-    paris4 = format(h3_int.latlng_to_cell(*PARIS, 4), "x")
-    row = r4.filter(cell=paris4).row(0, named=True)
-    # Two resolution-5 cells: 2 and 1 relevant sentences; the colour is their mean, each cell counting once.
-    assert row["relevant"] == 3 and row["children"] == 2 and row["m_relevant"] == 1.5
-    assert row["wikivoyage"] == 1 and row["m_wikivoyage"] == 1.0
-    assert row["language"] == "fra_Latn"
-    assert r4.schema["relevant"] == pl.Int32 and r4.schema["m_relevant"] == pl.Float32
-    assert "sentences" not in r4.columns and "share" not in r4.columns
-    # A count no child holds has no mean: empty, never NaN (Cape Town has no Wikipedia sentence).
-    cape = r4.filter(cell=format(h3_int.latlng_to_cell(*CAPE, 4), "x")).row(0, named=True)
-    assert cape["m_wikipedia"] is None and cape["m_photos"] == 1.0
-    assert r4["m_wikipedia"].is_nan().sum() == 0
-    # PCA: the cell's scores (0, 0, 0.5) scaled between the display limits (2nd and 98th percentiles:
+    assert not (out / "r4.parquet").exists()
+    r5 = pl.concat(pl.read_parquet(p) for p in (out / "r5").glob("*.parquet"))
+    assert r5.schema["relevant"] == pl.Int32 and "sentences" not in r5.columns and "share" not in r5.columns
+    row = r5.filter(cell=format(h3_int.latlng_to_cell(*PARIS, 5), "x")).row(0, named=True)
+    assert row["relevant"] == 2 and row["language"] == "fra_Latn"
+    # PCA: the cell's own scores (0, 0, 0.5) scaled between the display limits (2nd and 98th percentiles:
     # ±1.92, ±0.96, ±0.96), packed as r << 16 | g << 8 | b.
     packed = row["pca_landuse"]
     assert (packed >> 16 & 255, packed >> 8 & 255, packed & 255) == (128, 128, 194)
-    # Under PCA_MIN: no colour (Cape Town has 2 texts).
-    assert r4.filter(cell=format(h3_int.latlng_to_cell(*CAPE, 4), "x"))["pca_landuse"].null_count() == 1
-    assert manifest["chunks"] and all((out / "r5" / f"{c}.parquet").is_file() for c in manifest["chunks"])
-    r5 = pl.concat(pl.read_parquet(p) for p in (out / "r5").glob("*.parquet"))
+    # Its neighbour has no scores of its own, so no colour; Cape Town has 2 texts, under PCA_MIN.
     near = r5.filter(cell=format(h3_int.latlng_to_cell(*_sibling(*PARIS), 5), "x"))
-    # A resolution-5 cell takes its resolution-4 cell's colour.
-    assert near["pca_landuse"].to_list() == [packed]
+    assert near["relevant"].to_list() == [1] and near["pca_landuse"].to_list() == [None]
+    assert r5.filter(cell=format(h3_int.latlng_to_cell(*CAPE, 5), "x"))["pca_landuse"].null_count() == 1
+    assert manifest["chunks"] and all((out / "r5" / f"{c}.parquet").is_file() for c in manifest["chunks"])
     samples = pl.concat(pl.read_parquet(p) for p in (out / "samples").glob("*.parquet"))
     paris5 = format(h3_int.latlng_to_cell(*PARIS, 5), "x")
     here = samples.filter(cell=paris5)
@@ -168,11 +158,11 @@ def test_sentence_samples_keep_a_few_per_cell_and_source():
     ]
 
 
-def test_rollup_keeps_cells_without_pca(tmp_path):
+def test_cell_table_keeps_cells_without_pca(tmp_path):
     cells, languages = space.sentence_cells(_data())
     cells = cells.with_columns(photos=pl.lit(0, pl.Int64))
-    table = space.rollup(cells, languages, {}, 3)
-    assert table.height == 2 and "pca_landuse" not in table.columns
+    table = space.cell_table(cells, languages, {})
+    assert table.height == cells.height and "pca_landuse" not in table.columns
 
 
 def test_copy_app(tmp_path):

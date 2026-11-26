@@ -141,9 +141,7 @@ def test_compute_with_places_counts_each_text_once_per_hexagon(tmp_path, monkeyp
     sentences = sorted((tmp_path / "s").glob("*.parquet"))
     embeddings = _embed(sentences, tmp_path / "e")
     rows = pl.read_parquet(tmp_path / "s" / "*.parquet")
-    hexes = geo.h3_parents(
-        geo.h3_cells(np.array([lon for _, lon in PLACES]), np.array([lat for lat, _ in PLACES]))
-    )
+    hexes = geo.h3_cells(np.array([lon for _, lon in PLACES]), np.array([lat for lat, _ in PLACES]))
     # Each text has photos at its own place and twice at the first place: texts of place 0 count once
     # in its cell, the others once in their own cell and once in place 0's.
     (lat0, lon0), n = PLACES[0], rows.height
@@ -184,12 +182,13 @@ def test_prefetched_keeps_order_whatever_the_lookahead():
 
 
 def test_cell_means_average_each_text_in_its_cell_once(tmp_path):
-    # Two sibling resolution-5 cells under one resolution-4 cell: 3 texts in one, 1 in the other. The
-    # resolution-4 cell is the mean of its four texts, each counted once, not of its two sub-cells.
+    # Two neighbouring resolution-5 cells: 3 texts in one, 1 in the other. Each cell's mean is over its own
+    # texts, each counted once.
     import h3.api.basic_int as h3_int
 
-    parent = geo.h3_parents(geo.h3_cells(np.array([2.35]), np.array([48.85])))[0]
-    near = np.array(sorted(h3_int.cell_to_children(int(parent), geo.CELL_RESOLUTION))[:2], np.uint64)
+    cell = int(geo.h3_cells(np.array([2.35]), np.array([48.85]))[0])
+    parent = h3_int.cell_to_parent(cell, 4)
+    near = np.array(sorted(h3_int.cell_to_children(parent, geo.CELL_RESOLUTION))[:2], np.uint64)
     lat, lon = np.array([h3_int.cell_to_latlng(int(c)) for c in near]).T
     rows = pl.DataFrame(
         {
@@ -203,10 +202,11 @@ def test_cell_means_average_each_text_in_its_cell_once(tmp_path):
     (tmp_path / "s").mkdir()
     rows.write_parquet(tmp_path / "s" / "x.parquet")
     cells = themes._locate([tmp_path / "s" / "x.parquet"], [""], None)
-    assert cells.ids.tolist() == [int(parent)] and cells.texts.tolist() == [4]
+    assert cells.ids.tolist() == [int(c) for c in near] and cells.texts.tolist() == [3, 1]
     vectors = np.array([[1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
     means = themes._cell_means([(rows, vectors)], cells)
-    assert means.tolist() == [[0.75, 0.25]]
+    assert means.tolist() == [[1.0, 0.0], [0.0, 1.0]]
     kept, display_means, texts = themes._display(cells, means, 1)
-    assert kept.tolist() == [parent] and display_means.tolist() == [[0.75, 0.25]] and texts.tolist() == [4]
+    assert kept.tolist() == [int(c) for c in near] and display_means.tolist() == [[1.0, 0.0], [0.0, 1.0]]
+    assert texts.tolist() == [3, 1]
     assert themes._display(cells, means, 5)[0].size == 0

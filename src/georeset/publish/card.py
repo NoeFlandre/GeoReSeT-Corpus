@@ -367,7 +367,7 @@ def _theme_values(ctx: Context, themes: Themes, step: int) -> dict[str, str]:
         "themes_unit": corpus.unit,
         "themes_selection": corpus.selection,
         "themes_placement": corpus.placement,
-        "themes_resolution": str(geo.PCA_RESOLUTION),
+        "themes_resolution": str(geo.CELL_RESOLUTION),
         "themes_folder": corpus.folder,
         "themes_files": f"{corpus.folder}/train-*.parquet".ljust(_FILES_COLUMN),
         "themes_suffix": corpus.suffix,

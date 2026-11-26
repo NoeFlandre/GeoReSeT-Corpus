@@ -163,19 +163,8 @@ def scene_sentences(scenes: pl.LazyFrame) -> pl.LazyFrame:
 
 def photo_cells(photos: pl.DataFrame) -> pl.DataFrame:
     """Each (``id``, H3 ``cell``) pair where scene ``id`` has ``photos`` (``scene_id``, ``lat``, ``lon``)."""
-    cells = geo.h3_cells(photos["lon"].to_numpy(), photos["lat"].to_numpy(), geo.PCA_RESOLUTION)
+    cells = geo.h3_cells(photos["lon"].to_numpy(), photos["lat"].to_numpy(), geo.CELL_RESOLUTION)
     return pl.DataFrame({"id": photos["scene_id"], "cell": cells}).unique().sort("id", "cell")
-
-
-def parent_sums(
-    cells: np.ndarray, values: np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Each parent of ``cells`` at the display resolution, the sum of its children's ``values`` rows, its
-    number of children, and each child's index among the parents.
-    """
-    parents, inverse = np.unique(geo.h3_parents(cells, geo.DISPLAY_RESOLUTION), return_inverse=True)
-    _, sums, sizes = group_sums(inverse, values)
-    return parents, sums, sizes, inverse
 
 
 def group_sums(groups: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

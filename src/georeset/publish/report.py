@@ -49,11 +49,10 @@ def scene_points(out: Path) -> pl.DataFrame | None:
     return stats.points(pl.scan_parquet(out / "scene_photos" / "*.parquet"))
 
 
-def display_counts(points: pl.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-    """Each display cell and the mean count of its child H3 cells (each cell counts once)."""
+def cell_counts(points: pl.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """Each H3 cell holding points, and its count."""
     counts = geo.hex_counts(points)
-    parents, sums, sizes, _ = stats.parent_sums(counts["cell"].to_numpy(), counts["n"].to_numpy()[:, None])
-    return parents, sums[:, 0] / sizes
+    return counts["cell"].to_numpy(), counts["n"].to_numpy()
 
 
 def draw_maps(data: pl.LazyFrame, out: Path) -> None:
@@ -61,13 +60,13 @@ def draw_maps(data: pl.LazyFrame, out: Path) -> None:
     maps = out / "assets"
     photos = scene_points(out)
     sentences = stats.points(data)
-    full, values = display_counts(sentences if photos is None else pl.concat([sentences, photos]))
+    full, values = cell_counts(sentences if photos is None else pl.concat([sentences, photos]))
     unit = "Sentences" if photos is None else "Sentences and scene photos"
     figures.world_map(full, values, maps / "map.png", unit)
     for name, rows in SENTENCE_MAPS.items():
-        figures.world_map(*display_counts(stats.points(data.filter(rows))), maps / name, "Sentences", full)
+        figures.world_map(*cell_counts(stats.points(data.filter(rows))), maps / name, "Sentences", full)
     if photos is not None:
-        figures.world_map(*display_counts(photos), maps / "map_scenes.png", "Photos", full)
+        figures.world_map(*cell_counts(photos), maps / "map_scenes.png", "Photos", full)
 
 
 def theme_context(work: Path, assets: Path) -> tuple[card.Themes, ...]:

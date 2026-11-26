@@ -1,15 +1,12 @@
-"""Data of the explorer Space: per-H3-cell numbers of the relevant sentences at every resolution it shows.
+"""Data of the explorer Space: per-H3-cell numbers of the relevant sentences, all at ``geo.CELL_RESOLUTION``.
 
-Resolution 5 is the data layer; each coarser cell holds the mean of its resolution-5 children (each child
-counts once), as on the card. The PCA colours are at resolution ``geo.PCA_RESOLUTION``: each resolution-5
-cell takes its parent's colour, each coarser cell the mean of its ``geo.PCA_RESOLUTION`` children's scores.
+Every count and colour is that of a resolution-5 cell, as on the card; the PCA colours are the cell's own.
 
 ``build`` writes, into ``out``:
 
-* ``r2.parquet``, ``r3.parquet``, ``r4.parquet``: every cell of those resolutions;
-* ``r5/<res-1 cell>.parquet`` and ``samples/<res-1 cell>.parquet``: resolution-5 cells, and up to
-  ``SAMPLES`` relevant sentences per source and one scene per cell, split by resolution-1 parent and
-  loaded as the map zooms in;
+* ``r5/<res-1 cell>.parquet`` and ``samples/<res-1 cell>.parquet``: the cells, and up to ``SAMPLES``
+  relevant sentences per source and one scene per cell, split by resolution-1 parent and loaded as the
+  map is explored;
 * ``manifest.json``: the dataset revision they come from, the layers' ranges, the PCA's variance.
 """
 
@@ -23,7 +20,6 @@ import polars as pl
 
 from georeset.publish import geo, stats, themes
 
-RESOLUTIONS = (2, 3, 4)  # coarser than the data layer, as the map zooms out
 CHUNK_RESOLUTION = 1  # resolution-5 cells and samples are split by parent at this resolution
 SAMPLES = 3  # relevant sentences kept per resolution-5 cell and source
 SAMPLE_CHARS = 300
@@ -67,7 +63,7 @@ def sentence_cells(data: pl.LazyFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
 
 
 def pca_cells(work: Path) -> dict[str, tuple[pl.DataFrame, np.ndarray]]:
-    """Each computed corpus' ``geo.PCA_RESOLUTION`` cell scores (``cell``, ``n``, ``pc1``..) and the colour
+    """Each computed corpus' ``geo.CELL_RESOLUTION`` cell scores (``cell``, ``n``, ``pc1``..) and the colour
     limits of the card's maps (global: 2nd and 98th percentiles)."""
     out = {}
     for corpus in themes.CORPORA.values():
@@ -94,35 +90,16 @@ def _colours(name: str, scores: pl.DataFrame, limits: np.ndarray) -> pl.DataFram
     return pl.DataFrame({"cell": kept["cell"], name: pl.Series(_packed(rgb), dtype=pl.Int32)})
 
 
-def rollup(cells: pl.DataFrame, languages: pl.DataFrame, pca: dict, resolution: int) -> pl.DataFrame:
-    """Cells of ``resolution``: summed counts and each count's mean over the children holding it.
-
-    Also the most frequent language and each PCA's colour: from the mean scores of the PCA cells under each
-    cell, or of the PCA cell holding it when ``resolution`` is finer than the PCA's.
-    """
-    parent = pl.Series("parent", geo.h3_parents(cells["cell"].to_numpy(), resolution), pl.UInt64)
-    children = cells.with_columns(parent)
-    # Means over the children holding each count: empty (null), not NaN, where none does.
-    means = [pl.col(c).filter(pl.col(c) > 0).mean().cast(pl.Float32).alias(f"m_{c}") for c in COUNTS]
-    out = children.group_by("parent").agg(
-        pl.len().alias("children"), *[pl.col(c).sum() for c in COUNTS], *means
-    )
-    parents = pl.Series(geo.h3_parents(languages["cell"].to_numpy(), resolution), dtype=pl.UInt64)
+def cell_table(cells: pl.DataFrame, languages: pl.DataFrame, pca: dict) -> pl.DataFrame:
+    """One row per cell: its counts, its most frequent language and each PCA's colour."""
     top = stats.dominant_language(
-        languages.with_columns(hexagon=parents).group_by("hexagon", "language").agg(pl.col("n").sum())
+        languages.rename({"cell": "hexagon"}).group_by("hexagon", "language").agg(pl.col("n").sum())
     )
-    out = out.join(top.rename({"hexagon": "parent"}), on="parent", how="left")
-    level = min(resolution, geo.PCA_RESOLUTION)
-    holder = pl.Series(geo.h3_parents(out["parent"].to_numpy(), level), dtype=pl.UInt64)
+    out = cells.join(top.rename({"hexagon": "cell"}), on="cell", how="left")
     for name, (scores, limits) in pca.items():
-        child = scores.with_columns(
-            cell=pl.Series(geo.h3_parents(scores["cell"].to_numpy(), level), dtype=pl.UInt64)
-        )
-        mean = child.group_by("cell").agg(pl.col("n").sum(), *[pl.col(a).mean() for a in themes.PCS])
-        colours = _colours(PCA[name], mean, limits).rename({"cell": "holder"})
-        joined = out.with_columns(holder=holder).join(colours, on="holder", how="left")
-        out = joined.drop("holder")
-    return out.rename({"parent": "cell"})
+        mean = scores.group_by("cell").agg(pl.col("n").sum(), *[pl.col(a).mean() for a in themes.PCS])
+        out = out.join(_colours(PCA[name], mean, limits), on="cell", how="left")
+    return out
 
 
 def sentence_samples(data: pl.LazyFrame) -> pl.DataFrame:
@@ -178,12 +155,9 @@ def _chunked(frame: pl.DataFrame, folder: Path) -> list[str]:
     return sorted(names)
 
 
-def _ranges(tables: dict[int, pl.DataFrame]) -> dict:
-    """Per resolution, the 99th percentile of each mean count: the top of its colour scale."""
-    return {
-        str(res): {c: float(table[f"m_{c}"].quantile(0.99) or 1) for c in COUNTS}
-        for res, table in tables.items()
-    }
+def _ranges(table: pl.DataFrame) -> dict:
+    """The 99th percentile of each count: the top of its colour scale."""
+    return {str(geo.CELL_RESOLUTION): {c: float(table[c].quantile(0.99) or 1) for c in COUNTS}}
 
 
 def _axes(work: Path, names: list[str]) -> dict:
@@ -217,11 +191,9 @@ def build(
     photo_counts = geo.hex_counts(stats.points(photos)).rename({"n": "photos"})  # scene photos per cell
     cells = counts.join(photo_counts, on="cell", how="full", coalesce=True).fill_null(0)
     pca = pca_cells(work)
-    tables = {res: rollup(cells, languages, pca, res) for res in (*RESOLUTIONS, geo.CELL_RESOLUTION)}
+    table = cell_table(cells, languages, pca)
     out.mkdir(parents=True, exist_ok=True)
-    for res in RESOLUTIONS:
-        _write(tables[res], out / f"r{res}.parquet")
-    chunks = _chunked(tables[geo.CELL_RESOLUTION], out / "r5")
+    chunks = _chunked(table, out / "r5")
     samples = sentence_samples(data).join(scene_samples(photos, scenes), on="cell", how="full", coalesce=True)
     _chunked(samples, out / "samples")
     top = languages.group_by("language").agg(pl.col("n").sum()).sort("n", descending=True).head(12)
@@ -230,10 +202,10 @@ def build(
         "revision": revision,
         "folders": commits,
         "built": datetime.now(UTC).isoformat(timespec="seconds"),
-        "resolutions": [*RESOLUTIONS, geo.CELL_RESOLUTION],
+        "resolutions": [geo.CELL_RESOLUTION],
         "chunk_resolution": CHUNK_RESOLUTION,
         "chunks": chunks,
-        "ranges": _ranges(tables),
+        "ranges": _ranges(table),
         "languages": top["language"].to_list(),
         "pca": _axes(work, list(pca)),
         "pca_min": PCA_MIN,

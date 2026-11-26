@@ -26,12 +26,12 @@
     <details id="about">
       <summary>How to read this</summary>
       <p>Only the sentences labelled relevant to land use (<code>landuse</code> true) are shown, from every source
-      or one. Every number is counted per H3 cell of resolution 5 (about 250&nbsp;km²). Zoomed out, each larger cell
-      shows the <em>mean</em> of its resolution-5 cells, so every place counts once however much is written there.
-      Zoom in to reach resolution 5. Click a cell for its numbers, sample sentences and a scene.</p>
-      <p>The <em>what places talk about</em> layers colour each resolution-4 cell by the mean text embedding of its
-      texts on three principal components, as on the dataset card: similar colours, similar descriptions. Finer
-      cells take their resolution-4 cell's colour.</p>
+      or one. Every number is counted per H3 cell of resolution 5 (about 250&nbsp;km²), each cell on its own: there
+      are no zoom levels, no coarser cells and no averaging over other cells. Click a cell for its numbers, sample
+      sentences and a scene.</p>
+      <p>The <em>what places talk about</em> layers colour each H3 cell of resolution 5 with its own colour, from the
+      mean text embedding of its texts on three principal components, as on the dataset card: similar colours,
+      similar descriptions.</p>
     </details>
   </div>
   <footer id="source" class="muted"></footer>

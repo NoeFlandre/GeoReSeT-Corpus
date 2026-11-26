@@ -40,8 +40,8 @@ def test_h3_cells_and_parents():
     assert cells.tolist() == [
         h3.str_to_int(h3.latlng_to_cell(a, o, 5)) for a, o in zip(lat, lon, strict=True)
     ]
-    parents = geo.h3_parents(cells)
-    assert parents.tolist() == [h3_int.cell_to_parent(int(c), geo.DISPLAY_RESOLUTION) for c in cells]
+    parents = geo.h3_parents(cells, 3)
+    assert parents.tolist() == [h3_int.cell_to_parent(int(c), 3) for c in cells]
 
 
 def test_equal_earth():
@@ -70,8 +70,9 @@ def test_cell_rings_split_cells_across_180():
 
 def test_land_cells():
     land = geo.land_cells()
-    assert _cell(48.85, 2.35, 4) in land and _cell(-10.0, -140.0, 4) not in land
-    assert _cell(-80.0, 0.0, 4) not in land  # Antarctica is south of the maps
+    res = geo.CELL_RESOLUTION
+    assert _cell(48.85, 2.35, res) in land and _cell(-10.0, -140.0, res) not in land
+    assert _cell(-80.0, 0.0, res) not in land  # Antarctica is south of the maps
     assert land.dtype == np.uint64 and np.all(np.diff(land.astype(np.int64)) != 0)
 
 
