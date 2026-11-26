@@ -24,7 +24,7 @@ MEMORY_GB = 16  # NLLB 3.3B in float16 and its batches
 MODEL_DIR = "model"
 
 
-def release(repo: str = REPO, tag: str = RELEASE) -> str:
+def release_commit(repo: str = REPO, tag: str = RELEASE) -> str:
     """The commit of the release, pinned for every step."""
     return hub.revision_of(repo, tag)
 
@@ -65,7 +65,7 @@ def _plan_in_process(unit: str, rev: str, scratch: Path) -> None:  # pragma: no 
 
 def plan_all(scratch: Path, workers: int, only: list[str] | None = None) -> None:  # pragma: no cover
     """Plan every unit of the release (or ``only`` those), ``workers`` at a time (Grid'5000 CPU job)."""
-    rev = release()
+    rev = release_commit()
     bucket = Bucket()
     bucket.create()
     units = only or plan.units(hub.list_files(REPO, rev))
@@ -131,7 +131,7 @@ def summary(bucket: Bucket, scratch: Path, rev: str) -> dict:
 
 def assemble_all(out: Path, work: Path, scratch: Path) -> None:  # pragma: no cover (Grid'5000 CPU job)
     """Copy the release into ``out``, add the translation columns, write ``work/translation.json``."""
-    rev = release()
+    rev = release_commit()
     bucket = Bucket()
     if bucket.files("work/"):
         raise RuntimeError("work shards are left: translation is not finished")

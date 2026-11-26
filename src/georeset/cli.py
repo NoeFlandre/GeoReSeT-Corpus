@@ -29,6 +29,11 @@ Downloads = Annotated[int, typer.Option(help="Parallel downloads.")]
 Regions = Annotated[list[str] | None, typer.Option("--region", help="Geofabrik stems; default: all.")]
 
 
+def _bucket(bucket_id: str) -> Bucket:
+    """The Hub bucket ``bucket_id``, where a job's working files are kept."""
+    return Bucket(bucket_id)
+
+
 def _echo_card(work: Path, out: Path, repo: str = REPO_ID) -> None:
     """Write the dataset card of ``out`` for ``repo``, and print its path."""
     typer.echo(report.build_card(pipeline.Layout(work, out), repo, CODE_URL))
@@ -282,13 +287,13 @@ EMBED_BUCKET = embedding.BUCKET
 @app.command("embed-plan")
 def embed_plan(scratch: Scratch = Path("/tmp/georeset-embed-plan")) -> None:
     """Upload the English texts to embed to the bucket as work shards (CPU job)."""
-    typer.echo(f"{embedding.plan(scratch, Bucket(EMBED_BUCKET))} texts to embed")
+    typer.echo(f"{embedding.plan(scratch, _bucket(EMBED_BUCKET))} texts to embed")
 
 
 @app.command("embed-pending")
 def embed_pending() -> None:
     """Work items for g5k-dispatch: the work shards left in the bucket."""
-    typer.echo(embedding.pending(Bucket(EMBED_BUCKET)))
+    typer.echo(embedding.pending(_bucket(EMBED_BUCKET)))
 
 
 @app.command("embed-work")
@@ -308,7 +313,7 @@ def embed_assemble(
 ) -> None:
     """Add the vectors to the release as embeddings_en, check them, write the card, open a pull request
     (CPU job)."""
-    embedding.assemble(out, work, Bucket(EMBED_BUCKET))
+    embedding.assemble(out, work, _bucket(EMBED_BUCKET))
     _echo_card(work, out)
     typer.echo(embedding.propose(out))
 
@@ -316,7 +321,7 @@ def embed_assemble(
 @app.command("embed-finalize")
 def embed_finalize(pr: Annotated[int, typer.Option(help="Number of the reviewed pull request.")]) -> None:
     """Merge the English vectors' pull request, tag v1.3, delete the bucket."""
-    embedding.finalize(pr, Bucket(EMBED_BUCKET))
+    embedding.finalize(pr, _bucket(EMBED_BUCKET))
 
 
 PCA_BUCKET = pca.BUCKET
@@ -329,7 +334,7 @@ def pca_compute(
 ) -> None:
     """PCA of the multilingual and the English (original and translated) relevant sentences; the outputs
     go to the bucket (CPU job)."""
-    pca.compute(scratch, work, Bucket(PCA_BUCKET))
+    pca.compute(scratch, work, _bucket(PCA_BUCKET))
 
 
 @app.command("pca-propose")
@@ -338,10 +343,10 @@ def pca_propose(
     work: Work = Path("/tmp/georeset-pca-work"),
 ) -> None:
     """The card with the two maps, and a pull request with only the figures and the card (CPU job)."""
-    typer.echo(pca.propose(out, work, Bucket(PCA_BUCKET)))
+    typer.echo(pca.propose(out, work, _bucket(PCA_BUCKET)))
 
 
 @app.command("pca-finalize")
 def pca_finalize(pr: Annotated[int, typer.Option(help="Number of the reviewed pull request.")]) -> None:
     """Merge the PCA pull request, tag v1.4, delete the bucket."""
-    pca.finalize(pr, Bucket(PCA_BUCKET))
+    pca.finalize(pr, _bucket(PCA_BUCKET))
