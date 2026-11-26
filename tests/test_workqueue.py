@@ -1,4 +1,5 @@
 import io
+import json
 
 import polars as pl
 import pytest
@@ -145,6 +146,13 @@ def test_run_measures_each_shard_by_its_own_duration(bucket, tmp_path):
     _bucket_with(bucket, {"a/00000": [(b"k", "fra_Latn", "x")], "a/00001": [(b"j", "fra_Latn", "y")]})
     run = workqueue.Worker(bucket, _upper, tmp_path, 0, budget_s=100, clock=Clock(1.0))
     assert run.run() == 2
+
+
+def test_pending_reports_the_dispatch_item_of_the_bucket(bucket):
+    bucket.data.update({"work/00001.parquet": b"", "results/00000.parquet": b""})
+    assert json.loads(workqueue.pending(bucket, key="nllb", memory_gb=16)) == [
+        {"key": "nllb", "memory_gb": 16, "remaining": 1, "fp16_ok": True, "done": 1}
+    ]
 
 
 def test_worker_writes_arrow_tables_as_they_are(bucket, tmp_path):

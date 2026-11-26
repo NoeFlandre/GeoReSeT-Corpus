@@ -42,7 +42,7 @@ def test_write_translated_slices_the_rows_into_embeddings_en_shards(tmp_path, mo
         }
     )
     monkeypatch.setattr(pca.embedding, "selection", lambda data: rows.lazy())
-    assert pca.write_translated(rows.lazy(), tmp_path / "t") == 2
+    pca.write_translated(rows.lazy(), tmp_path / "t")
     names = sorted(p.name for p in (tmp_path / "t").iterdir())
     assert names == ["train-00000-of-00002.parquet", "train-00001-of-00002.parquet"]
     assert pl.read_parquet(tmp_path / "t" / names[0])["id"].to_list() == ["a", "b"]

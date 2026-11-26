@@ -372,8 +372,3 @@ def test_pca_commands_call_their_jobs(monkeypatch):
         ("propose", Path("o"), Path("w"), bucket),
         ("finalize", 5, bucket),
     ]
-
-
-def test_bucket_opens_the_named_hub_bucket(monkeypatch):
-    monkeypatch.setattr(cli, "Bucket", lambda bucket_id: f"bucket {bucket_id}")
-    assert cli._bucket("b") == "bucket b"

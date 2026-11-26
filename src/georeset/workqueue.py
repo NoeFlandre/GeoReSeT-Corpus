@@ -5,6 +5,7 @@ then deletes the work shard and its claim, which frees their storage at once. A 
 ``CLAIM_S`` belongs to a job that died; its shard is taken again.
 """
 
+import json
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -43,6 +44,21 @@ def choose(work: list[str], taken: set[str], offset: int) -> str | None:
 def may_start(elapsed: float, longest: float, budget: float) -> bool:
     """Start another shard only if one as long as the longest so far still fits in the budget."""
     return elapsed + longest < budget
+
+
+def pending(bucket: Bucket, key: str, memory_gb: int) -> str:
+    """The dispatcher's work item (``g5k-dispatch``) of a job: the work shards left and the results done.
+
+    Results only grow, so they measure progress; planning may still add work shards.
+    """
+    item = {
+        "key": key,
+        "memory_gb": memory_gb,
+        "remaining": len(bucket.files("work/")),
+        "fp16_ok": True,  # float16 where the GPU has it, else float32 (see ``embedding.torch_dtype``)
+        "done": len(bucket.files("results/")),
+    }
+    return json.dumps([item])
 
 
 @dataclass

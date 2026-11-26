@@ -38,9 +38,9 @@ def h3_parents(cells: np.ndarray, resolution: int = DISPLAY_RESOLUTION) -> np.nd
     return np.fromiter((h3_int.cell_to_parent(int(c), resolution) for c in cells), np.uint64, len(cells))
 
 
-def hex_counts(points: pl.DataFrame, resolution: int = CELL_RESOLUTION) -> pl.DataFrame:
-    """Sum ``n`` per H3 ``cell`` (64-bit id) of each (lat, lon) point."""
-    cells = h3_cells(points["lon"].to_numpy(), points["lat"].to_numpy(), resolution)
+def hex_counts(points: pl.DataFrame) -> pl.DataFrame:
+    """Sum ``n`` per H3 ``cell`` (64-bit id, at ``CELL_RESOLUTION``) of each (lat, lon) point."""
+    cells = h3_cells(points["lon"].to_numpy(), points["lat"].to_numpy(), CELL_RESOLUTION)
     counts = pl.DataFrame({"cell": cells, "n": points["n"]}, schema={"cell": pl.UInt64, "n": pl.Int64})
     return counts.group_by("cell").agg(pl.col("n").sum())
 

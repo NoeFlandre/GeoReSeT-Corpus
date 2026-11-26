@@ -13,8 +13,11 @@ def _cell(lat: float, lon: float, resolution: int = 5) -> int:
 
 def test_hex_counts_sums_points_per_cell():
     pts = pl.DataFrame({"lat": [48.85, 48.8501, -33.9], "lon": [2.35, 2.3501, 18.4], "n": [2, 3, 7]})
-    out = geo.hex_counts(pts, 3).sort("n")
-    assert out.rows() == [(_cell(48.85, 2.35, 3), 5), (_cell(-33.9, 18.4, 3), 7)]
+    out = geo.hex_counts(pts).sort("n")
+    assert out.rows() == [
+        (_cell(48.85, 2.35, geo.CELL_RESOLUTION), 5),
+        (_cell(-33.9, 18.4, geo.CELL_RESOLUTION), 7),
+    ]
     assert out.schema == {"cell": pl.UInt64, "n": pl.Int64}
 
 

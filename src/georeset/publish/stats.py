@@ -60,9 +60,14 @@ def by_source(data: pl.LazyFrame) -> pl.DataFrame:
     )
 
 
+def _ranked(rows: pl.LazyFrame, key: str) -> pl.DataFrame:
+    """Rows per ``key`` in column ``sentences``, largest first, ties by ``key``."""
+    counts = _collect(rows.group_by(key).agg(sentences=pl.len().cast(pl.Int64)))
+    return counts.sort("sentences", key, descending=[True, False])
+
+
 def top_languages(data: pl.LazyFrame, n: int) -> pl.DataFrame:
-    counts = _collect(data.group_by("language").agg(sentences=pl.len().cast(pl.Int64)))
-    return counts.sort("sentences", "language", descending=[True, False]).head(n)
+    return _ranked(data, "language").head(n)
 
 
 def by_continent(data: pl.LazyFrame) -> pl.DataFrame:
@@ -156,19 +161,19 @@ def scene_sentences(scenes: pl.LazyFrame) -> pl.LazyFrame:
     return rows.sort("id").unique("text", keep="first", maintain_order=True)
 
 
-def photo_cells(photos: pl.DataFrame, resolution: int = geo.PCA_RESOLUTION) -> pl.DataFrame:
+def photo_cells(photos: pl.DataFrame) -> pl.DataFrame:
     """Each (``id``, H3 ``cell``) pair where scene ``id`` has ``photos`` (``scene_id``, ``lat``, ``lon``)."""
-    cells = geo.h3_cells(photos["lon"].to_numpy(), photos["lat"].to_numpy(), resolution)
+    cells = geo.h3_cells(photos["lon"].to_numpy(), photos["lat"].to_numpy(), geo.PCA_RESOLUTION)
     return pl.DataFrame({"id": photos["scene_id"], "cell": cells}).unique().sort("id", "cell")
 
 
 def parent_sums(
-    cells: np.ndarray, values: np.ndarray, resolution: int = geo.DISPLAY_RESOLUTION
+    cells: np.ndarray, values: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Each parent of ``cells`` at ``resolution`` (the display layer by default), the sum of its children's
-    ``values`` rows, its number of children, and each child's index among the parents.
+    """Each parent of ``cells`` at the display resolution, the sum of its children's ``values`` rows, its
+    number of children, and each child's index among the parents.
     """
-    parents, inverse = np.unique(geo.h3_parents(cells, resolution), return_inverse=True)
+    parents, inverse = np.unique(geo.h3_parents(cells, geo.DISPLAY_RESOLUTION), return_inverse=True)
     _, sums, sizes = group_sums(inverse, values)
     return parents, sums, sizes, inverse
 
@@ -226,8 +231,7 @@ def dominant_language(counts: pl.DataFrame) -> pl.DataFrame:
 
 def translation_kinds(rows: pl.LazyFrame) -> pl.DataFrame:
     """Rows per ``translation`` kind, largest first."""
-    counts = _collect(rows.group_by("translation").agg(sentences=pl.len().cast(pl.Int64)))
-    return counts.sort("sentences", "translation", descending=[True, False])
+    return _ranked(rows, "translation")
 
 
 def translation_flags(rows: pl.LazyFrame) -> pl.DataFrame:

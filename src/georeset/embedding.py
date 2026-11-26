@@ -64,7 +64,8 @@ def plan(scratch: Path, bucket: Bucket) -> int:
     """Upload the work shards and ``plan.json`` (the mark that planning is done); returns the texts."""
     bucket.create()
     if bucket.files("plan.json"):
-        return json.loads(_get(bucket, "plan.json", scratch).read_text())["texts"]
+        bucket.get([("plan.json", scratch / "plan.json")])
+        return json.loads((scratch / "plan.json").read_text())["texts"]
     rev = hub.revision_of(REPO, RELEASE)
     hub.snapshot(REPO, rev, scratch / "release", ["data/*"])
     rows = selection(pl.scan_parquet(scratch / "release" / "data" / "*" / "*" / "*.parquet"))
@@ -76,22 +77,9 @@ def plan(scratch: Path, bucket: Bucket) -> int:
     return texts.height
 
 
-def _get(bucket: Bucket, path: str, scratch: Path) -> Path:
-    local = scratch / path
-    bucket.get([(path, local)])
-    return local
-
-
 def pending(bucket: Bucket) -> str:
-    """The dispatcher's work items (``g5k-dispatch``): one, the work shards left and the shards done."""
-    item = {
-        "key": "embed",
-        "memory_gb": MEMORY_GB,
-        "remaining": len(bucket.files("work/")),
-        "fp16_ok": True,  # a GPU without bf16 computes in float32 instead (see ``torch_dtype``)
-        "done": len(bucket.files("results/")),
-    }
-    return json.dumps([item])
+    """The dispatcher's work item (``g5k-dispatch``) of the embedding job."""
+    return workqueue.pending(bucket, key="embed", memory_gb=MEMORY_GB)
 
 
 def torch_dtype(dtype: str | None) -> str:

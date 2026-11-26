@@ -27,14 +27,13 @@ CORPORA = (themes.LANDUSE, themes.ENGLISH_POOL)  # the two maps, in the order of
 KEPT_ON_PR = ("assets", "README.md")  # the others are the release's, unchanged
 
 
-def write_translated(data: pl.LazyFrame, out: Path) -> int:
-    """The English translations, in the shards and order of ``embeddings_en``; returns their number."""
+def write_translated(data: pl.LazyFrame, out: Path) -> None:
+    """The English translations, in the shards and order of ``embeddings_en``."""
     rows = embedding.selection(data).collect(engine="streaming")
     shards = -(-rows.height // embedding.ROWS_PER_SHARD)
     out.mkdir(parents=True, exist_ok=True)
     for i, start in enumerate(range(0, rows.height, embedding.ROWS_PER_SHARD)):
         rows.slice(start, embedding.ROWS_PER_SHARD).write_parquet(out / themes.shard_name(i, shards))
-    return shards
 
 
 def sentence_shards(
@@ -87,14 +86,10 @@ def fetch_themes(work: Path, bucket: Bucket) -> None:
         bucket.get([(path, work / "themes" / corpus.name / Path(path).name) for path in files])
 
 
-def card_context(out: Path, work: Path) -> None:  # pragma: no cover (Grid'5000 CPU job)
-    """The release (data, and the copied folders the card counts) with the context its card keeps."""
-    extras.fetch_release(out, work, RELEASE, (*extras.EXTRAS_FOLDERS, "embeddings_en"))
-
-
 def propose(out: Path, work: Path, bucket: Bucket) -> str:  # pragma: no cover (Grid'5000 CPU job)
     """The card with the maps, and a pull request with only the figures and the card."""
-    card_context(out, work)
+    # The release, with the copied folders the card counts and the context its card keeps.
+    extras.fetch_release(out, work, RELEASE, (*extras.EXTRAS_FOLDERS, "embeddings_en"))
     fetch_themes(work, bucket)
     report.build_card(Layout(work, out), REPO, CODE_URL)
     drop = [path.name for path in out.iterdir() if path.name not in KEPT_ON_PR]

@@ -47,25 +47,23 @@ def _cell_ids(frame: pl.DataFrame) -> pl.Series:
     return pl.Series("cell", geo.h3_cells(frame["lon"].to_numpy(), frame["lat"].to_numpy()), pl.UInt64)
 
 
+def _with_cells(places: pl.DataFrame) -> pl.DataFrame:
+    """``places`` (with ``lat`` and ``lon``) and each place's ``cell``, the same for rows at one spot."""
+    located = places.unique(["lat", "lon"]).select("lat", "lon")
+    located = located.with_columns(_cell_ids(located))
+    return places.join(located, on=["lat", "lon"])
+
+
 def sentence_cells(data: pl.LazyFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Per resolution-5 cell: relevant sentences, in total and per source; and (cell, language) counts."""
     sums = [pl.len().alias("relevant")]
     sums += [(pl.col("source") == source).sum().alias(name) for name, source in SOURCES.items()]
     relevant = data.filter(pl.col("landuse"))
     places = relevant.group_by("lat", "lon", "language").agg(sums).collect(engine="streaming")
-    located = places.unique(["lat", "lon"]).select("lat", "lon")
-    located = located.with_columns(_cell_ids(located))
-    placed = places.join(located, on=["lat", "lon"]).drop("lat", "lon")
+    placed = _with_cells(places).drop("lat", "lon")
     languages = placed.group_by("cell", "language").agg(n=pl.col("relevant").sum())
     counts = placed.drop("language").group_by("cell").agg(pl.all().sum())
     return counts.with_columns(pl.col(c).cast(pl.Int64) for c in counts.columns if c != "cell"), languages
-
-
-def photo_cells(photos: pl.LazyFrame) -> pl.DataFrame:
-    """Scene photos per resolution-5 cell."""
-    points = stats.points(photos)
-    counts = pl.DataFrame({"cell": _cell_ids(points), "photos": points["n"]})
-    return counts.group_by("cell").agg(pl.col("photos").sum())
 
 
 def pca_cells(work: Path) -> dict[str, tuple[pl.DataFrame, np.ndarray]]:
@@ -134,8 +132,7 @@ def sentence_samples(data: pl.LazyFrame) -> pl.DataFrame:
         "id", "text", "source", "url", "language", "lat", "lon"
     )
     rows = relevant.collect(engine="streaming")
-    located = rows.unique(["lat", "lon"]).select("lat", "lon")
-    rows = rows.join(located.with_columns(_cell_ids(located)), on=["lat", "lon"])
+    rows = _with_cells(rows)
     pick = pl.col("id").hash().rank("ordinal").over("cell", "source")
     return (
         rows.filter(pick <= SAMPLES)
@@ -217,7 +214,8 @@ def build(
     then, which the app compares with the dataset's to tell when the data (not just the card) has changed.
     """
     counts, languages = sentence_cells(data)
-    cells = counts.join(photo_cells(photos), on="cell", how="full", coalesce=True).fill_null(0)
+    photo_counts = geo.hex_counts(stats.points(photos)).rename({"n": "photos"})  # scene photos per cell
+    cells = counts.join(photo_counts, on="cell", how="full", coalesce=True).fill_null(0)
     pca = pca_cells(work)
     tables = {res: rollup(cells, languages, pca, res) for res in (*RESOLUTIONS, geo.CELL_RESOLUTION)}
     out.mkdir(parents=True, exist_ok=True)

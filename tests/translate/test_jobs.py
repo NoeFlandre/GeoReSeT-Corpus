@@ -8,9 +8,14 @@ import pytest
 from georeset.translate import assemble, jobs, plan, route
 
 
-def test_release_commit_resolves_the_tag(monkeypatch):
-    monkeypatch.setattr(jobs.hub, "revision_of", lambda repo, ref: f"{repo}@{ref}")
-    assert jobs.release_commit() == "NoeFlandre/GeoReSeT-Corpus@v1.0"
+def _pinned_release(monkeypatch):
+    """The Hub is asked for the commit of the release tag, which is ``sha``."""
+
+    def revision_of(repo, ref):
+        assert (repo, ref) == (jobs.REPO, jobs.RELEASE)
+        return "sha"
+
+    monkeypatch.setattr(jobs.hub, "revision_of", revision_of)
 
 
 def _shard(path, rows):
@@ -203,7 +208,7 @@ def test_plan_all_plans_the_units_not_planned_yet(bucket, tmp_path, monkeypatch)
     bucket.data["plan/deu_Latn.json"] = b"{}"
     done = []
     _Pool.made = []
-    monkeypatch.setattr(jobs, "release_commit", lambda: "sha")
+    _pinned_release(monkeypatch)
     monkeypatch.setattr(jobs, "Bucket", lambda: bucket)
     monkeypatch.setattr(jobs, "ProcessPoolExecutor", _Pool)
     listed = []
@@ -247,7 +252,7 @@ def test_translate_runs_a_worker_with_the_downloaded_model(tmp_path, monkeypatch
 
 def test_assemble_all_needs_every_shard_translated(bucket, tmp_path, monkeypatch):
     bucket.data["work/a/0.parquet"] = b""
-    monkeypatch.setattr(jobs, "release_commit", lambda: "sha")
+    _pinned_release(monkeypatch)
     monkeypatch.setattr(jobs, "Bucket", lambda: bucket)
     monkeypatch.setattr(jobs.fuse, "fetch_corpus", lambda *args: pytest.fail("fetched"))
     with pytest.raises(RuntimeError, match=r"^work shards are left: translation is not finished$"):
@@ -258,7 +263,7 @@ def test_assemble_all_assembles_each_unit_then_writes_the_summary(bucket, tmp_pa
     out, work, scratch = tmp_path / "out", tmp_path / "work", tmp_path / "scratch"
     work.mkdir()
     calls, printed = [], []
-    monkeypatch.setattr(jobs, "release_commit", lambda: "sha")
+    _pinned_release(monkeypatch)
     monkeypatch.setattr(jobs, "Bucket", lambda: bucket)
     monkeypatch.setattr(jobs.fuse, "fetch_corpus", lambda *args: calls.append(("fetch", *args)))
     monkeypatch.setattr(

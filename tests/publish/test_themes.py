@@ -14,6 +14,11 @@ PLACES = [(48.8, 2.3), (-33.9, 18.4), (35.7, 139.7), (40.7, -74.0), (-22.9, -43.
 LANGUAGES = ["fra_Latn", "afr_Latn", "jpn_Jpan", "eng_Latn", "por_Latn"]
 
 
+def _shards(n: int) -> card.Corpus:
+    """LANDUSE cut into ``n`` shards."""
+    return replace(themes.LANDUSE, shards=n)
+
+
 def _data(per_place: int) -> pl.LazyFrame:
     rng = np.random.default_rng(0)
     rows = []
@@ -44,7 +49,7 @@ def _embed(sentences, out):
 
 @pytest.fixture
 def computed(tmp_path, monkeypatch):
-    n = themes.write_sentences(_data(12), tmp_path / "sentences", shards=3)
+    n = themes.write_sentences(_data(12), tmp_path / "sentences", _shards(3))
     sentences = sorted((tmp_path / "sentences").glob("*.parquet"))
     embeddings = _embed(sentences, tmp_path / "embeddings")
     corpus = replace(themes.LANDUSE, min_texts=10)
@@ -53,7 +58,7 @@ def computed(tmp_path, monkeypatch):
 
 
 def test_write_sentences_shards_distinct_relevant_rows(tmp_path):
-    n = themes.write_sentences(_data(12), tmp_path, shards=4)
+    n = themes.write_sentences(_data(12), tmp_path, _shards(4))
     assert themes.write_sentences(_data(2), tmp_path / "all") == 10
     assert len(list((tmp_path / "all").glob("*.parquet"))) == themes.LANDUSE.shards
     assert n == 60
@@ -68,7 +73,7 @@ def test_write_sentences_shards_distinct_relevant_rows(tmp_path):
 
 
 def test_read_vectors(tmp_path):
-    themes.write_sentences(_data(2), tmp_path / "s", shards=1)
+    themes.write_sentences(_data(2), tmp_path / "s", _shards(1))
     (path,) = _embed(sorted((tmp_path / "s").glob("*.parquet")), tmp_path / "e")
     ids, vectors = themes.read_vectors(str(path))
     assert ids.to_list() == pl.read_parquet(path)["id"].to_list()
@@ -99,7 +104,7 @@ def test_compute(computed):
 
 
 def test_compute_rejects_mismatched_shards(tmp_path):
-    themes.write_sentences(_data(2), tmp_path / "s", shards=2)
+    themes.write_sentences(_data(2), tmp_path / "s", _shards(2))
     sentences = sorted((tmp_path / "s").glob("*.parquet"))
     embeddings = _embed(sentences, tmp_path / "e")
     with pytest.raises(ValueError, match="row for row"):
@@ -132,7 +137,7 @@ def test_render_scenes_names_files(computed):
 
 
 def test_compute_with_places_counts_each_text_once_per_hexagon(tmp_path, monkeypatch):
-    themes.write_sentences(_data(12), tmp_path / "s", shards=2)
+    themes.write_sentences(_data(12), tmp_path / "s", _shards(2))
     sentences = sorted((tmp_path / "s").glob("*.parquet"))
     embeddings = _embed(sentences, tmp_path / "e")
     rows = pl.read_parquet(tmp_path / "s" / "*.parquet")
@@ -159,17 +164,17 @@ def test_compute_with_places_counts_each_text_once_per_hexagon(tmp_path, monkeyp
 
 
 def test_pairs_keep_only_one_language_with_its_vectors(tmp_path):
-    themes.write_sentences(_data(4), tmp_path / "s", shards=2)
+    themes.write_sentences(_data(4), tmp_path / "s", _shards(2))
     sentences = sorted((tmp_path / "s").glob("*.parquet"))
     embeddings = _embed(sentences, tmp_path / "e")
-    pairs = list(themes._pairs(sentences, embeddings, None, ["eng_Latn"] * len(sentences)))
+    pairs = list(themes._pairs(sentences, embeddings, ["eng_Latn"] * len(sentences)))
     rows = pl.concat([rows for rows, _ in pairs])
     assert rows["language"].unique().to_list() == ["eng_Latn"] and rows.height == 4
     for rows, vectors in pairs:
         assert len(vectors) == rows.height
         # Place 3 (English) has the longest vectors, 4 times the unit one plus noise.
         assert np.all(np.linalg.norm(vectors, axis=1) > 3.5)
-    assert sum(len(v) for _, v in themes._pairs(sentences, embeddings, None, [""] * len(sentences))) == 20
+    assert sum(len(v) for _, v in themes._pairs(sentences, embeddings, [""] * len(sentences))) == 20
 
 
 def test_prefetched_keeps_order_whatever_the_lookahead():

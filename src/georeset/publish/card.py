@@ -373,7 +373,6 @@ def _theme_values(ctx: Context, themes: Themes, step: int) -> dict[str, str]:
         "themes_suffix": corpus.suffix,
         "themes_legend": legend(themes),
         "themes_step": str(step),
-        "code_url": ctx.code_url,
     }
 
 
@@ -488,9 +487,13 @@ def english_parts(ctx: Context) -> dict[str, str]:
 
 def _pca_table(theme: Themes) -> str:
     """Each axis: its colour and variance."""
-    rows = ["| Axis | Variance |", "|---|---:|"]
-    rows += [f"| {i} ({_COLOURS[i - 1]}) | {pct(share)} |" for i, share in enumerate(theme.explained, 1)]
-    return "\n".join(rows)
+    axes = pl.DataFrame(
+        {
+            "axis": [f"{i} ({_COLOURS[i - 1]})" for i in range(1, len(theme.explained) + 1)],
+            "share": list(theme.explained),
+        }
+    )
+    return table(axes, {"axis": ("Axis", str), "share": ("Variance", pct)})
 
 
 def _pca_block(theme: Themes) -> str:

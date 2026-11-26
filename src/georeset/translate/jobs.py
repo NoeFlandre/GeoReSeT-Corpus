@@ -24,11 +24,6 @@ MEMORY_GB = 16  # NLLB 3.3B in float16 and its batches
 MODEL_DIR = "model"
 
 
-def release_commit(repo: str = REPO, tag: str = RELEASE) -> str:
-    """The commit of the release, pinned for every step."""
-    return hub.revision_of(repo, tag)
-
-
 def planned(bucket: Bucket) -> set[str]:
     return {Path(p).stem for p in bucket.files("plan/")}
 
@@ -65,7 +60,7 @@ def _plan_in_process(unit: str, rev: str, scratch: Path) -> None:  # pragma: no 
 
 def plan_all(scratch: Path, workers: int, only: list[str] | None = None) -> None:  # pragma: no cover
     """Plan every unit of the release (or ``only`` those), ``workers`` at a time (Grid'5000 CPU job)."""
-    rev = release_commit()
+    rev = hub.revision_of(REPO, RELEASE)  # the release's commit, pinned for every step
     bucket = Bucket()
     bucket.create()
     units = only or plan.units(hub.list_files(REPO, rev))
@@ -79,10 +74,7 @@ def pending(bucket: Bucket) -> str:
 
     Planning may still add work shards; the result shards only grow, so they measure progress.
     """
-    remaining = len(bucket.files("work/"))
-    done = len(bucket.files("results/"))
-    item = {"key": "nllb", "memory_gb": MEMORY_GB, "remaining": remaining, "fp16_ok": True, "done": done}
-    return json.dumps([item])
+    return workqueue.pending(bucket, key="nllb", memory_gb=MEMORY_GB)
 
 
 def fetch_model(bucket: Bucket, scratch: Path) -> Path:
@@ -131,7 +123,7 @@ def summary(bucket: Bucket, scratch: Path, rev: str) -> dict:
 
 def assemble_all(out: Path, work: Path, scratch: Path) -> None:  # pragma: no cover (Grid'5000 CPU job)
     """Copy the release into ``out``, add the translation columns, write ``work/translation.json``."""
-    rev = release_commit()
+    rev = hub.revision_of(REPO, RELEASE)  # the release's commit, pinned for every step
     bucket = Bucket()
     if bucket.files("work/"):
         raise RuntimeError("work shards are left: translation is not finished")

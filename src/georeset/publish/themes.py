@@ -83,11 +83,9 @@ def shard_name(i: int, shards: int) -> str:
     return f"train-{i:05d}-of-{shards:05d}.parquet"
 
 
-def write_sentences(
-    data: pl.LazyFrame, out: Path, corpus: card.Corpus = LANDUSE, shards: int | None = None
-) -> int:
+def write_sentences(data: pl.LazyFrame, out: Path, corpus: card.Corpus = LANDUSE) -> int:
     """Write a corpus' distinct texts (``id``, ``text``, ``language``, ``lat``, ``lon``) in its shards."""
-    shards = shards or corpus.shards
+    shards = corpus.shards
     rows = _SELECT[corpus.name](data).collect(engine="streaming")
     out.mkdir(parents=True, exist_ok=True)
     size = -(-rows.height // shards)
@@ -96,9 +94,9 @@ def write_sentences(
     return rows.height
 
 
-def read_vectors(source, filesystem=None) -> tuple[pl.Series, np.ndarray]:
+def read_vectors(source) -> tuple[pl.Series, np.ndarray]:
     """An embeddings shard: its ``id`` and its vectors as a float16 matrix (summed in float64 by chunks)."""
-    table = pq.read_table(source, columns=["id", "vector"], filesystem=filesystem)
+    table = pq.read_table(source, columns=["id", "vector"])
     column = table.column("vector").combine_chunks()
     vectors = column.values.to_numpy(zero_copy_only=False).reshape(len(column), -1)
     ids = pl.Series("id", table.column("id").combine_chunks())
@@ -124,14 +122,14 @@ def _rows(text: Path, language: str) -> pl.DataFrame:
 
 
 def _pairs(
-    sentences: list[Path], embeddings: list, filesystem, languages: list[str]
+    sentences: list[Path], embeddings: list, languages: list[str]
 ) -> Iterator[tuple[pl.DataFrame, np.ndarray]]:
     """Each sentence shard and the vectors of its rows; only the rows in its ``language`` if given."""
 
     def load(triple: tuple[Path, object, str]) -> tuple[pl.DataFrame, np.ndarray]:
         text, source, language = triple
         rows = pl.read_parquet(text)
-        ids, vectors = read_vectors(source, filesystem)
+        ids, vectors = read_vectors(source)
         if not rows["id"].equals(ids, check_names=False):
             raise ValueError(f"{source} does not match {text} row for row")
         if language:
@@ -206,7 +204,6 @@ def compute(
     work: Path,
     corpus: card.Corpus = LANDUSE,
     photos: pl.DataFrame | None = None,
-    filesystem=None,
     languages: list[str] | None = None,
 ) -> Path:
     """Each cell's mean vector, then the PCA of the cells with enough texts, in ``work/themes/<corpus>``.
@@ -221,7 +218,7 @@ def compute(
     """
     languages = languages or [corpus.only_language] * len(sentences)
     cells = _locate(sentences, languages, photos)
-    means = _cell_means(_pairs(sentences, embeddings, filesystem, languages), cells)
+    means = _cell_means(_pairs(sentences, embeddings, languages), cells)
     kept, display_means, texts = _display(cells, means, corpus.min_texts)
     fit = stats.pca(display_means, COMPONENTS)
     out = work / "themes" / corpus.name
