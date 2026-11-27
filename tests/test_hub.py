@@ -1,14 +1,17 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from georeset import hub
 
 
 class _FakeApi:
     """Records every call with all its arguments."""
 
-    def __init__(self):
+    def __init__(self, tags=()):
         self.calls = []
+        self.tags = tags
 
     def create_repo(self, *args, **kwargs):
         self.calls.append(("create_repo", args, kwargs))
@@ -32,6 +35,10 @@ class _FakeApi:
 
     def create_tag(self, *args, **kwargs):
         self.calls.append(("create_tag", args, kwargs))
+
+    def list_repo_refs(self, *args, **kwargs):
+        self.calls.append(("list_repo_refs", args, kwargs))
+        return SimpleNamespace(tags=[SimpleNamespace(name=name) for name in self.tags])
 
 
 def _out(tmp_path):
@@ -281,14 +288,23 @@ def test_propose_uploads_to_a_new_pull_request(tmp_path, monkeypatch):
 
 
 def test_release_opens_merges_then_tags(monkeypatch):
-    api = _FakeApi()
+    api = _FakeApi(tags=["v1.0", "v1.1"])
     monkeypatch.setattr(hub, "HfApi", lambda: api)
     hub.release("me/d", 3, "v1.2")
     assert api.calls == [
+        ("list_repo_refs", ("me/d",), {"repo_type": "dataset"}),
         ("change_discussion_status", ("me/d", 3, "open"), {"repo_type": "dataset"}),
         ("merge_pull_request", ("me/d", 3), {"repo_type": "dataset"}),
         ("create_tag", ("me/d",), {"tag": "v1.2", "repo_type": "dataset"}),
     ]
+
+
+def test_release_refuses_a_tag_that_exists_before_merging_anything(monkeypatch):
+    api = _FakeApi(tags=["v1.0", "v1.4"])
+    monkeypatch.setattr(hub, "HfApi", lambda: api)
+    with pytest.raises(ValueError, match=r"already has the tag v1\.4"):
+        hub.release("me/d", 9, "v1.4")
+    assert api.calls == [("list_repo_refs", ("me/d",), {"repo_type": "dataset"})]
 
 
 def test_propose_drops_the_given_folders_and_files_before_uploading(tmp_path, monkeypatch):

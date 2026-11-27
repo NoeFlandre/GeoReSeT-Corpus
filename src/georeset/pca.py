@@ -4,7 +4,7 @@ compute   (CPU job) the relevant sentences' shards of release v1.3, as ``themes`
           the vectors of ``embeddings`` (multilingual) and of ``embeddings`` plus ``embeddings_en``
           (English); ``themes.compute`` for both; the outputs go to the bucket ``BUCKET``
 propose   (CPU job) the release's card with the two maps, its figures, and a pull request on the dataset
-          with only the figures and the card; ``finalize`` merges it, tags v1.4 and deletes the bucket
+          with only the figures and the card; ``finalize`` merges it, tags v1.7 and deletes the bucket
 """
 
 from pathlib import Path
@@ -20,7 +20,7 @@ from georeset.translate.store import Bucket
 BUCKET = "NoeFlandre/georeset-pca"
 REPO = extras.REPO
 CODE_URL = "https://github.com/NoeFlandre/GeoReSeT-Corpus"
-RELEASE, NEXT_RELEASE = "v1.3", "v1.4"
+RELEASE, NEXT_RELEASE = "v1.3", "v1.7"
 ENGLISH_LANGUAGE = "eng_Latn"
 PR_TITLE = "Principal components section: maps and method in plain terms"
 CORPORA = (themes.LANDUSE, themes.ENGLISH_POOL)  # the two maps, in the order of the card

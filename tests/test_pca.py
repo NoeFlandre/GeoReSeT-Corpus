@@ -53,7 +53,7 @@ def test_shard_size_is_the_embedding_one():
     assert ROWS_PER_SHARD == 50_000
 
 
-def test_finalize_merges_tags_v1_4_then_deletes_the_bucket(monkeypatch):
+def test_finalize_merges_tags_v1_7_then_deletes_the_bucket(monkeypatch):
     calls = []
     monkeypatch.setattr(pca.hub, "release", lambda repo, n, name: calls.append(("release", repo, n, name)))
 
@@ -62,7 +62,7 @@ def test_finalize_merges_tags_v1_4_then_deletes_the_bucket(monkeypatch):
             calls.append(("remove",))
 
     pca.finalize(9, Bucket())
-    assert calls == [("release", pca.REPO, 9, "v1.4"), ("remove",)]
+    assert calls == [("release", pca.REPO, 9, "v1.7"), ("remove",)]
 
 
 def test_fetch_themes_brings_each_corpus_outputs_back(tmp_path, monkeypatch):

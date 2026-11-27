@@ -337,5 +337,5 @@ def pca_propose(
 
 @app.command("pca-finalize")
 def pca_finalize(pr: Annotated[int, typer.Option(help="Number of the reviewed pull request.")]) -> None:
-    """Merge the PCA pull request, tag v1.4, delete the bucket."""
+    """Merge the PCA pull request, tag v1.7, delete the bucket."""
     pca.finalize(pr, Bucket(pca.BUCKET))

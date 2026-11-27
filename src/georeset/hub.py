@@ -120,9 +120,12 @@ def _delete(path: Path) -> None:
 def release(repo_id: str, number: int, tag_name: str) -> None:
     """Merge pull request ``number`` and tag the merged commit ``tag_name``, a release.
 
-    The Hub opens pull requests as drafts, which cannot be merged, so the draft is opened first.
+    Tags are never moved, so a name already taken stops the release before anything is merged. The Hub opens
+    pull requests as drafts, which cannot be merged, so the draft is opened first.
     """
     api = HfApi()
+    if tag_name in {tag.name for tag in api.list_repo_refs(repo_id, repo_type="dataset").tags}:
+        raise ValueError(f"{repo_id} already has the tag {tag_name}; nothing was merged")
     api.change_discussion_status(repo_id, number, "open", repo_type="dataset")
     api.merge_pull_request(repo_id, number, repo_type="dataset")
     api.create_tag(repo_id, tag=tag_name, repo_type="dataset")
