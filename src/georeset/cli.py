@@ -1,5 +1,6 @@
 """``georeset`` command line: each step is resumable, ``run`` chains them all."""
 
+import json
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
@@ -10,6 +11,7 @@ import typer
 from georeset import embedding, hub, pca
 from georeset.build import extras, pipeline, stage
 from georeset.build import fuse as fusion
+from georeset.label import jobs as labelling
 from georeset.publish import report, space, themes
 from georeset.sources import description, website, wiki
 from georeset.translate import jobs as translation
@@ -339,3 +341,35 @@ def pca_propose(
 def pca_finalize(pr: Annotated[int, typer.Option(help="Number of the reviewed pull request.")]) -> None:
     """Merge the PCA pull request, tag v1.7, delete the bucket."""
     pca.finalize(pr, Bucket(pca.BUCKET))
+
+
+LabelBucket = Annotated[str, typer.Option(help="Private bucket of one labelling check.")]
+
+
+@app.command("label-plan")
+def label_plan(
+    bucket: LabelBucket,
+    scratch: Scratch = Path("/tmp/georeset-label"),
+    sample: Annotated[int, typer.Option(help="Rows to label: half relevant, half not.")] = 48,
+    seed: Annotated[int, typer.Option(help="Sampling seed.")] = 0,
+) -> None:
+    """Sample corpus rows and upload their tokenized prompts to the bucket (CPU job)."""
+    labelling.plan_corpus(Bucket(bucket), scratch, sample, seed)
+
+
+@app.command("label-work")
+def label_work(bucket: LabelBucket, scratch: Scratch = Path("/tmp/georeset-label")) -> None:
+    """Label the sampled texts on this node's GPU and upload the generations (GPU job)."""
+    labelling.work_on_gpu(Bucket(bucket), scratch)
+
+
+@app.command("label-report")
+def label_report(bucket: LabelBucket, scratch: Scratch = Path("/tmp/georeset-label")) -> None:
+    """Compare the sampled rows' decisions with their existing labels."""
+    typer.echo(json.dumps(labelling.report(Bucket(bucket), scratch), indent=2))
+
+
+@app.command("label-remove")
+def label_remove(bucket: LabelBucket) -> None:
+    """Delete the labelling check's bucket."""
+    labelling.remove(Bucket(bucket))

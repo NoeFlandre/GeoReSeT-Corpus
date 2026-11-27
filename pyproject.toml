@@ -9,7 +9,7 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "h3>=4.5.0",
-    "huggingface-hub>=2.3.0",
+    "huggingface-hub>=1.5.0",
     "langcodes>=3.5.1",
     "language-data>=1.4.0",
     "matplotlib>=3.11.2",
@@ -32,6 +32,21 @@ translate = [
 ]
 # Grid'5000 job environments only: the sentence embedder (as in scripts/embed.py).
 embed = ["sentence-transformers>=5.1", "torch>=2.8"]
+# Grid'5000 GPU jobs only: the benchmark's runtime, SGLang with the DSpark draft (pins as in the benchmark).
+label = [
+    "sglang==0.5.20",
+    "cuda-tile>=1.6.0rc5",
+    "flash-attn-4>=4.0.0b18",
+]
+# Grid'5000 CPU jobs only: the chat template, to tokenize the prompts before the GPU job.
+tokenize = ["transformers>=5.12.1", "jinja2>=3.1"]
+
+[tool.uv]
+# SGLang pins its own torch and transformers, so these environments cannot share a lock.
+conflicts = [
+    [{ extra = "label" }, { extra = "translate" }],
+    [{ extra = "label" }, { extra = "embed" }],
+]
 
 [tool.uv.sources]
 # The benchmark that chose the model: its generation budget and failure checks are reused as they are.
@@ -82,6 +97,8 @@ forkserver_warmup = "none"
 [tool.coverage.run]
 branch = true
 source = ["georeset", "tools"]
+# Need a GPU (SGLang) or the real tokenizer: exercised on Grid'5000, not in the unit tests.
+omit = ["src/georeset/label/engine.py", "src/georeset/label/tokenizer.py"]
 
 [tool.coverage.report]
 exclude_also = ["if __name__ == .__main__.:"]

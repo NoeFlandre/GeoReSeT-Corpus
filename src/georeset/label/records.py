@@ -1,0 +1,114 @@
+"""What one generation records: the row a labelling run writes for each distinct text."""
+
+from dataclasses import dataclass
+
+MAX_RECORDED_TOKEN_COUNT = 2_147_483_647
+# finish_reason of a row decided by rule instead of by the model (a letterless text).
+RULE_NO_LETTERS = "rule:no_letters"
+
+
+@dataclass(frozen=True, slots=True)
+class Generation:
+    text_sha256: str
+    raw_output: str
+    prompt_tokens: int
+    generated_tokens: int
+    finish_reason: str
+    truncated: bool
+    verify_steps: int | None
+    accepted_drafts: int | None
+    proposed_drafts: int | None
+    latency_s: float | None
+
+
+def _finish_kind(finish: object) -> str:
+    """The finish type of SGLang's ``finish_reason``: a dict with ``type``, or a plain string."""
+    if isinstance(finish, dict):
+        return str(finish.get("type", "unknown"))
+    return str(finish) if finish else "unknown"
+
+
+def from_sglang(text_sha256: str, output: dict, prompt_tokens: int) -> Generation:
+    """Read one SGLang completion dict (``text`` + ``meta_info``)."""
+    meta = output.get("meta_info", {})
+    kind = _finish_kind(meta.get("finish_reason"))
+    steps = meta.get("spec_verify_ct")
+    latency = meta.get("e2e_latency")
+    return Generation(
+        text_sha256=text_sha256,
+        raw_output=str(output.get("text", "")),
+        prompt_tokens=prompt_tokens,
+        generated_tokens=int(meta.get("completion_tokens") or 0),
+        finish_reason=kind,
+        truncated=kind == "length",
+        verify_steps=int(steps) if steps else None,
+        accepted_drafts=meta.get("spec_num_correct_drafts"),
+        proposed_drafts=meta.get("spec_num_proposed_drafts"),
+        latency_s=None if latency is None else float(latency),
+    )
+
+
+def rule_decided_no(text_sha256: str, prompt_tokens: int) -> Generation:
+    """The row of a letterless text: a plain ``no`` that parses like a model answer."""
+    return Generation(
+        text_sha256=text_sha256,
+        raw_output="</think>no",
+        prompt_tokens=prompt_tokens,
+        generated_tokens=0,
+        finish_reason=RULE_NO_LETTERS,
+        truncated=False,
+        verify_steps=None,
+        accepted_drafts=None,
+        proposed_drafts=None,
+        latency_s=None,
+    )
+
+
+def _is_recordable_token_count(token_count: int) -> bool:
+    return 0 < token_count <= MAX_RECORDED_TOKEN_COUNT
+
+
+def _input_overflow_marker(input_tokens: int, context_limit: int) -> str:
+    if input_tokens < context_limit:
+        raise ValueError("input token count must meet or exceed the context limit")
+    operator = ">=" if input_tokens == context_limit else ">"
+    return f"{input_tokens}{operator}{context_limit}"
+
+
+def _budget_overflow_marker(input_tokens: int, context_limit: int, max_new_tokens: int) -> str:
+    requested_tokens = input_tokens + max_new_tokens
+    if input_tokens >= context_limit or not context_limit < requested_tokens <= MAX_RECORDED_TOKEN_COUNT:
+        raise ValueError("requested token count must exceed a positive context limit")
+    return f"{input_tokens}+{max_new_tokens}>{context_limit}"
+
+
+def _context_overflow_marker(input_tokens: int, context_limit: int, max_new_tokens: int | None) -> str:
+    if max_new_tokens is None:
+        return _input_overflow_marker(input_tokens, context_limit)
+    return _budget_overflow_marker(input_tokens, context_limit, max_new_tokens)
+
+
+def input_too_long_failure(
+    text_sha256: str,
+    input_tokens: int,
+    context_limit: int,
+    max_new_tokens: int | None = None,
+) -> Generation:
+    """Record a terminal failure when the prompt or the requested completion will not fit."""
+    if not _is_recordable_token_count(context_limit):
+        raise ValueError("context limit must be positive")
+    if not _is_recordable_token_count(input_tokens):
+        raise ValueError("input token count must be positive and recordable")
+    failure = _context_overflow_marker(input_tokens, context_limit, max_new_tokens)
+    return Generation(
+        text_sha256=text_sha256,
+        raw_output=f"luf_failure:input_too_long:{failure}",
+        prompt_tokens=input_tokens,
+        generated_tokens=0,
+        finish_reason="input_too_long",
+        truncated=False,
+        verify_steps=None,
+        accepted_drafts=None,
+        proposed_drafts=None,
+        latency_s=None,
+    )

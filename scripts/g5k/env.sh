@@ -6,7 +6,9 @@ mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 export UV_CACHE_DIR="$WORK/uv-cache" UV_PROJECT_ENVIRONMENT="$WORK/venv" UV_PYTHON_INSTALL_DIR="$WORK/python"
 export HF_HOME="$WORK/hf" XDG_CACHE_HOME="$WORK/xdg" PIP_CACHE_DIR="$WORK/pip"
-export HF_TOKEN="$(cat "$HOME/.cache/huggingface/token")"
+TOKEN_FILE="$HOME/.hf_token"  # mode 600, as the tutorial says; else the Hub cache
+[ -r "$TOKEN_FILE" ] || TOKEN_FILE="$HOME/.cache/huggingface/token"
+export HF_TOKEN="$(cat "$TOKEN_FILE")"
 python3 -m venv "$WORK/uv" && "$WORK/uv/bin/pip" install --quiet uv
 UV="$WORK/uv/bin/uv"
 echo "node: $(hostname)  job: ${OAR_JOB_ID:-none}  code: $(git -C "$SRC" rev-parse --short HEAD)  start: $(date)"
