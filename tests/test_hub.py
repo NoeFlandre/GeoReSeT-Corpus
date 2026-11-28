@@ -83,6 +83,12 @@ def test_upload_units_skip_missing_folders(tmp_path):
     assert hub.upload_units(tmp_path) == ["data/website"]
 
 
+def test_upload_units_publish_the_labels_after_the_data(tmp_path):
+    out = _out(tmp_path)
+    (out / "labels" / "lfm25-dspark-p2fb4856").mkdir(parents=True)
+    assert hub.upload_units(out)[:3] == ["data/website", "data/wikipedia", "labels"]
+
+
 def test_publish_creates_public_repo_uploads_units_then_card(tmp_path, monkeypatch):
     api = _FakeApi()
     monkeypatch.setattr(hub, "HfApi", lambda: api)

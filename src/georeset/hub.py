@@ -33,7 +33,7 @@ def snapshot(repo: str, rev: str, dest: Path, patterns: list[str]) -> Path:
 
 
 EXTRA_UNITS = (
-    "unlabelled", "polygons", "scenes", "scene_photos", "embeddings", "polygons_labels_shares",
+    "labels", "unlabelled", "polygons", "scenes", "scene_photos", "embeddings", "polygons_labels_shares",
     "embeddings_en", "assets",
 )  # fmt: skip
 
@@ -59,7 +59,7 @@ def publish_space(folder: Path, space: str) -> str:
 
 
 def upload_units(folder: Path) -> list[str]:
-    """Commit units: each data source, then unlabelled, polygons, scenes, assets; README last."""
+    """Commit units: each data source, then labels, unlabelled, polygons, scenes, assets; README last."""
     dirs = [*sorted(folder.glob("data/*")), *(folder / unit for unit in EXTRA_UNITS)]
     return [str(d.relative_to(folder)) for d in dirs if d.is_dir()]
 

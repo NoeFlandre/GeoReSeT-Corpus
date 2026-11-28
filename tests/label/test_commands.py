@@ -29,3 +29,17 @@ def test_label_report_prints_the_summary(monkeypatch):
     monkeypatch.setattr(jobs, "report", lambda *args: EMPTY_REPORT)
     result = runner.invoke(cli.app, ["label-report", "--bucket", "me/b"])
     assert '"rows": 0' in result.output
+
+
+def test_round_commands_call_their_functions(monkeypatch, tmp_path):
+    from georeset.label import round as labelling_round
+
+    calls = []
+    monkeypatch.setattr(labelling_round, "build", lambda *args: calls.append(("build", *args)))
+    monkeypatch.setattr(labelling_round, "propose", lambda *args: calls.append(("propose", *args)) or "url")
+    monkeypatch.setattr(labelling_round, "finalize", lambda *args: calls.append(("finalize", *args)))
+    assert runner.invoke(cli.app, ["label-round-build", "--work", str(tmp_path)]).exit_code == 0
+    assert runner.invoke(cli.app, ["label-round-propose", "--out", str(tmp_path)]).exit_code == 0
+    assert runner.invoke(cli.app, ["label-round-finalize", "--pr", "10"]).exit_code == 0
+    assert [call[0] for call in calls] == ["build", "propose", "finalize"]
+    assert calls[2][1] == 10

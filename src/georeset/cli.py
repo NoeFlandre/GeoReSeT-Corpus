@@ -12,6 +12,7 @@ from georeset import embedding, hub, pca
 from georeset.build import extras, pipeline, stage
 from georeset.build import fuse as fusion
 from georeset.label import jobs as labelling
+from georeset.label import round as labelling_round
 from georeset.publish import report, space, themes
 from georeset.sources import description, website, wiki
 from georeset.translate import jobs as translation
@@ -373,3 +374,26 @@ def label_report(bucket: LabelBucket, scratch: Scratch = Path("/tmp/georeset-lab
 def label_remove(bucket: LabelBucket) -> None:
     """Delete the labelling check's bucket."""
     labelling.remove(Bucket(bucket))
+
+
+@app.command("label-round-build")
+def label_round_build(
+    work: Scratch = Path("/tmp/georeset-round"),
+    out: Out = Path("/tmp/georeset-round-out"),
+) -> None:
+    """Join round 1 to the filter's generations and migrate data/ into one release-shaped folder (CPU job)."""
+    labelling_round.build(work, out)
+
+
+@app.command("label-round-propose")
+def label_round_propose(out: Out = Path("/tmp/georeset-round-out")) -> None:
+    """Open the pull request with the round's data/ and labels/ on the corpus (CPU job)."""
+    typer.echo(labelling_round.propose(out))
+
+
+@app.command("label-round-finalize")
+def label_round_finalize(
+    pr: Annotated[int, typer.Option(help="Number of the reviewed pull request.")],
+) -> None:
+    """Merge the reviewed pull request and tag the release v2.0."""
+    labelling_round.finalize(pr)
