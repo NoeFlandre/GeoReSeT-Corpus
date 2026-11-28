@@ -17,7 +17,7 @@ def landuse(data: pl.LazyFrame, out: Path) -> pl.LazyFrame:
     """The rows with a boolean ``landuse``, read from the folder ``out`` when it has no column."""
     if "landuse" in data.collect_schema().names():
         return data
-    decisions = pl.scan_parquet(str(out / "labels" / CURRENT / "decisions-*.parquet")).select(
+    decisions = pl.scan_parquet(str(out / "labels" / CURRENT / "decisions.parquet")).select(
         "id", landuse=pl.col("decision") == "yes"
     )
     return data.join(decisions, on="id", how="left")

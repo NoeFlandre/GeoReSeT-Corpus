@@ -13,7 +13,7 @@ def test_card_drops_the_landuse_column_and_points_at_the_round():
     assert "| `landuse` | bool |" not in card
     assert "s.landuse" not in card
     assert 'select_columns(["id", "text_en", "translation"])' in card
-    assert f"labels/{ROUND}/decisions-*.parquet" in card
+    assert f"labels/{ROUND}/decisions.parquet" in card
     assert f'"config_name": "labels-{ROUND}"' in card
     assert f'"config_name": "generations-{ROUND}"' in card
     assert card.index("## Labels") < card.index("## Sentences")

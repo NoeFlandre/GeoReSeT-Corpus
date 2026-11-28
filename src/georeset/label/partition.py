@@ -57,6 +57,27 @@ def generation_file_rows(path: Path, group: str) -> pl.DataFrame:
     return pl.read_parquet(path, columns=columns).with_columns(group=pl.lit(group))
 
 
+SHARDS = (
+    4  # generations are published in this many files: the Hub stores each file whole, and they total ~67 GB
+)
+
+
+def consolidate(folder: Path) -> None:
+    """Merge a round folder's bucket files into the published files, then delete the buckets.
+
+    ``decisions.parquet`` is one file; ``generations-<i>-of-<SHARDS>.parquet`` are the shards, each of every
+    SHARDS-th bucket. The buckets are the files named by one hex digit (``decisions-0.parquet`` ... ``-f``).
+    """
+    decisions = sorted(folder.glob("decisions-[0-9a-f].parquet"))
+    generations = sorted(folder.glob("generations-[0-9a-f].parquet"))
+    pl.scan_parquet(decisions).sink_parquet(folder / "decisions.parquet")
+    for shard in range(SHARDS):
+        name = f"generations-{shard:05d}-of-{SHARDS:05d}.parquet"
+        pl.scan_parquet(generations[shard::SHARDS]).sink_parquet(folder / name)
+    for path in [*decisions, *generations]:
+        path.unlink()
+
+
 def write_buckets(frame: pl.DataFrame, out: Path, name: str) -> None:
     """Write each bucket's rows of ``frame`` to ``out/<bucket>/<name>.parquet``; empty buckets get no file."""
     for bucket in BUCKETS:

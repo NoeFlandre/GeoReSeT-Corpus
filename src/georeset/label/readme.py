@@ -9,7 +9,7 @@ EMBEDDINGS_END = (
 )
 LABEL_CONFIGS = (
     '{"config_name": "labels-{round}", "data_files": [{"split": "train", '
-    '"path": "labels/{round}/decisions-*.parquet"}]}, '
+    '"path": "labels/{round}/decisions.parquet"}]}, '
     '{"config_name": "generations-{round}", "data_files": [{"split": "train", '
     '"path": "labels/{round}/generations-*.parquet"}]}]'
 )
@@ -32,7 +32,7 @@ SQL_OLD = (
 SQL_NEW = (
     "SELECT s.text, l.decision, p.osm_tag, p.geometry\n"
     "FROM 'hf://datasets/NoeFlandre/GeoReSeT-Corpus/data/wikipedia/*/*.parquet' s\n"
-    "JOIN 'hf://datasets/NoeFlandre/GeoReSeT-Corpus/labels/{round}/decisions-*.parquet' l "
+    "JOIN 'hf://datasets/NoeFlandre/GeoReSeT-Corpus/labels/{round}/decisions.parquet' l "
     "ON l.id = s.id\n"
     "JOIN 'hf://datasets/NoeFlandre/GeoReSeT-Corpus/polygons/*.parquet' p "
     "ON p.polygon_id = s.polygon_ids[1]\n"
@@ -53,7 +53,7 @@ LABELS_SECTION = (
     "| `decision` | string | `yes` (describes land use, land cover or a geographic environment "
     "observable by remote sensing), `no`, or `failed` |\n"
     "| `failure` | string | Why no usable answer was given |\n\n"
-    "`generations-*.parquet` holds, once per distinct text, the model's raw output with its "
+    "`generations-*.parquet` (shards) holds, once per distinct text, the model's raw output with its "
     "`finish_reason` and `truncated`. Round `{round}` is the first round: its `decision` is the label "
     "`data/` carried before this release, and its raw outputs come from the three `-landuse` repositories "
     "described in the method.\n\n"

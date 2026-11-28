@@ -76,3 +76,15 @@ def test_join_bucket_with_nothing_in_it_is_empty(tmp_path):
     assert rounds.height == 0 and raws.height == 0
     assert stats["rows"] == 0
     assert rounds.columns == ["id", "text_sha256", "decision", "failure"]
+
+
+def test_consolidate_publishes_decisions_in_one_file_and_generations_in_shards(tmp_path):
+    for bucket in ("0", "f"):
+        pl.DataFrame({"id": [f"d{bucket}"]}).write_parquet(tmp_path / f"decisions-{bucket}.parquet")
+    for bucket in "0123":
+        pl.DataFrame({"id": [f"g{bucket}"]}).write_parquet(tmp_path / f"generations-{bucket}.parquet")
+    partition.consolidate(tmp_path)
+    shards = [f"generations-{shard:05d}-of-00004.parquet" for shard in range(4)]
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["decisions.parquet", *shards]
+    assert sorted(pl.read_parquet(tmp_path / "decisions.parquet")["id"].to_list()) == ["d0", "df"]
+    assert pl.read_parquet(tmp_path / shards[2])["id"].to_list() == ["g2"]

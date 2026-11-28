@@ -10,7 +10,7 @@ def _round_folder(out: Path) -> Path:
     folder.mkdir(parents=True)
     pl.DataFrame(
         {"id": ["a", "b"], "text_sha256": ["x", "y"], "decision": ["yes", "no"], "failure": [None, None]}
-    ).write_parquet(folder / "decisions-0.parquet")
+    ).write_parquet(folder / "decisions.parquet")
     return out
 
 

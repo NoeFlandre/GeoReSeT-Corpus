@@ -51,12 +51,13 @@ Its name is the model slug and the prompt's sha256, e.g. `lfm25-dspark-p2fb4856`
 
 ```
 labels/rounds.json                         the registry: each round's configuration and code commits
-labels/<round>/decisions-<b>.parquet       id, text_sha256, decision (yes / no / failed), failure
-labels/<round>/generations-<b>.parquet     group, text_sha256, raw_output, finish_reason, truncated
+labels/<round>/decisions.parquet           id, text_sha256, decision (yes / no / failed), failure
+labels/<round>/generations-*.parquet       group, text_sha256, raw_output, finish_reason, truncated (4 shards)
 labels/<round>/agreement.json              the parser's agreement with the round's decisions
 ```
 
-`<b>` is the first hex digit of `text_sha256` (16 buckets). A row's label is its `decision` in a round, joined on `id`.
+A row's label is its `decision` in a round, joined on `id`. The build works in 16 buckets (the first hex digit of
+`text_sha256`) and publishes decisions as one file and generations in four shards.
 Round 1 is the corpus's original labels, with their raw outputs from the three filter repositories.
 `label.attach.landuse` gives any pipeline the relevant flag: the release's `landuse` column before v2.0, the current
 round's `yes` decisions from v2.0 on.

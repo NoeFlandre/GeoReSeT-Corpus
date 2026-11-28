@@ -52,7 +52,7 @@ def _write_card(work: Path, out: Path, round_name: str) -> None:  # pragma: no c
 
 def _verify(out: Path, round_name: str) -> None:  # pragma: no cover (reads the staged folder)
     data_files = sorted((out / "data").rglob("*.parquet"))
-    decisions = sorted((out / "labels" / round_name).glob("decisions-*.parquet"))
+    decisions = [out / "labels" / round_name / "decisions.parquet"]
     data_rows, decision_rows = migrate.rows(data_files), migrate.rows(decisions)
     migrate.check_migrated(data_rows, decision_rows, migrate.inline_labels(data_files))
     print(f"round: verified {data_rows} rows, {len(data_files)} data files", flush=True)
@@ -116,6 +116,7 @@ def _write_round(  # pragma: no cover
         decisions.write_parquet(folder / f"decisions-{bucket}.parquet")
         raws.write_parquet(folder / f"generations-{bucket}.parquet")
         totals = {key: totals[key] + agreed[key] for key in TOTALS}
+    partition.consolidate(folder)
     (folder / "agreement.json").write_text(json.dumps(totals, indent=2) + "\n", encoding="utf-8")
     registry = out / "labels" / "rounds.json"
     rounds.write_registry(registry, rounds.add(registry, found))
