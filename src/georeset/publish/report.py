@@ -9,6 +9,7 @@ import numpy as np
 import polars as pl
 
 from georeset.build.pipeline import Layout
+from georeset.label import attach
 from georeset.publish import card, figures, geo, stats, themes
 
 # Sentence maps after the full dataset (map.png): file name -> rows drawn.
@@ -130,7 +131,7 @@ def english_context(out: Path) -> card.English | None:
 
 
 def build_card(layout: Layout, repo_id: str, code_url: str) -> Path:
-    data = pl.scan_parquet(layout.out / "data" / "*" / "*" / "*.parquet")
+    data = attach.landuse(pl.scan_parquet(layout.out / "data" / "*" / "*" / "*.parquet"), layout.out)
     draw_maps(data, layout.out)
     figures.language_bars(stats.top_languages(data, TOP_LANGUAGES), layout.out / "assets" / "languages.png")
     polygons = pl.scan_parquet(layout.out / "polygons" / "*.parquet")

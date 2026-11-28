@@ -59,7 +59,9 @@ def test_plan_uploads_the_shards_then_the_summary_and_cleans_up(bucket, tmp_path
     monkeypatch.setattr(embedding.hub, "snapshot", lambda *a: calls.append(a) or _release_data(scratch))
     assert embedding.plan(scratch, bucket) == 2
     rev = f"{embedding.REPO}@v1.2"
-    assert calls == [(embedding.REPO, rev, scratch / "release", ["data/*"])]
+    assert calls == [
+        (embedding.REPO, rev, scratch / "release", ["data/*", f"labels/{embedding.attach.CURRENT}/*"])
+    ]
     assert bucket.calls == [("create",), ("put", ["work/00000.parquet"]), ("put", ["plan.json"])]
     assert json.loads(bucket.data["plan.json"]) == {"texts": 2, "release": rev}
     assert pl.read_parquet(io.BytesIO(bucket.data["work/00000.parquet"]))["text"].to_list() == [

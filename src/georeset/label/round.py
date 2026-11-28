@@ -7,6 +7,7 @@ finalize  merge the reviewed pull request and tag the release
 """
 
 import json
+import shutil
 from collections import defaultdict
 from pathlib import Path
 
@@ -86,7 +87,10 @@ def _stage_corpus(work: Path, out: Path) -> Path:  # pragma: no cover (Hub)
 
     local = Path(
         snapshot_download(
-            REPO, repo_type="dataset", allow_patterns=["data/**"], local_dir=work / "src" / "corpus"
+            REPO,
+            repo_type="dataset",
+            allow_patterns=["data/**", "labels/rounds.json"],
+            local_dir=work / "src" / "corpus",
         )
     )
     buckets = work / "corpus"
@@ -94,6 +98,10 @@ def _stage_corpus(work: Path, out: Path) -> Path:  # pragma: no cover (Hub)
         relative = path.relative_to(local)
         partition.write_buckets(partition.corpus_file_rows(path), buckets, "-".join(relative.parts[1:]))
         migrate.strip_label(path, out / relative)
+    registry = local / "labels" / "rounds.json"  # the rounds already published; this round is added to them
+    if registry.exists():
+        (out / "labels").mkdir(parents=True, exist_ok=True)
+        shutil.copy(registry, out / "labels" / "rounds.json")
     return buckets
 
 
@@ -109,7 +117,8 @@ def _write_round(  # pragma: no cover
         raws.write_parquet(folder / f"generations-{bucket}.parquet")
         totals = {key: totals[key] + agreed[key] for key in TOTALS}
     (folder / "agreement.json").write_text(json.dumps(totals, indent=2) + "\n", encoding="utf-8")
-    rounds.write_registry(out / "labels" / "rounds.json", {found.name: found})
+    registry = out / "labels" / "rounds.json"
+    rounds.write_registry(registry, rounds.add(registry, found))
 
 
 def propose(out: Path) -> str:  # pragma: no cover (Hub)

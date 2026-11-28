@@ -192,7 +192,7 @@ def test_space_builds_from_the_current_revision_then_uploads(tmp_path, monkeypat
     monkeypatch.setattr(
         hub, "snapshot", lambda repo, rev, dest, patterns: seen.update(get=(repo, rev, patterns))
     )
-    monkeypatch.setattr(cli.pl, "scan_parquet", lambda glob: glob)
+    monkeypatch.setattr(cli.pl, "scan_parquet", lambda glob: pl.LazyFrame({"landuse": [True]}))
     monkeypatch.setattr(
         hub, "folder_commits", lambda repo, rev, folders: {"repo": repo, "rev": rev, "folders": folders}
     )
@@ -209,9 +209,14 @@ def test_space_builds_from_the_current_revision_then_uploads(tmp_path, monkeypat
     args = ["space", "--cache", str(cache), "--out", str(out), "--repo", "me/d", "--target", "me/s"]
     result = runner.invoke(cli.app, args)
     assert result.exit_code == 0, result.output
-    assert seen["get"] == ("me/d", "rev", ["data/*", "scene_photos/*", "scenes/*"])
+    assert seen["get"] == (
+        "me/d",
+        "rev",
+        ["data/*", "scene_photos/*", "scenes/*", f"labels/{cli.attach.CURRENT}/*"],
+    )
     commits = {"repo": "me/d", "rev": "rev", "folders": cli.space.FOLDERS}
-    assert seen["build"] == (cache / "data" / "*" / "*" / "*.parquet", out / "data", "me/d", "rev", commits)
+    assert seen["build"][0].collect()["landuse"].to_list() == [True]
+    assert seen["build"][1:] == (out / "data", "me/d", "rev", commits)
     assert seen["app"] == out and result.output.strip() == f"uploaded {out} to me/s"
     built = runner.invoke(cli.app, [*args[:-2], "--target", ""])
     assert built.output.strip() == str(out)

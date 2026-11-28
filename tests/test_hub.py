@@ -323,3 +323,13 @@ def test_propose_drops_the_given_folders_and_files_before_uploading(tmp_path, mo
     assert (out / "assets").is_dir() and (out / "README.md").is_file()
     uploaded = [kwargs["path_in_repo"] for name, _, kwargs in api.calls if name == "upload_folder"]
     assert "polygons" not in uploaded and "assets" in uploaded
+
+
+def test_labels_upload_keeps_the_rounds_already_on_the_hub(tmp_path, monkeypatch):
+    api = _FakeApi()
+    monkeypatch.setattr(hub, "HfApi", lambda: api)
+    out = _out(tmp_path)
+    (out / "labels" / "lfm25-dspark-p2fb4856").mkdir(parents=True)
+    hub.publish(out, "me/d")
+    uploads = [c for c in api.calls if c[0] == "upload_folder" and c[2]["path_in_repo"] == "labels"]
+    assert uploads[0][2]["delete_patterns"] is None

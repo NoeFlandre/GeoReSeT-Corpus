@@ -76,14 +76,18 @@ def publish(folder: Path, repo_id: str, private: bool = False) -> str:
 
 
 def _upload(api: HfApi, folder: Path, repo_id: str, revision: str | None) -> None:
-    """One commit per unit of ``folder``, then the card, on ``revision`` (default: main)."""
+    """One commit per unit of ``folder``, then the card, on ``revision`` (default: main).
+
+    A unit replaces what the Hub holds under its name, except ``labels``: each labelling round is kept, so
+    publishing a release never removes a round that is already there.
+    """
     for unit in upload_units(folder):
         api.upload_folder(
             repo_id=repo_id,
             repo_type="dataset",
             folder_path=folder / unit,
             path_in_repo=unit,
-            delete_patterns="*",
+            delete_patterns=None if unit == "labels" else "*",
             commit_message=f"Upload {unit}",
             revision=revision,
         )

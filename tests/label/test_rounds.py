@@ -83,3 +83,23 @@ def test_backfilled_round_refuses_a_missing_output_configuration():
     del fields["model"]
     with pytest.raises(ValueError, match="0 values for model"):
         rounds.backfilled(fields)
+
+
+def test_add_keeps_the_registered_rounds_and_adds_the_new_one(tmp_path):
+    first = rounds.current("17d7180")
+    second = rounds.Round(
+        name="other-p0000000",
+        slug="other",
+        config={"prompt_sha256": "0" * 64},
+        prompt_sha256="0" * 64,
+        parser_version=parse.PARSER_VERSION,
+        code_commits=["abc"],
+    )
+    path = tmp_path / "rounds.json"
+    rounds.write_registry(path, {first.name: first})
+    assert set(rounds.add(path, second)) == {first.name, second.name}
+
+
+def test_add_starts_the_registry_when_there_is_none(tmp_path):
+    current = rounds.current("17d7180")
+    assert rounds.add(tmp_path / "rounds.json", current) == {current.name: current}

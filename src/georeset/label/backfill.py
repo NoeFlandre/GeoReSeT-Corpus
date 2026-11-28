@@ -17,7 +17,7 @@ KEYS = ["group", "text_sha256"]
 def _judged(corpus: pl.DataFrame, generations: pl.DataFrame) -> pl.DataFrame:
     """One row per corpus row, with its label, its generation and the parser's verdict on it."""
     joined = corpus.select("id", *KEYS, "landuse").join(
-        generations.select(*KEYS, "raw_output", "truncated"), on=KEYS, how="left"
+        generations.select(*KEYS, "raw_output", "finish_reason", "truncated"), on=KEYS, how="left"
     )
     model, failure = [], []
     for raw, truncated in zip(joined["raw_output"].to_list(), joined["truncated"].to_list(), strict=True):
@@ -47,6 +47,15 @@ def raw_rows(corpus: pl.DataFrame, generations: pl.DataFrame) -> pl.DataFrame:
         generations.select(*KEYS, "raw_output", "finish_reason", "truncated"),
         on=KEYS,
         how="inner",
+    )
+
+
+def disagreeing(corpus: pl.DataFrame, generations: pl.DataFrame) -> pl.DataFrame:
+    """The rows whose raw output the parser reads differently from the label, with the output to inspect."""
+    judged = _judged(corpus, generations)
+    differs = pl.col("raw_output").is_not_null() & (pl.col("model_decision") != pl.col("decision"))
+    return judged.filter(differs).select(
+        "id", *KEYS, "decision", "model_decision", "failure", "finish_reason", "truncated", "raw_output"
     )
 
 

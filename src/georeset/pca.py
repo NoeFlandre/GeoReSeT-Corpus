@@ -14,6 +14,7 @@ import polars as pl
 from georeset import embedding, hub
 from georeset.build import extras
 from georeset.build.pipeline import Layout
+from georeset.label import attach
 from georeset.publish import report, themes
 from georeset.translate.store import Bucket
 
@@ -41,8 +42,10 @@ def sentence_shards(
 ) -> tuple[list[Path], list[Path]]:  # pragma: no cover (downloads the release)
     """Release v1.3's relevant sentences: the multilingual shards, then the translated ones."""
     rev = hub.revision_of(REPO, RELEASE)
-    hub.snapshot(REPO, rev, scratch / "release", ["data/*"])
-    data = pl.scan_parquet(scratch / "release" / "data" / "*" / "*" / "*.parquet")
+    hub.snapshot(REPO, rev, scratch / "release", ["data/*", f"labels/{attach.CURRENT}/*"])
+    data = attach.landuse(
+        pl.scan_parquet(scratch / "release" / "data" / "*" / "*" / "*.parquet"), scratch / "release"
+    )
     themes.write_sentences(data, scratch / "sentences", themes.LANDUSE)
     write_translated(data, scratch / "translated")
     return sorted((scratch / "sentences").glob("train-*.parquet")), sorted(

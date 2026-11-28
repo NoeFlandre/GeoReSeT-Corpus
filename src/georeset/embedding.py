@@ -24,6 +24,7 @@ import pyarrow as pa
 
 from georeset import hub, workqueue
 from georeset.build import extras, fuse
+from georeset.label import attach
 from georeset.publish import themes
 from georeset.translate.store import Bucket
 
@@ -67,8 +68,12 @@ def plan(scratch: Path, bucket: Bucket) -> int:
         bucket.get([("plan.json", scratch / "plan.json")])
         return json.loads((scratch / "plan.json").read_text())["texts"]
     rev = hub.revision_of(REPO, RELEASE)
-    hub.snapshot(REPO, rev, scratch / "release", ["data/*"])
-    rows = selection(pl.scan_parquet(scratch / "release" / "data" / "*" / "*" / "*.parquet"))
+    hub.snapshot(REPO, rev, scratch / "release", ["data/*", f"labels/{attach.CURRENT}/*"])
+    rows = selection(
+        attach.landuse(
+            pl.scan_parquet(scratch / "release" / "data" / "*" / "*" / "*.parquet"), scratch / "release"
+        )
+    )
     texts = rows.collect(engine="streaming")
     bucket.put(work_shards(texts, scratch / "work"))
     summary = {"texts": texts.height, "release": rev}
@@ -133,7 +138,7 @@ def fetch(out: Path, work_dir: Path, bucket: Bucket) -> None:
 
 def _checks(out: Path) -> dict[str, pl.LazyFrame]:
     """Each check of ``embeddings_en`` against the release, as a count of the rows that fail it."""
-    data = pl.scan_parquet(out / "data" / "*" / "*" / "*.parquet")
+    data = attach.landuse(pl.scan_parquet(out / "data" / "*" / "*" / "*.parquet"), out)
     translated = data.filter(pl.col("landuse") & (pl.col("translation") == "nllb"))
     vectors = pl.scan_parquet(out / FOLDER / "*.parquet").select("id", "lat", "lon")
     placed = vectors.join(translated.select("id", "text_en", "lat", "lon"), on="id", suffix="_row")

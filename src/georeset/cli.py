@@ -11,6 +11,7 @@ import typer
 from georeset import embedding, hub, pca
 from georeset.build import extras, pipeline, stage
 from georeset.build import fuse as fusion
+from georeset.label import attach
 from georeset.label import jobs as labelling
 from georeset.label import round as labelling_round
 from georeset.publish import report, space, themes
@@ -147,9 +148,11 @@ def space_cmd(
 ) -> None:
     """Build the explorer Space from the dataset (current revision) and ``georeset themes``; upload it."""
     revision = hub.revision(repo)
-    hub.snapshot(repo, revision, cache, ["data/*", "scene_photos/*", "scenes/*"])
+    hub.snapshot(
+        repo, revision, cache, ["data/*", "scene_photos/*", "scenes/*", f"labels/{attach.CURRENT}/*"]
+    )
     space.build(
-        pl.scan_parquet(cache / "data" / "*" / "*" / "*.parquet"),
+        attach.landuse(pl.scan_parquet(cache / "data" / "*" / "*" / "*.parquet"), cache),
         pl.scan_parquet(cache / "scene_photos" / "*.parquet"),
         pl.scan_parquet(cache / "scenes" / "*.parquet"),
         work,

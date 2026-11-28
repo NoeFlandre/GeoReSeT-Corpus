@@ -39,9 +39,33 @@ Downloads run in parallel; conversions are capped to bound memory. Each region i
 
 ## Rows and shards
 
-Labelled (`yes` / `no`) sentences become `landuse = true / false`; `failed` and `skipped_unsplit`
-go to `unlabelled` with `status` and `failure_reason`. Partitions are sorted by region, then document and position,
-so region filters read few row groups. Staged and intermediate files are deleted as soon as they are consumed.
+Labelled sentences are rows of `data/`; `failed` and `skipped_unsplit` go to `unlabelled` with `status` and
+`failure_reason`. The labels are not in `data/`: they live in the labelling round's sidecar (see Labelling rounds).
+Partitions are sorted by region, then document and position, so region filters read few row groups.
+Staged and intermediate files are deleted as soon as they are consumed.
+
+## Labelling rounds
+
+A round is one labelling of the corpus: a model, a draft, a prompt and the parser that reads its output.
+Its name is the model slug and the prompt's sha256, e.g. `lfm25-dspark-p2fb4856`.
+
+```
+labels/rounds.json                         the registry: each round's configuration and code commits
+labels/<round>/decisions-<b>.parquet       id, text_sha256, decision (yes / no / failed), failure
+labels/<round>/generations-<b>.parquet     group, text_sha256, raw_output, finish_reason, truncated
+labels/<round>/agreement.json              the parser's agreement with the round's decisions
+```
+
+`<b>` is the first hex digit of `text_sha256` (16 buckets). A row's label is its `decision` in a round, joined on `id`.
+Round 1 is the corpus's original labels, with their raw outputs from the three filter repositories.
+`label.attach.landuse` gives any pipeline the relevant flag: the release's `landuse` column before v2.0, the current
+round's `yes` decisions from v2.0 on.
+
+* Build (CPU, whole node): `label-round-build` joins the corpus to the generations and writes the round's folder.
+* Propose: `label-round-propose` opens a pull request with `data/`, `labels/` and the card.
+* Finalize, after review: `hub.release` merges the pull request and tags the release.
+
+A release never removes a round already on the Hub: `labels/` is added to, and the registry keeps every round.
 
 ## Fuse
 
@@ -88,8 +112,8 @@ the PCA only: its maps and each component's share of variance, with no axis name
 [An interactive map](https://huggingface.co/spaces/NoeFlandre/GeoReSeT-Corpus-Fused) of the fused dataset,
 on the same two layers: numbers per H3 cell of resolution 5, each cell on its own (no zoom levels, no coarser
 cells, nothing averaged over other cells). The PCA colours are each resolution-5 cell's own colour. It shows only
-the sentences labelled relevant
-(`landuse` true), from every source or one; layers: those sentences, scene photos, their most frequent
+the sentences the labelling round decides are relevant
+(`decision` yes), from every source or one; layers: those sentences, scene photos, their most frequent
 language and the three PCA maps; a click shows a cell's numbers, up to three relevant sentences and the
 scene with the most photos there. The dataset itself is not changed.
 

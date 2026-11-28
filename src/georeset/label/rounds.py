@@ -81,3 +81,9 @@ def write_registry(path: Path, rounds: dict[str, Round]) -> None:
 
 def read_registry(path: Path) -> dict[str, Round]:
     return {name: Round(**fields) for name, fields in json.loads(path.read_text(encoding="utf-8")).items()}
+
+
+def add(path: Path, found: Round) -> dict[str, Round]:
+    """The registry at ``path`` (none yet: empty) with ``found`` added; the rounds already there stay."""
+    existing = read_registry(path) if path.exists() else {}
+    return {**existing, found.name: found}

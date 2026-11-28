@@ -53,3 +53,11 @@ def test_raw_rows_hold_each_group_and_text_once_with_its_output():
 def test_agreement_counts_where_the_raw_output_gives_back_the_label():
     stats = backfill.agreement(corpus(), generations())
     assert stats == {"rows": 4, "parsed": 3, "agree": 2, "disagree": 1, "missing": 1}
+
+
+def test_disagreeing_lists_the_rows_the_parser_reads_differently():
+    out = backfill.disagreeing(corpus(), generations())
+    assert out["id"].to_list() == ["c"]
+    assert out["decision"].to_list() == ["yes"]
+    assert out["model_decision"].to_list() == ["no"]
+    assert out["raw_output"].to_list() == ["</think>no"]

@@ -12,6 +12,7 @@ import polars as pl
 
 from georeset import hub
 from georeset.build import fuse
+from georeset.label import attach
 from georeset.publish.card import EXTRAS_FOLDERS
 from georeset.translate import models, route
 
@@ -73,7 +74,9 @@ def _scan(out: Path, folder: str) -> pl.LazyFrame:
 
 def _checks(out: Path) -> dict[str, pl.LazyFrame]:
     """Each check of the copied folders against the release, as a count of the rows that fail it."""
-    relevant = pl.scan_parquet(out / "data" / "*" / "*" / "*.parquet").filter(pl.col("landuse"))
+    relevant = attach.landuse(pl.scan_parquet(out / "data" / "*" / "*" / "*.parquet"), out).filter(
+        pl.col("landuse")
+    )
     vectors = _scan(out, "embeddings").select("id", "lat", "lon")
     placed = vectors.join(relevant.select("id", "text", "lat", "lon"), on="id", suffix="_text")
     shares = _scan(out, "polygons_labels_shares").select("polygon_id")
